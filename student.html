@@ -123,15 +123,65 @@
         </div>
         <div class="empty-hint" id="radar-empty-hint">⏳ 尚無評核資料、教官評核後雷達會自動更新</div>
         <div class="radar-actions">
-          <button class="btn-eval" id="btn-eval-epa" disabled title="F11-D 開發中">📝 請教官評核 EPA</button>
-          <button class="btn-copy" id="btn-copy-link" disabled title="F11-D 開發中">🔗 複製連結</button>
+          <button class="btn-eval" id="btn-eval-epa">📝 請教官評核 EPA</button>
+          <button class="btn-copy" id="btn-copy-link">🔗 複製連結</button>
         </div>
+      </div>
+
+      <!-- F11-D: 評核連結 Modal -->
+      <div id="eval-link-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;padding:20px">
+        <div style="background:white;border-radius:16px;padding:28px;max-width:500px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+          <h3 style="color:#1e293b;font-size:20px;margin-bottom:8px">📝 教官評核連結</h3>
+          <p style="color:#64748b;font-size:13px;margin-bottom:16px">把下面連結傳給教官（LINE 等）、或現場給教官手機點開</p>
+          <div style="background:#f0fdfa;border:2px solid #14b8a6;padding:12px;border-radius:10px;margin-bottom:12px;word-break:break-all;font-family:monospace;font-size:13px;color:#0d9488" id="eval-link-url">—</div>
+          <div style="display:flex;gap:8px;margin-bottom:14px">
+            <button id="btn-eval-copy" style="flex:1;background:#14b8a6;color:white;border:none;padding:11px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600">📋 複製連結</button>
+            <button id="btn-eval-open" style="flex:1;background:white;color:#14b8a6;border:2px solid #14b8a6;padding:9px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600">🔗 開新分頁</button>
+          </div>
+          <div id="eval-link-status"></div>
+          <div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:10px 14px;border-radius:6px;color:#78350f;font-size:12px;margin-bottom:14px">
+            ⏰ <strong>24 小時內有效</strong>、教官可重複使用評核多個 Milestone<br>
+            ⚠️ 連結請勿外流、避免被他人冒用
+          </div>
+          <button id="btn-eval-close" style="width:100%;background:#f1f5f9;color:#64748b;border:none;padding:10px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:14px">關閉</button>
+        </div>
+      </div>
+
+      <!-- F11-C: Milestone 評分明細（按群分組、點看河流圖） -->
+      <div class="milestone-section" id="milestone-details-section" style="display:none">
+        <h3>📋 Milestone 評分明細</h3>
+        <div style="color:#64748b;font-size:13px;margin-bottom:12px">💡 點任一 milestone 看歷次評核河流圖 + 教官質性回饋</div>
+        <div id="milestone-details-content"></div>
       </div>
 
       <!-- F11-B: 核心技術簽核清單 -->
       <div class="milestone-section">
         <h3>🛠️ 核心技術簽核清單</h3>
         <div id="core-skills-list"><div class="loading">⏳ 載入中...</div></div>
+      </div>
+
+      <!-- F11-C: 單一 Milestone 河流圖 Modal -->
+      <div id="ms-river-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1000;justify-content:center;align-items:flex-start;padding:20px;overflow-y:auto">
+        <div style="background:white;border-radius:16px;padding:24px;max-width:680px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);margin:auto">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+            <div>
+              <div style="color:#94a3b8;font-size:13px;font-family:monospace" id="river-milestone-id">—</div>
+              <h3 style="color:#1e293b;font-size:20px" id="river-milestone-name">—</h3>
+              <div style="color:#64748b;font-size:13px;margin-top:2px" id="river-milestone-step">—</div>
+            </div>
+            <button id="btn-river-close" style="background:#f1f5f9;border:none;font-size:22px;cursor:pointer;color:#64748b;padding:4px 12px;border-radius:6px;line-height:1">×</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0;background:#f8fafc;padding:14px;border-radius:10px">
+            <div style="text-align:center"><div style="color:#94a3b8;font-size:12px">評核次數</div><div style="color:#1e293b;font-size:22px;font-weight:700" id="river-count">—</div></div>
+            <div style="text-align:center"><div style="color:#94a3b8;font-size:12px">平均 Level</div><div style="color:#14b8a6;font-size:22px;font-weight:700" id="river-avg">—</div></div>
+            <div style="text-align:center"><div style="color:#94a3b8;font-size:12px">趨勢</div><div style="font-size:18px;font-weight:600" id="river-trend">—</div></div>
+          </div>
+          <div style="position:relative;height:240px;margin-bottom:14px">
+            <canvas id="river-chart"></canvas>
+          </div>
+          <h4 style="color:#1e293b;font-size:15px;margin:12px 0 10px">📝 歷次評核紀錄</h4>
+          <div id="river-evals-list" style="max-height:300px;overflow-y:auto"></div>
+        </div>
       </div>
 
       <div class="feature-grid" id="features"><div class="loading">⏳ 載入中...</div></div>
@@ -141,7 +191,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, query, where, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, Timestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -327,9 +377,93 @@
 
         // F11-A + F11-B + F11-F: 載入 Milestone 雷達 + 核心技術簽核 + 6 角學科雷達
         await Promise.all([loadAcademicRadar(), loadMilestoneRadar(), loadCoreSkills()]);
+
+        // F11-E: 偵測 URL ?qr= 自動處理掃 QR 簽核
+        const urlParams = new URLSearchParams(location.search);
+        const qrToken = urlParams.get('qr');
+        if (qrToken) {
+          await processQrSignoff(qrToken);
+          // 處理完清掉 URL（避免重整重複觸發）
+          history.replaceState({}, '', location.pathname);
+        }
       } catch (e) {
         document.getElementById('features').innerHTML = `<div class="err-msg">${e.message}</div>`;
       }
+    }
+
+    // ===== F11-E: 學員掃 QR Code 自動簽核 =====
+    async function processQrSignoff(sessionId) {
+      try {
+        const sessDoc = await getDoc(doc(db, 'qr_signoff_sessions', sessionId));
+        if (!sessDoc.exists()) {
+          showQrResult('error', '❌ QR Code 無效', '此 QR Code 不存在或已被撤銷');
+          return;
+        }
+        const sess = sessDoc.data();
+        const now = Date.now();
+        const expiresAt = sess.expiresAt?.seconds ? sess.expiresAt.seconds * 1000 : 0;
+        if (sess.isActive === false) {
+          showQrResult('error', '⏹ Session 已結束', '教官已提早結束此 session');
+          return;
+        }
+        if (now > expiresAt) {
+          showQrResult('error', '⏰ QR Code 已過期', '5 分鐘時效已結束、請請教官重新產生 QR Code');
+          return;
+        }
+        if (sess.classId !== currentStudent.classId) {
+          showQrResult('error', '🚫 班級不符', `此 QR Code 限定 ${sess.className || sess.classId} 班使用、你的班級是 ${currentStudent.classId}`);
+          return;
+        }
+        // 檢查已掃過
+        const alreadyScanned = (sess.scannedStudents || []).some(s => s.studentId === currentStudent.id);
+        if (alreadyScanned) {
+          showQrResult('warning', '⚠️ 你已完成此次簽核', `「${sess.skillName}」此 QR 已掃過、不可重複（同 QR 內防重複）`);
+          return;
+        }
+        // 寫入 core_skill_signoffs
+        const signoffRef = doc(collection(db, 'core_skill_signoffs'));
+        await setDoc(signoffRef, {
+          studentId: currentStudent.id,
+          studentName: currentStudent.name,
+          classId: currentStudent.classId,
+          skillId: sess.skillId,
+          skillName: sess.skillName,
+          signedBy: sess.instructorId,
+          signedByName: sess.instructorName,
+          sessionId,
+          signedAt: serverTimestamp()
+        });
+        // 更新 session.scannedStudents
+        await updateDoc(doc(db, 'qr_signoff_sessions', sessionId), {
+          scannedStudents: arrayUnion({
+            studentId: currentStudent.id,
+            studentName: currentStudent.name,
+            scannedAt: Timestamp.now()
+          })
+        });
+        showQrResult('success', '✅ 簽核成功！', `「${sess.skillName}」+1 次\n核心技術簽核進度已更新`);
+        // 重新載入核心技術簽核
+        await loadCoreSkills();
+      } catch (e) {
+        console.error('[F11-E] processQrSignoff:', e);
+        showQrResult('error', '❌ 簽核失敗', e.message);
+      }
+    }
+
+    function showQrResult(type, title, msg) {
+      const colors = {
+        success: { bg: '#f0fdf4', border: '#10b981', text: '#065f46', icon: '✅' },
+        warning: { bg: '#fef3c7', border: '#f59e0b', text: '#78350f', icon: '⚠️' },
+        error: { bg: '#fef2f2', border: '#ef4444', text: '#991b1b', icon: '❌' }
+      };
+      const c = colors[type] || colors.error;
+      const main = document.querySelector('main');
+      if (!main) return;
+      const banner = document.createElement('div');
+      banner.style.cssText = `background:${c.bg};border:2px solid ${c.border};color:${c.text};padding:18px 24px;border-radius:12px;margin-bottom:16px;font-size:15px;display:flex;align-items:center;gap:14px;animation:slideDown 0.3s`;
+      banner.innerHTML = `<div style="font-size:28px">${c.icon}</div><div style="flex:1"><div style="font-weight:700;margin-bottom:4px">${title}</div><div style="font-size:13px;white-space:pre-wrap">${msg}</div></div><button style="background:transparent;border:none;color:${c.text};font-size:22px;cursor:pointer;padding:4px 12px" onclick="this.parentElement.remove()">×</button>`;
+      main.insertBefore(banner, main.firstChild);
+      if (type === 'success') setTimeout(() => banner.remove(), 8000);
     }
 
     // ===== F11-F: 6 角學科雷達（D1-D6） =====
@@ -426,8 +560,14 @@
       }
     }
 
-    // ===== F11-A: Milestone 5 角雷達 =====
+    // ===== F11-A + F11-C 共用：Milestone 資料 cache =====
     let radarChart = null;
+    let riverChart = null;
+    let _mGroups = [];
+    let _mItems = [];
+    let _mEvals = [];
+    let _mScores = {};
+    let _mRecentN = 3;
     async function loadMilestoneRadar() {
       try {
         // 1. 讀啟用的 milestone 群（5 角）
@@ -547,11 +687,211 @@
         const hint = document.getElementById('radar-empty-hint');
         if (hint) hint.style.display = groupScores.every(s => s === 0) ? 'block' : 'none';
 
+        // 9. 存到 module-level、給 F11-C 評分明細用
+        _mGroups = groups;
+        _mItems = milestones;
+        _mEvals = evaluations;
+        _mScores = milestoneScores;
+        _mRecentN = recentN;
+
+        // 10. F11-C: 渲染評分明細（如果有評核資料）
+        renderMilestoneDetails();
       } catch (e) {
         console.error('[F11-A] loadMilestoneRadar error:', e);
         document.getElementById('radar-empty-hint').innerHTML = `❌ 載入失敗：${e.message}`;
       }
     }
+
+    // ===== F11-C: Milestone 評分明細 + 河流圖 =====
+    function renderMilestoneDetails() {
+      const section = document.getElementById('milestone-details-section');
+      const content = document.getElementById('milestone-details-content');
+      if (!section || !content) return;
+
+      // 只顯示有評核紀錄的群
+      const groupsWithData = _mGroups.filter(g => {
+        const inGroup = _mItems.filter(m => m.groupId === g.id);
+        return inGroup.some(m => _mScores[m.id] !== null);
+      });
+
+      if (groupsWithData.length === 0) {
+        section.style.display = 'none';
+        return;
+      }
+
+      section.style.display = 'block';
+      let html = '';
+      groupsWithData.forEach(g => {
+        const inGroup = _mItems.filter(m => m.groupId === g.id);
+        const itemsWithScore = inGroup.filter(m => _mScores[m.id] !== null);
+        if (itemsWithScore.length === 0) return;
+
+        // 群平均
+        const sum = itemsWithScore.reduce((acc, m) => acc + _mScores[m.id], 0);
+        const groupAvg = sum / itemsWithScore.length;
+
+        html += `<div style="margin-bottom:20px">
+          <div style="background:linear-gradient(135deg,#14b8a6,#0d9488);color:white;padding:10px 16px;border-radius:8px 8px 0 0;display:flex;justify-content:space-between;align-items:center">
+            <strong>${g.id} ${g.name}</strong>
+            <span style="font-size:13px;opacity:0.9">綜合 Level ${groupAvg.toFixed(2)}（最近 ${_mRecentN} 筆平均）</span>
+          </div>
+          <table style="width:100%;border-collapse:collapse;background:white;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;overflow:hidden">
+            <thead>
+              <tr style="background:#f8fafc">
+                <th style="padding:8px 12px;text-align:left;font-size:12px;color:#64748b;font-weight:600">ID</th>
+                <th style="padding:8px 12px;text-align:left;font-size:12px;color:#64748b;font-weight:600">項目</th>
+                <th style="padding:8px 12px;text-align:left;font-size:12px;color:#64748b;font-weight:600">步驟</th>
+                <th style="padding:8px 12px;text-align:center;font-size:12px;color:#64748b;font-weight:600">平均</th>
+                <th style="padding:8px 12px;text-align:center;font-size:12px;color:#64748b;font-weight:600">次數</th>
+                <th style="padding:8px 12px;text-align:center;font-size:12px;color:#64748b;font-weight:600">趨勢</th>
+              </tr>
+            </thead>
+            <tbody>`;
+
+        // 排序：分數低的在前（提醒學員加強）
+        itemsWithScore.sort((a, b) => (_mScores[a.id] || 0) - (_mScores[b.id] || 0));
+
+        itemsWithScore.forEach(m => {
+          const score = _mScores[m.id];
+          const count = _mEvals.filter(e => e.milestoneId === m.id).length;
+          const scoreColor = score >= 4 ? '#10b981' : score >= 3 ? '#f59e0b' : '#ef4444';
+          html += `<tr style="border-top:1px solid #e2e8f0;cursor:pointer" onclick="window._openRiver('${m.id}')" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+            <td style="padding:10px 12px;font-family:monospace;font-size:13px;color:#64748b">${m.id}</td>
+            <td style="padding:10px 12px;font-weight:600;color:#1e293b">${m.name}</td>
+            <td style="padding:10px 12px"><span style="background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:10px;font-size:12px">${m.step || '—'}</span></td>
+            <td style="padding:10px 12px;text-align:center;font-weight:700;color:${scoreColor};font-size:16px">${score.toFixed(1)}</td>
+            <td style="padding:10px 12px;text-align:center;color:#64748b">${count}</td>
+            <td style="padding:10px 12px;text-align:center"><button style="background:#14b8a6;color:white;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">📈 詳細</button></td>
+          </tr>`;
+        });
+
+        html += '</tbody></table></div>';
+      });
+
+      content.innerHTML = html;
+    }
+
+    // 全域函式給 onclick 用
+    window._openRiver = openMilestoneRiverModal;
+
+    function openMilestoneRiverModal(milestoneId) {
+      const m = _mItems.find(x => x.id === milestoneId);
+      if (!m) return;
+
+      // 該 milestone 的所有評核（新到舊已排序）
+      const allEvals = _mEvals.filter(e => e.milestoneId === milestoneId);
+
+      // 標題
+      document.getElementById('river-milestone-id').textContent = m.id;
+      document.getElementById('river-milestone-name').textContent = m.name;
+      document.getElementById('river-milestone-step').textContent = m.step ? `📍 ${m.step}` : '';
+
+      // 統計（最近 N 筆平均）
+      const count = allEvals.length;
+      const recent = allEvals.slice(0, _mRecentN);
+      const avgRecent = recent.length > 0 ? recent.reduce((a, e) => a + (e.level || 0), 0) / recent.length : 0;
+
+      // 趨勢（最近 vs 前期）
+      let trendIcon = '➖ 平穩';
+      let trendColor = '#64748b';
+      if (allEvals.length >= 4) {
+        const half = Math.floor(allEvals.length / 2);
+        const recentAvg = allEvals.slice(0, half).reduce((a, e) => a + (e.level || 0), 0) / half;
+        const oldAvg = allEvals.slice(half).reduce((a, e) => a + (e.level || 0), 0) / (allEvals.length - half);
+        const diff = recentAvg - oldAvg;
+        if (diff > 0.3) { trendIcon = '📈 進步'; trendColor = '#10b981'; }
+        else if (diff < -0.3) { trendIcon = '📉 退步'; trendColor = '#ef4444'; }
+      }
+
+      document.getElementById('river-count').textContent = count;
+      document.getElementById('river-avg').textContent = avgRecent.toFixed(2);
+      const trendEl = document.getElementById('river-trend');
+      trendEl.textContent = trendIcon;
+      trendEl.style.color = trendColor;
+
+      // 河流圖（時間正向、舊到新）
+      const evalsAsc = [...allEvals].reverse();
+      const labels = evalsAsc.map(e => {
+        if (e.evaluatedAt?.seconds) {
+          const d = new Date(e.evaluatedAt.seconds * 1000);
+          return `${d.getMonth() + 1}/${d.getDate()}`;
+        }
+        return '—';
+      });
+      const data = evalsAsc.map(e => e.level || 0);
+
+      const ctx = document.getElementById('river-chart');
+      if (riverChart) riverChart.destroy();
+      riverChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Level',
+              data,
+              backgroundColor: 'rgba(20, 184, 166, 0.15)',
+              borderColor: 'rgba(20, 184, 166, 1)',
+              pointBackgroundColor: 'rgba(20, 184, 166, 1)',
+              pointBorderColor: '#fff',
+              pointRadius: 5,
+              borderWidth: 3,
+              fill: true,
+              tension: 0.3
+            },
+            {
+              label: '獨立執行門檻 (Level 4)',
+              data: evalsAsc.map(() => 4),
+              backgroundColor: 'transparent',
+              borderColor: 'rgba(239, 68, 68, 0.7)',
+              borderDash: [6, 4],
+              pointRadius: 0,
+              borderWidth: 1.5
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { min: 0, max: 5, ticks: { stepSize: 1, color: '#94a3b8' }, grid: { color: 'rgba(148, 163, 184, 0.2)' } },
+            x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148, 163, 184, 0.1)' } }
+          },
+          plugins: { legend: { position: 'bottom', labels: { padding: 10, font: { size: 11 } } } }
+        }
+      });
+
+      // 歷次評核紀錄（含質性回饋）
+      const listEl = document.getElementById('river-evals-list');
+      if (allEvals.length === 0) {
+        listEl.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:20px">尚無評核紀錄</div>';
+      } else {
+        let lhtml = '';
+        const levelColors = { 0: '#6b7280', 1: '#ef4444', 2: '#dc2626', 3: '#f59e0b', 4: '#10b981', 5: '#059669' };
+        allEvals.forEach(e => {
+          const date = e.evaluatedAt?.seconds ? new Date(e.evaluatedAt.seconds * 1000).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+          const lv = e.level ?? 0;
+          const fb = e.qualitativeFeedback?.trim() || '（無文字回饋）';
+          lhtml += `<div style="border-left:4px solid ${levelColors[lv] || '#6b7280'};background:#f8fafc;padding:10px 14px;margin-bottom:8px;border-radius:0 8px 8px 0">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:4px">
+              <div style="color:#64748b;font-size:12px">${date} ・ ${e.evaluatorName || '—'}（${e.evaluatorRole || '—'}）／ ${e.evaluatorUnit || '—'}</div>
+              <div style="background:${levelColors[lv] || '#6b7280'};color:white;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700">Level ${lv}</div>
+            </div>
+            <div style="color:${e.qualitativeFeedback?.trim() ? '#1e293b' : '#94a3b8'};font-size:13px;font-style:${e.qualitativeFeedback?.trim() ? 'normal' : 'italic'}">${fb}</div>
+          </div>`;
+        });
+        listEl.innerHTML = lhtml;
+      }
+
+      document.getElementById('ms-river-modal').style.display = 'flex';
+    }
+
+    document.getElementById('btn-river-close').addEventListener('click', () => {
+      document.getElementById('ms-river-modal').style.display = 'none';
+    });
+    document.getElementById('ms-river-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) document.getElementById('ms-river-modal').style.display = 'none';
+    });
 
     // ===== F11-B: 核心技術簽核清單 =====
     async function loadCoreSkills() {
@@ -611,6 +951,88 @@
         document.getElementById('core-skills-list').innerHTML = `<div class="empty-hint">❌ 載入失敗：${e.message}</div>`;
       }
     }
+
+    // ===== F11-D: 產生 EPA 評核 token + 顯示連結 =====
+    async function generateEvalToken() {
+      if (!currentStudent) throw new Error('未登入');
+      const tokenId = 'tok_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      const expiresAt = Timestamp.fromDate(new Date(Date.now() + 24 * 60 * 60 * 1000));
+      await setDoc(doc(db, 'evaluation_tokens', tokenId), {
+        studentId: currentStudent.id,
+        studentName: currentStudent.name,
+        classId: currentStudent.classId,
+        createdAt: serverTimestamp(),
+        expiresAt,
+        usedCount: 0,
+        evaluationIds: []
+      });
+      return tokenId;
+    }
+
+    function buildEvalUrl(token) {
+      return `${location.origin}${location.pathname.replace(/student\.html$/, 'eval.html')}?token=${token}`;
+    }
+
+    document.getElementById('btn-eval-epa').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-eval-epa');
+      btn.disabled = true; btn.textContent = '⏳ 產生連結中...';
+      try {
+        const token = await generateEvalToken();
+        const url = buildEvalUrl(token);
+        document.getElementById('eval-link-url').textContent = url;
+        document.getElementById('eval-link-status').innerHTML = '';
+        document.getElementById('eval-link-modal').style.display = 'flex';
+      } catch (e) {
+        alert('❌ 產生連結失敗：' + e.message);
+      } finally {
+        btn.disabled = false; btn.textContent = '📝 請教官評核 EPA';
+      }
+    });
+
+    document.getElementById('btn-copy-link').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-copy-link');
+      btn.disabled = true; btn.textContent = '⏳ 產生中...';
+      try {
+        const token = await generateEvalToken();
+        const url = buildEvalUrl(token);
+        try {
+          await navigator.clipboard.writeText(url);
+          alert('✅ 連結已複製到剪貼簿！\n\n可貼到 LINE 傳給教官、24 小時內有效。');
+        } catch (clipErr) {
+          // 剪貼簿失敗（HTTP 環境）→ 顯示 modal 讓使用者手動複製
+          document.getElementById('eval-link-url').textContent = url;
+          document.getElementById('eval-link-status').innerHTML = '<div style="color:#f59e0b;margin-top:8px;font-size:12px">⚠️ 自動複製失敗、請手動複製上方連結</div>';
+          document.getElementById('eval-link-modal').style.display = 'flex';
+        }
+      } catch (e) {
+        alert('❌ 產生連結失敗：' + e.message);
+      } finally {
+        btn.disabled = false; btn.textContent = '🔗 複製連結';
+      }
+    });
+
+    document.getElementById('btn-eval-copy').addEventListener('click', async () => {
+      const url = document.getElementById('eval-link-url').textContent;
+      try {
+        await navigator.clipboard.writeText(url);
+        document.getElementById('eval-link-status').innerHTML = '<div style="color:#10b981;margin-top:6px;font-size:13px">✅ 已複製、可貼到 LINE 傳給教官</div>';
+      } catch (e) {
+        document.getElementById('eval-link-status').innerHTML = '<div style="color:#ef4444;margin-top:6px;font-size:12px">❌ 複製失敗、請手動選取上方連結複製</div>';
+      }
+    });
+
+    document.getElementById('btn-eval-open').addEventListener('click', () => {
+      const url = document.getElementById('eval-link-url').textContent;
+      window.open(url, '_blank');
+    });
+
+    document.getElementById('btn-eval-close').addEventListener('click', () => {
+      document.getElementById('eval-link-modal').style.display = 'none';
+    });
+
+    document.getElementById('eval-link-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) document.getElementById('eval-link-modal').style.display = 'none';
+    });
 
     document.getElementById('btn-logout').addEventListener('click', () => { if (confirm('確定要登出嗎？')) signOut(auth); });
   </script>
