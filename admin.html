@@ -618,59 +618,83 @@
         const parts = line.split(/\t|,/).map(s => s.trim());
         const no = parseInt(parts[0]);
         const name = parts[1] || '';
-        const email = parts[2] || '';
+        const idNumber = (parts[2] || '').toUpperCase();
+        const email = parts[3] || '';
         if (isNaN(no)) { rows.push({ line: idx + 1, err: '學號不是數字' }); return; }
         if (!name) { rows.push({ line: idx + 1, no, err: '姓名空白' }); return; }
-        if (seen[no]) { rows.push({ line: idx + 1, no, name, err: `此學號在這批裡重複（也在第 ${seen[no]} 行）` }); return; }
+        if (!/^[A-Z]\d{9}$/.test(idNumber)) { rows.push({ line: idx + 1, no, name, err: '身分證格式錯誤' }); return; }
+        if (seen[no]) { rows.push({ line: idx + 1, no, name, err: `學號重複（也在第 ${seen[no]} 行）` }); return; }
         seen[no] = idx + 1;
-        rows.push({ line: idx + 1, no, name, email, ok: true });
+        rows.push({ line: idx + 1, no, name, idNumber, email, ok: true });
       });
-      // 檢查 Firestore 是否已存在
       const checkPromises = rows.filter(r => r.ok).map(async r => {
         const docSnap = await getDoc(doc(db, 'students', `${classId.toLowerCase()}-${r.no}`));
-        if (docSnap.exists()) r.warn = '此學號已存在、會被覆蓋';
+        if (docSnap.exists()) r.warn = '此學號已存在、會覆蓋';
       });
       await Promise.all(checkPromises);
 
       let html = '<h4 style="color:#fcd34d;margin:12px 0 8px">預覽結果：</h4>';
-      html += '<table class="table"><thead><tr><th>行</th><th>學號</th><th>姓名</th><th>Email</th><th>狀態</th></tr></thead><tbody>';
+      html += '<table class="table"><thead><tr><th>行</th><th>學號</th><th>姓名</th><th>身分證</th><th>狀態</th></tr></thead><tbody>';
       let okCount = 0, errCount = 0, warnCount = 0;
       rows.forEach(r => {
         let status = '';
         if (r.err) { status = `<span class="tag-pill red">❌ ${r.err}</span>`; errCount++; }
         else if (r.warn) { status = `<span class="tag-pill yellow">⚠️ ${r.warn}</span>`; okCount++; warnCount++; }
         else { status = `<span class="tag-pill">✅ OK</span>`; okCount++; }
-        html += `<tr><td class="num">${r.line}</td><td class="num">${r.no || '—'}</td><td>${r.name || '—'}</td><td style="color:#94a3b8;font-size:13px">${r.email || '—'}</td><td>${status}</td></tr>`;
+        const idMask = r.idNumber ? r.idNumber.substring(0, 1) + '*****' + r.idNumber.slice(-2) : '—';
+        html += `<tr><td class="num">${r.line}</td><td class="num">${r.no || '—'}</td><td>${r.name || '—'}</td><td style="font-family:monospace;color:#94a3b8;font-size:13px">${idMask}</td><td>${status}</td></tr>`;
       });
       html += '</tbody></table>';
       html += `<div style="margin-top:12px"><span class="tag-pill">有效 ${okCount}</span> ${errCount > 0 ? `<span class="tag-pill red">錯誤 ${errCount}</span>` : ''} ${warnCount > 0 ? `<span class="tag-pill yellow">覆蓋 ${warnCount}</span>` : ''}</div>`;
       previewEl.innerHTML = html;
       currentBatchPreview = { classId, rows: rows.filter(r => r.ok) };
       document.getElementById('btn-batch-commit').disabled = okCount === 0;
-      document.getElementById('btn-batch-commit').textContent = `💾 寫入 ${okCount} 筆`;
+      document.getElementById('btn-batch-commit').textContent = `💾 寫入 + 建帳號 ${okCount} 筆`;
     });
 
     document.getElementById('btn-batch-commit').addEventListener('click', async () => {
       if (!currentBatchPreview) return;
       const { classId, rows } = currentBatchPreview;
-      if (!confirm(`確定寫入 ${rows.length} 筆學員到 ${classId}？`)) return;
+      if (!confirm(`確定寫入 ${rows.length} 筆學員、並自動建立帳號？\n\n密碼一律設為身分證字號、請通知學員首次登入後改密碼。`)) return;
       const btn = document.getElementById('btn-batch-commit');
-      btn.disabled = true; btn.textContent = '⏳ 寫入中...';
+      btn.disabled = true;
+      let success = 0, failed = 0, failures = [];
       try {
-        const batch = writeBatch(db);
-        rows.forEach(r => {
+        for (const r of rows) {
           const sid = `${classId.toLowerCase()}-${r.no}`;
-          batch.set(doc(db, 'students', sid), {
-            classId: classId, studentNo: r.no, name: r.name, email: r.email,
-            isActive: true, archivedAt: null,
-            createdAt: serverTimestamp(), createdBy: currentUser.email
-          });
-        });
-        await batch.commit();
-        alert(`✅ 寫入 ${rows.length} 筆成功！`);
+          const fakeEmail = `${classId.toLowerCase()}-${r.no}@emtp.local`;
+          btn.textContent = `⏳ 建立中 ${success + failed + 1}/${rows.length}`;
+          try {
+            let authUid = null;
+            try {
+              const cred = await createUserWithEmailAndPassword(secondaryAuth, fakeEmail, r.idNumber);
+              authUid = cred.user.uid;
+            } catch (authErr) {
+              if (authErr.code !== 'auth/email-already-in-use') throw authErr;
+            }
+            await setDoc(doc(db, 'students', sid), {
+              classId, studentNo: r.no, name: r.name, idNumber: r.idNumber, email: r.email,
+              hasAuthAccount: true, authUid,
+              isActive: true, archivedAt: null,
+              createdAt: serverTimestamp(), createdBy: currentUser.email
+            });
+            success++;
+          } catch (e) {
+            failed++;
+            failures.push(`${r.name}(學號${r.no}): ${e.message}`);
+          }
+        }
+        try { await signOut(secondaryAuth); } catch (e) {}
+        let msg = `✅ 完成！\n\n成功：${success} 筆\n失敗：${failed} 筆`;
+        if (failures.length > 0) msg += '\n\n失敗清單：\n' + failures.slice(0, 5).join('\n');
+        alert(msg);
         document.getElementById('batch-modal').classList.remove('active');
         loadStudents(); loadOverviewStats();
-      } catch (e) { alert('❌ ' + e.message); btn.disabled = false; btn.textContent = `💾 寫入 ${rows.length} 筆`; }
+      } catch (e) {
+        alert('❌ ' + e.message);
+      } finally {
+        btn.disabled = false; btn.textContent = `💾 寫入 + 建帳號 ${rows.length} 筆`;
+      }
     });
     
     // === 指導員管理 (F7) ===
