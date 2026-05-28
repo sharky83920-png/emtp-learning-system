@@ -105,6 +105,7 @@
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
+    setPersistence(auth, inMemoryPersistence);
     const db = getFirestore(app);
     let currentStudent = null;
 
