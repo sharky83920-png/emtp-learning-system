@@ -221,12 +221,15 @@
         <div class="form-group"><label>班級</label><input type="text" id="batch-class-display" readonly style="background:#0a0f1f;color:#94a3b8"></div>
         <div class="form-group">
           <label>學員資料（每行一筆、Tab 或逗號分隔）</label>
-          <textarea id="batch-data" rows="12" placeholder="格式：學號 [Tab/逗號] 姓名 [Tab/逗號] email
-範例：
-1	尤偉檁	will50113@yahoo.com.tw
-2	黃朕為	willy11134444@gmail.com
-3	劉仕偉	passatjay@gmail.com
-...
+          <textarea id="batch-data" rows="12" placeholder="【格式】學號 [Tab] 姓名 [Tab] 身分證 [Tab] email（選填）
+
+【範例】（⚠️ 假資料、僅供格式參考）
+1	王小明	A123456789	wang@example.com
+2	李大華	B234567890	li@example.com
+3	張小美	C345678901	
+
+💡 身分證 = 初始密碼、學員首次登入後可改
+💡 Email 可空白、不用於登入
 
 💡 Email 可以空白、之後再補"></textarea>
         </div>
