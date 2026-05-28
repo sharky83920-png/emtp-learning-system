@@ -8,20 +8,21 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; background: #f1f5f9; color: #1e293b; min-height: 100vh; line-height: 1.6; }
     .login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .login-card { background: white; padding: 40px; border-radius: 16px; width: 100%; max-width: 420px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
-    .login-card h1 { color: #1e293b; font-size: 28px; margin-bottom: 8px; text-align: center; }
-    .login-card .subtitle { color: #64748b; font-size: 14px; margin-bottom: 30px; text-align: center; }
-    .form-group { margin-bottom: 16px; }
+    .login-card { background: white; padding: 36px; border-radius: 16px; width: 100%; max-width: 440px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+    .login-card h1 { color: #1e293b; font-size: 24px; margin-bottom: 8px; text-align: center; }
+    .login-card .subtitle { color: #64748b; font-size: 13px; margin-bottom: 24px; text-align: center; }
+    .form-group { margin-bottom: 14px; }
     .form-group label { display: block; color: #475569; font-size: 13px; margin-bottom: 6px; font-weight: 500; }
-    .form-group input { width: 100%; padding: 12px 14px; background: #f8fafc; border: 2px solid #e2e8f0; color: #1e293b; border-radius: 8px; font-family: inherit; font-size: 16px; transition: border 0.15s; }
-    .form-group input:focus { outline: none; border-color: #6366f1; background: white; }
-    .btn-primary { width: 100%; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; padding: 14px; border-radius: 8px; font-family: inherit; font-size: 16px; cursor: pointer; font-weight: 600; margin-top: 8px; }
+    .form-group input, .form-group select { width: 100%; padding: 11px 14px; background: #f8fafc; border: 2px solid #e2e8f0; color: #1e293b; border-radius: 8px; font-family: inherit; font-size: 15px; }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: #6366f1; background: white; }
+    .form-group input:disabled, .form-group select:disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
+    .btn-primary { width: 100%; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; padding: 13px; border-radius: 8px; font-family: inherit; font-size: 15px; cursor: pointer; font-weight: 600; margin-top: 8px; }
     .btn-primary:hover { opacity: 0.9; }
     .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
     .err-msg { background: #fef2f2; color: #b91c1c; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 12px; border: 1px solid #fecaca; }
-    .info-msg { background: #eff6ff; color: #1e40af; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 12px; border: 1px solid #bfdbfe; }
+    .info-msg { background: #eff6ff; color: #1e40af; padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-top: 12px; border: 1px solid #bfdbfe; }
     .dashboard { display: none; }
-    .header { background: white; padding: 16px 24px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .header { background: white; padding: 16px 24px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
     .header h1 { font-size: 20px; color: #1e293b; }
     .user-info { display: flex; align-items: center; gap: 12px; color: #64748b; font-size: 14px; }
     .btn-logout { background: #ef4444; color: white; padding: 8px 16px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-family: inherit; }
@@ -49,20 +50,23 @@
   <div class="login-screen" id="login-screen">
     <div class="login-card">
       <h1>📚 EMTP 學員系統</h1>
-      <p class="subtitle">請輸入「姓名」+「身分證字號」登入</p>
+      <p class="subtitle">選班級 + 姓名、輸入身分證登入</p>
+
       <div class="form-group">
-        <label>姓名</label>
-        <input type="text" id="login-name" placeholder="王小明" autocomplete="off">
+        <label>1. 班級</label>
+        <select id="login-class" disabled><option value="">⏳ 載入中...</option></select>
       </div>
       <div class="form-group">
-        <label>身分證字號</label>
-        <input type="text" id="login-id" placeholder="A123456789" maxlength="10" style="font-family:monospace;text-transform:uppercase">
+        <label>2. 姓名</label>
+        <select id="login-name" disabled><option value="">請先選班級</option></select>
+      </div>
+      <div class="form-group">
+        <label>3. 身分證字號</label>
+        <input type="text" id="login-id" maxlength="10" placeholder="A123456789" style="text-transform:uppercase;font-family:monospace">
       </div>
       <button class="btn-primary" id="btn-login">登入</button>
       <div id="login-error"></div>
-      <div class="info-msg" style="margin-top:20px;font-size:12px">
-        💡 第一次使用：密碼 = 身分證字號。登入後可改密碼。
-      </div>
+      <div class="info-msg">💡 第一次使用：密碼 = 身分證字號</div>
     </div>
   </div>
 
@@ -78,11 +82,8 @@
     <main>
       <div class="welcome-card">
         <h2>👋 歡迎、<span id="student-name">同學</span></h2>
-        <div class="class-info">
-          🏫 班級：<span id="student-class">—</span> ・ 學號：<span id="student-no">—</span>
-        </div>
+        <div class="class-info">🏫 班級：<span id="student-class">—</span> ・ 學號：<span id="student-no">—</span></div>
       </div>
-
       <div class="feature-grid" id="features"><div class="loading">⏳ 載入中...</div></div>
     </main>
   </div>
@@ -105,37 +106,128 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-
     let currentStudent = null;
 
+    function showLogin(errMsg) {
+      document.getElementById('login-screen').style.display = 'flex';
+      document.getElementById('dashboard').style.display = 'none';
+      if (errMsg) {
+        document.getElementById('login-error').innerHTML = `<div class="err-msg">❌ ${errMsg}</div>`;
+      }
+      loadClasses();
+    }
+
+    async function loadClasses() {
+      const sel = document.getElementById('login-class');
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">⏳ 載入中...</option>';
+      try {
+        console.log('[Init] Loading classes...');
+        const snap = await getDocs(collection(db, 'classes'));
+        const classes = [];
+        snap.forEach(d => { const data = d.data(); if (data.isActive !== false) classes.push({ id: d.id, ...data }); });
+        classes.sort((a, b) => (b.year || 0) - (a.year || 0));
+        console.log('[Init] Loaded', classes.length, 'classes');
+        let html = '<option value="">請選班級...</option>';
+        classes.forEach(c => { html += `<option value="${c.id}">${c.displayName || c.id}</option>`; });
+        sel.innerHTML = html;
+        sel.disabled = false;
+      } catch (e) {
+        console.error('[Init] Failed to load classes:', e);
+        sel.innerHTML = `<option value="">❌ 載入失敗</option>`;
+      }
+    }
+
+    document.getElementById('login-class').addEventListener('change', async () => {
+      const classId = document.getElementById('login-class').value;
+      const sel = document.getElementById('login-name');
+      if (!classId) { sel.innerHTML = '<option value="">請先選班級</option>'; sel.disabled = true; return; }
+      sel.innerHTML = '<option value="">⏳ 載入學員...</option>';
+      sel.disabled = true;
+      try {
+        console.log('[Init] Loading students for', classId);
+        const q = query(collection(db, 'students'), where('classId', '==', classId));
+        const snap = await getDocs(q);
+        const students = [];
+        snap.forEach(d => { const data = d.data(); if (data.isActive !== false && data.hasAuthAccount) students.push(data); });
+        students.sort((a, b) => (a.studentNo || 0) - (b.studentNo || 0));
+        console.log('[Init] Loaded', students.length, 'students');
+        if (students.length === 0) {
+          sel.innerHTML = '<option value="">⚠️ 該班沒有學員（請聯絡管理員）</option>';
+          return;
+        }
+        let html = '<option value="">請選姓名...</option>';
+        students.forEach(s => { html += `<option value="${s.studentNo}|${s.name}">${s.studentNo}. ${s.name}</option>`; });
+        sel.innerHTML = html;
+        sel.disabled = false;
+      } catch (e) {
+        console.error('[Init] Failed to load students:', e);
+        sel.innerHTML = `<option value="">❌ ${e.message}</option>`;
+      }
+    });
+
+    document.getElementById('btn-login').addEventListener('click', async () => {
+      const classId = document.getElementById('login-class').value;
+      const nameValue = document.getElementById('login-name').value;
+      const idNumber = document.getElementById('login-id').value.trim().toUpperCase();
+      const errEl = document.getElementById('login-error');
+      errEl.innerHTML = '';
+      if (!classId) { errEl.innerHTML = '<div class="err-msg">❌ 請選班級</div>'; return; }
+      if (!nameValue) { errEl.innerHTML = '<div class="err-msg">❌ 請選姓名</div>'; return; }
+      if (!/^[A-Z]\d{9}$/.test(idNumber)) { errEl.innerHTML = '<div class="err-msg">❌ 身分證格式錯誤（1 個英文字母 + 9 個數字）</div>'; return; }
+
+      const [studentNo, name] = nameValue.split('|');
+      const fakeEmail = `${classId.toLowerCase()}-${studentNo}@emtp.local`;
+      const btn = document.getElementById('btn-login');
+      btn.disabled = true; btn.textContent = '⏳ 登入中...';
+
+      try {
+        console.log('[Login] Attempting:', { classId, studentNo, name, fakeEmail });
+        await signInWithEmailAndPassword(auth, fakeEmail, idNumber);
+        console.log('[Login] Sign-in success');
+      } catch (e) {
+        console.error('[Login] Failed:', e);
+        let msg = '登入失敗';
+        if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password') msg = '身分證錯誤';
+        else if (e.code === 'auth/user-not-found') msg = '帳號未建立、請聯絡管理員';
+        else msg = e.message;
+        errEl.innerHTML = `<div class="err-msg">❌ ${msg}</div>`;
+        btn.disabled = false; btn.textContent = '登入';
+      }
+    });
+
+    document.getElementById('login-id').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('btn-login').click(); });
+
     onAuthStateChanged(auth, async (user) => {
+      console.log('[Auth] state changed:', user?.email || 'null');
       if (!user) {
-        document.getElementById('login-screen').style.display = 'flex';
-        document.getElementById('dashboard').style.display = 'none';
+        showLogin();
         return;
       }
-      // 從 user.email 解析 classId 跟 studentNo（格式：tp17-1@emtp.local）
       const match = user.email.match(/^([^-]+)-(\d+)@emtp\.local$/);
       if (!match) {
-        document.getElementById('login-error').innerHTML = '<div class="err-msg">❌ 此帳號不是學員帳號</div>';
+        console.warn('[Auth] not a student email');
         await signOut(auth);
+        showLogin('此帳號不是學員');
         return;
       }
       const classId = match[1].toUpperCase();
       const studentNo = parseInt(match[2]);
       const studentId = `${classId.toLowerCase()}-${studentNo}`;
+      console.log('[Auth] Querying student doc:', studentId);
 
       try {
         const sDoc = await getDoc(doc(db, 'students', studentId));
+        console.log('[Auth] doc exists:', sDoc.exists());
         if (!sDoc.exists()) {
-          document.getElementById('login-error').innerHTML = '<div class="err-msg">❌ 找不到學員資料</div>';
           await signOut(auth);
+          showLogin('找不到學員資料');
           return;
         }
         currentStudent = { id: sDoc.id, ...sDoc.data() };
         if (currentStudent.isActive === false) {
-          document.getElementById('login-error').innerHTML = '<div class="err-msg">❌ 你的帳號已被封存、請聯絡管理員</div>';
           await signOut(auth);
+          showLogin('帳號已封存、請聯絡管理員');
           return;
         }
         document.getElementById('login-screen').style.display = 'none';
@@ -145,8 +237,11 @@
         document.getElementById('student-no').textContent = currentStudent.studentNo || '—';
         await loadDashboard();
       } catch (e) {
-        document.getElementById('login-error').innerHTML = `<div class="err-msg">❌ ${e.message}</div>`;
-        await signOut(auth);
+        console.error('[Auth] error:', e);
+        // ⭐ 不要 signOut、避免無限循環、只顯示錯誤
+        document.getElementById('login-error').innerHTML = `<div class="err-msg">❌ 讀取失敗: ${e.message}<br>請重整頁面再試</div>`;
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('dashboard').style.display = 'none';
       }
     });
 
@@ -173,8 +268,8 @@
         } else {
           html += `<div class="feature-card disabled"><div class="icon">⚡</div><h3>能量條 <span class="tag tag-disabled">未啟用</span></h3><div class="desc">指導員尚未開啟</div></div>`;
         }
-        html += `<div class="feature-card ${mb.enabled ? '' : 'disabled'}"><div class="icon">📓</div><h3>錯題本 <span class="tag ${mb.enabled ? 'tag-enabled' : 'tag-disabled'}">${mb.enabled ? '啟用中' : '未啟用'}</span></h3><div class="desc">⏳ 開發中</div></div>`;
-        html += `<div class="feature-card ${lb.enabled ? '' : 'disabled'}"><div class="icon">🏆</div><h3>戰力排行 <span class="tag ${lb.enabled ? 'tag-enabled' : 'tag-disabled'}">${lb.enabled ? '啟用中' : '未啟用'}</span></h3><div class="desc">⏳ 開發中</div></div>`;
+        html += `<div class="feature-card ${mb.enabled ? '' : 'disabled'}"><div class="icon">📓</div><h3>錯題本 <span class="tag ${mb.enabled ? 'tag-enabled' : 'tag-disabled'}">${mb.enabled ? '啟用中' : '未啟用'}</span></h3><div class="desc">⏳ F11 開發中</div></div>`;
+        html += `<div class="feature-card ${lb.enabled ? '' : 'disabled'}"><div class="icon">🏆</div><h3>戰力排行 <span class="tag ${lb.enabled ? 'tag-enabled' : 'tag-disabled'}">${lb.enabled ? '啟用中' : '未啟用'}</span></h3><div class="desc">⏳ F11 開發中</div></div>`;
         html += `<div class="feature-card"><div class="icon">📝</div><h3>答題系統 <span class="tag tag-disabled">F11 建置中</span></h3><div class="desc">隨機綜合測驗、章節練習等</div></div>`;
         document.getElementById('features').innerHTML = html;
       } catch (e) {
@@ -182,35 +277,6 @@
       }
     }
 
-    document.getElementById('btn-login').addEventListener('click', async () => {
-      const name = document.getElementById('login-name').value.trim();
-      const idNumber = document.getElementById('login-id').value.trim().toUpperCase();
-      const btn = document.getElementById('btn-login');
-      const errEl = document.getElementById('login-error');
-      errEl.innerHTML = '';
-      if (!name || !idNumber) { errEl.innerHTML = '<div class="err-msg">❌ 請填寫姓名跟身分證</div>'; return; }
-      if (!/^[A-Z]\d{9}$/.test(idNumber)) { errEl.innerHTML = '<div class="err-msg">❌ 身分證格式錯誤（1 個英文字母 + 9 個數字）</div>'; return; }
-      btn.disabled = true; btn.textContent = '⏳ 登入中...';
-      try {
-        // 用姓名 + 身分證 query students
-        const q = query(collection(db, 'students'), where('name', '==', name), where('idNumber', '==', idNumber));
-        const snapshot = await getDocs(q);
-        if (snapshot.empty) {
-          errEl.innerHTML = '<div class="err-msg">❌ 找不到對應學員、請確認姓名跟身分證是否正確</div>';
-          btn.disabled = false; btn.textContent = '登入';
-          return;
-        }
-        const student = snapshot.docs[0].data();
-        // 用假 email + 身分證登入
-        const fakeEmail = `${student.classId.toLowerCase()}-${student.studentNo}@emtp.local`;
-        await signInWithEmailAndPassword(auth, fakeEmail, idNumber);
-      } catch (e) {
-        let msg = e.code === 'auth/invalid-credential' ? '❌ 帳號未啟用、請聯絡管理員' : '❌ ' + e.message;
-        errEl.innerHTML = `<div class="err-msg">${msg}</div>`;
-        btn.disabled = false; btn.textContent = '登入';
-      }
-    });
-    document.getElementById('login-id').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('btn-login').click(); });
     document.getElementById('btn-logout').addEventListener('click', () => { if (confirm('確定要登出嗎？')) signOut(auth); });
   </script>
 </body>
