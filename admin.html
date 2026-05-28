@@ -261,7 +261,7 @@
                 <strong id="qr-skill-name">—</strong> · <span id="qr-class-name">—</span>
               </div>
               <div class="qr-canvas-wrap">
-                <canvas id="qr-canvas"></canvas>
+                <img id="qr-img" style="display:block;width:280px;height:280px" alt="QR Code">
               </div>
               <div style="color:#94a3b8;font-size:12px;font-family:monospace;word-break:break-all;padding:8px 14px;background:#0f172a;border-radius:6px;margin-bottom:12px" id="qr-url">—</div>
               <div style="color:#cbd5e1;font-size:14px;margin-top:8px">已掃描學員：<strong style="color:#10b981" id="qr-scanned-count">0</strong> 位</div>
@@ -498,7 +498,36 @@
           <option value="氣管插管">
         </datalist>
         <div class="form-group"><label>項目名稱</label><input type="text" id="ms-item-name" placeholder="創傷初步評估"></div>
-        <div class="form-group"><label>評分指引（選填、多行）</label><textarea id="ms-item-guide" rows="4" placeholder="OPQRST / SAMPLE / DCAP-BTLS&#10;注意 ICP 變化..."></textarea></div>
+        <div class="form-group"><label>整體評分指引（選填、多行）</label><textarea id="ms-item-guide" rows="3" placeholder="OPQRST / SAMPLE / DCAP-BTLS&#10;注意 ICP 變化..."></textarea></div>
+
+        <!-- F11-G: Level 1-5 評核標準（每個 milestone 自己的詳細描述）-->
+        <div class="form-group">
+          <label>📖 Level 1-5 評核標準（選填、教官評分時參考、可細化評分客觀性）</label>
+          <div style="background:#0f172a;padding:14px;border-radius:8px;border:1px solid #334155;display:flex;flex-direction:column;gap:10px">
+            <div>
+              <label style="color:#ef4444;font-weight:600;font-size:13px;margin-bottom:4px">Level 1（基礎認知）</label>
+              <textarea id="ms-item-lv1" rows="2" placeholder="例：描述上呼吸道解剖構造、執行基本呼吸道處置（BVM）" style="background:#1e293b;border-color:#334155"></textarea>
+            </div>
+            <div>
+              <label style="color:#dc2626;font-weight:600;font-size:13px;margin-bottom:4px">Level 2（標準操作）</label>
+              <textarea id="ms-item-lv2" rows="2" placeholder="例：描述呼吸道評估項目、使用喉頭鏡執行 RSI、確認插管位置" style="background:#1e293b;border-color:#334155"></textarea>
+            </div>
+            <div>
+              <label style="color:#f59e0b;font-weight:600;font-size:13px;margin-bottom:4px">Level 3（進階整合）</label>
+              <textarea id="ms-item-lv3" rows="2" placeholder="例：對複雜病人決定適當插管工具、使用輔助器材完成 RSI、最少 35 例" style="background:#1e293b;border-color:#334155"></textarea>
+            </div>
+            <div>
+              <label style="color:#3b82f6;font-weight:600;font-size:13px;margin-bottom:4px">Level 4（獨立執行）⭐ 門檻</label>
+              <textarea id="ms-item-lv4" rows="2" placeholder="例：任何情況下完成必要處置、能執行 cricothyrotomy、進階呼吸道處置" style="background:#1e293b;border-color:#334155"></textarea>
+            </div>
+            <div>
+              <label style="color:#059669;font-weight:600;font-size:13px;margin-bottom:4px">Level 5（教練等級）</label>
+              <textarea id="ms-item-lv5" rows="2" placeholder="例：教導醫療人員呼吸道處置" style="background:#1e293b;border-color:#334155"></textarea>
+            </div>
+          </div>
+          <div style="color:#94a3b8;font-size:12px;margin-top:6px">💡 留空即代表「未設定該 Level 標準」、教官評分時不會顯示。</div>
+        </div>
+
         <div class="form-group"><label>排序（同群內由小到大）</label><input type="number" id="ms-item-order" value="1" min="1"></div>
         <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <label style="display:flex;align-items:center;gap:8px;background:#0f172a;padding:10px 12px;border-radius:6px;border:1px solid #334155"><input type="checkbox" id="ms-item-count" checked style="width:18px;height:18px"> ✅ 計入雷達分數</label>
@@ -1656,6 +1685,13 @@
         document.getElementById('ms-item-order').value = m.displayOrder || 1;
         document.getElementById('ms-item-count').checked = m.countInRadar !== false;
         document.getElementById('ms-item-visible').checked = m.isVisible !== false;
+        // F11-G: 載入 Level 1-5 評核標準
+        const lds = m.levelDescriptions || {};
+        document.getElementById('ms-item-lv1').value = lds[1] || lds['1'] || '';
+        document.getElementById('ms-item-lv2').value = lds[2] || lds['2'] || '';
+        document.getElementById('ms-item-lv3').value = lds[3] || lds['3'] || '';
+        document.getElementById('ms-item-lv4').value = lds[4] || lds['4'] || '';
+        document.getElementById('ms-item-lv5').value = lds[5] || lds['5'] || '';
       } else {
         document.getElementById('ms-item-id').value = '';
         document.getElementById('ms-item-id').readOnly = false;
@@ -1666,6 +1702,12 @@
         document.getElementById('ms-item-order').value = 1;
         document.getElementById('ms-item-count').checked = true;
         document.getElementById('ms-item-visible').checked = true;
+        // F11-G: 清空 Level 1-5
+        document.getElementById('ms-item-lv1').value = '';
+        document.getElementById('ms-item-lv2').value = '';
+        document.getElementById('ms-item-lv3').value = '';
+        document.getElementById('ms-item-lv4').value = '';
+        document.getElementById('ms-item-lv5').value = '';
       }
       document.getElementById('ms-item-modal').classList.add('active');
     }
@@ -1687,6 +1729,14 @@
       if (!groupId) { errEl.innerHTML = '<div class="err-msg">❌ 請選所屬群</div>'; return; }
       if (!step) { errEl.innerHTML = '<div class="err-msg">❌ 步驟必填</div>'; return; }
       if (!name) { errEl.innerHTML = '<div class="err-msg">❌ 項目名稱必填</div>'; return; }
+
+      // F11-G: 收集 Level 1-5（空字串不存）
+      const levelDescriptions = {};
+      [1,2,3,4,5].forEach(lv => {
+        const v = document.getElementById('ms-item-lv' + lv).value.trim();
+        if (v) levelDescriptions[lv] = v;
+      });
+
       const btn = document.getElementById('ms-item-save');
       btn.disabled = true; btn.textContent = '⏳';
       try {
@@ -1697,6 +1747,7 @@
         await setDoc(doc(db, 'milestones', id), {
           groupId, step, name,
           scoringGuide: guide,
+          levelDescriptions,                          // F11-G: 5 個 Level 描述
           countInRadar, isVisible,
           displayOrder: order,
           updatedAt: serverTimestamp(), updatedBy: currentUser.email,
@@ -2471,14 +2522,20 @@
         document.getElementById('qr-skill-name').textContent = skillName;
         document.getElementById('qr-class-name').textContent = classDisplay;
 
-        // 生成 URL + QR
+        // 生成 URL + QR（用 toDataURL + img、最穩定）
         const url = `${location.origin}${location.pathname.replace(/admin\.html$/, 'student.html')}?qr=${sessionId}`;
         document.getElementById('qr-url').textContent = url;
-        const canvas = document.getElementById('qr-canvas');
-        if (window.QRCode) {
-          await QRCode.toCanvas(canvas, url, { width: 260, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } });
+        const qrImg = document.getElementById('qr-img');
+        if (typeof QRCode === 'undefined') {
+          alert('⚠️ QRCode 函式庫尚未載入、請重整頁面再試');
         } else {
-          alert('⚠️ QRCode 函式庫載入失敗、請重整頁面');
+          try {
+            const dataUrl = await QRCode.toDataURL(url, { width: 320, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } });
+            qrImg.src = dataUrl;
+          } catch (qrErr) {
+            console.error('QR generate fail:', qrErr);
+            alert('⚠️ QR Code 產生失敗：' + qrErr.message);
+          }
         }
 
         // 倒數計時
