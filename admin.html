@@ -6,51 +6,66 @@
   <title>🛠 EMTP 管理後台</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body {
-      font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", "微軟正黑體", sans-serif;
-      background: #0f172a; color: #e2e8f0; min-height: 100vh; line-height: 1.6;
-    }
+    html, body { font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; line-height: 1.6; }
     .login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
     .login-card { background: #1e293b; padding: 40px; border-radius: 12px; width: 100%; max-width: 420px; border: 1px solid #334155; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
     .login-card h1 { color: #f1f5f9; font-size: 24px; margin-bottom: 8px; }
     .login-card .subtitle { color: #94a3b8; font-size: 14px; margin-bottom: 30px; }
     .form-group { margin-bottom: 16px; }
     .form-group label { display: block; color: #94a3b8; font-size: 12px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .form-group input { width: 100%; padding: 10px 14px; background: #0f172a; border: 1px solid #334155; color: #e2e8f0; border-radius: 6px; font-family: inherit; font-size: 15px; }
-    .form-group input:focus { outline: none; border-color: #60a5fa; }
-    .btn-primary { width: 100%; background: #3b82f6; color: white; border: none; padding: 12px; border-radius: 6px; font-family: inherit; font-size: 15px; cursor: pointer; font-weight: 600; margin-top: 4px; }
-    .btn-primary:hover { background: #2563eb; }
-    .btn-primary:disabled { background: #475569; cursor: not-allowed; }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 14px; background: #0f172a; border: 1px solid #334155; color: #e2e8f0; border-radius: 6px; font-family: inherit; font-size: 15px; }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: #60a5fa; }
+    .btn { background: #3b82f6; color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
+    .btn:hover { background: #2563eb; }
+    .btn:disabled { background: #475569; cursor: not-allowed; }
+    .btn-primary { width: 100%; padding: 12px; font-size: 15px; }
+    .btn-ghost { background: #334155; color: #e2e8f0; }
+    .btn-ghost:hover { background: #475569; }
+    .btn-green { background: #10b981; }
+    .btn-green:hover { background: #059669; }
+    .btn-red { background: #dc2626; }
+    .btn-red:hover { background: #b91c1c; }
+    .btn-orange { background: #f59e0b; color: #1e293b; }
     .err-msg { background: #7f1d1d; color: #fecaca; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-top: 12px; }
+    .ok-msg { background: #064e3b; color: #6ee7b7; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-top: 12px; }
     .dashboard { display: none; }
     .header { background: #1e293b; padding: 16px 24px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
     .header h1 { font-size: 20px; color: #f1f5f9; }
     .user-info { display: flex; align-items: center; gap: 12px; color: #94a3b8; font-size: 13px; font-family: monospace; }
     .btn-logout { background: #475569; color: white; padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit; }
-    .btn-logout:hover { background: #64748b; }
     .tab-bar { display: flex; background: #1e293b; border-bottom: 1px solid #334155; overflow-x: auto; padding: 0 12px; gap: 4px; }
-    .tab-button { background: none; border: none; color: #94a3b8; padding: 14px 18px; font-size: 15px; cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; font-family: inherit; transition: all 0.15s; }
+    .tab-button { background: none; border: none; color: #94a3b8; padding: 14px 18px; font-size: 15px; cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; font-family: inherit; }
     .tab-button:hover { color: #e2e8f0; background: #273449; }
     .tab-button.active { color: #60a5fa; border-bottom-color: #60a5fa; font-weight: 600; }
     main { padding: 24px; max-width: 1400px; margin: 0 auto; }
-    .tab-content { display: none; animation: fadeIn 0.2s ease; }
+    .tab-content { display: none; }
     .tab-content.active { display: block; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
     .card { background: #1e293b; border-radius: 10px; padding: 24px; margin-bottom: 20px; border: 1px solid #334155; }
-    .card h2 { color: #f1f5f9; font-size: 18px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #334155; }
+    .card h2 { color: #f1f5f9; font-size: 18px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
     .placeholder { text-align: center; padding: 60px 20px; color: #94a3b8; }
     .placeholder .icon { font-size: 72px; margin-bottom: 16px; }
     .placeholder h3 { color: #e2e8f0; margin-bottom: 8px; font-size: 22px; }
     .placeholder .step-tag { display: inline-block; background: #334155; color: #cbd5e1; padding: 4px 14px; border-radius: 14px; font-size: 12px; margin-top: 14px; font-family: monospace; }
     .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
     .stat-card { background: #273449; padding: 18px; border-radius: 8px; border: 1px solid #334155; }
-    .stat-card .label { color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .label { color: #94a3b8; font-size: 12px; text-transform: uppercase; }
     .stat-card .value { color: #60a5fa; font-size: 32px; font-weight: bold; margin-top: 4px; }
-    .progress-list { list-style: none; color: #cbd5e1; }
-    .progress-list li { padding: 10px 0; border-bottom: 1px solid #2d3a52; display: flex; align-items: center; gap: 10px; }
-    .progress-list li:last-child { border-bottom: none; }
-    .progress-list .done { color: #6ee7b7; }
-    .progress-list .pending { color: #94a3b8; }
+    .table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .table th, .table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #2d3a52; font-size: 14px; }
+    .table th { color: #94a3b8; font-weight: 500; font-size: 12px; text-transform: uppercase; background: #172033; }
+    .table tr:hover td { background: #243248; }
+    .tag-pill { display: inline-block; background: #064e3b; color: #6ee7b7; padding: 2px 10px; border-radius: 12px; font-size: 12px; }
+    .tag-pill.gray { background: #334155; color: #cbd5e1; }
+    .tag-pill.yellow { background: #78350f; color: #fcd34d; }
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); z-index: 1000; justify-content: center; align-items: flex-start; padding: 40px 20px; overflow-y: auto; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: #1e293b; border-radius: 12px; max-width: 600px; width: 100%; border: 1px solid #334155; }
+    .modal-header { padding: 16px 24px; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
+    .modal-header h3 { color: #f1f5f9; font-size: 16px; }
+    .modal-close { background: none; border: none; color: #94a3b8; font-size: 28px; cursor: pointer; line-height: 1; }
+    .modal-body { padding: 20px 24px; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid #334155; display: flex; justify-content: flex-end; gap: 8px; }
+    .loading { color: #94a3b8; text-align: center; padding: 30px; }
   </style>
 </head>
 <body>
@@ -59,15 +74,9 @@
     <div class="login-card">
       <h1>🛠 EMTP 管理後台</h1>
       <p class="subtitle">請使用管理員 Email + 密碼登入</p>
-      <div class="form-group">
-        <label>Email</label>
-        <input type="email" id="login-email" placeholder="admin@example.com" autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label>密碼</label>
-        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
-      </div>
-      <button class="btn-primary" id="btn-login">登入</button>
+      <div class="form-group"><label>Email</label><input type="email" id="login-email" placeholder="admin@example.com"></div>
+      <div class="form-group"><label>密碼</label><input type="password" id="login-password" placeholder="••••••••"></div>
+      <button class="btn btn-primary" id="btn-login">登入</button>
       <div id="login-error"></div>
     </div>
   </div>
@@ -92,7 +101,7 @@
     <main>
       <section class="tab-content active" id="tab-overview">
         <div class="card">
-          <h2>📊 系統健康度</h2>
+          <h2><span>📊 系統健康度</span><button class="btn btn-ghost" id="btn-refresh-stats">🔄 重新整理</button></h2>
           <div class="stat-grid">
             <div class="stat-card"><div class="label">班級</div><div class="value" id="stat-classes">—</div></div>
             <div class="stat-card"><div class="label">學員</div><div class="value" id="stat-students">—</div></div>
@@ -100,25 +109,18 @@
             <div class="stat-card"><div class="label">題目</div><div class="value" id="stat-questions">—</div></div>
           </div>
         </div>
-        <div class="card">
-          <h2>📋 建置進度</h2>
-          <ul class="progress-list">
-            <li><span class="done">✅</span> F1：Firebase 專案 + Firestore + Auth</li>
-            <li><span class="done">✅</span> F2：Email/密碼登入啟用</li>
-            <li><span class="done">✅</span> F3：第一個 Hello World 頁面（GitHub Pages）</li>
-            <li><span class="done">✅</span> F4：管理後台框架（你現在看到的）</li>
-            <li><span class="pending">⏳</span> F5：班級管理（CRUD + Archive）</li>
-            <li><span class="pending">⏳</span> F6：學員管理（CRUD + 批次匯入）</li>
-            <li><span class="pending">⏳</span> F7：指導員管理 + 班級權限</li>
-            <li><span class="pending">⏳</span> F8：系統設定（能量條、戰力排行等）</li>
-            <li><span class="pending">⏳</span> F9：學員端入口 + 答題介面</li>
-            <li><span class="pending">⏳</span> F10：指導員端</li>
-          </ul>
-        </div>
       </section>
 
       <section class="tab-content" id="tab-classes">
-        <div class="card"><div class="placeholder"><div class="icon">🏫</div><h3>班級管理</h3><p>列出所有班級、新增、archive（封存）、開新班</p><span class="step-tag">F5 預定建置</span></div></div>
+        <div class="card">
+          <h2><span>🏫 班級管理</span>
+            <span>
+              <button class="btn btn-ghost" id="btn-toggle-archived">顯示封存班級</button>
+              <button class="btn btn-green" id="btn-add-class">➕ 新增班級</button>
+            </span>
+          </h2>
+          <div id="classes-list"><div class="loading">載入中...</div></div>
+        </div>
       </section>
 
       <section class="tab-content" id="tab-students">
@@ -126,19 +128,47 @@
       </section>
 
       <section class="tab-content" id="tab-instructors">
-        <div class="card"><div class="placeholder"><div class="icon">👨‍🏫</div><h3>指導員管理</h3><p>列出指導員、設定他能管哪些班級</p><span class="step-tag">F7 預定建置</span></div></div>
+        <div class="card"><div class="placeholder"><div class="icon">👨‍🏫</div><h3>指導員管理</h3><p>列出指導員、設定他能管哪些班級 + 權限</p><span class="step-tag">F7 預定建置</span></div></div>
       </section>
 
       <section class="tab-content" id="tab-settings">
-        <div class="card"><div class="placeholder"><div class="icon">⚙️</div><h3>系統設定</h3><p>能量條、戰力排行、權限矩陣等全域設定</p><span class="step-tag">F8 預定建置</span></div></div>
+        <div class="card"><div class="placeholder"><div class="icon">⚙️</div><h3>系統設定</h3><p>能量條、戰力排行等全域設定</p><span class="step-tag">F8 預定建置</span></div></div>
       </section>
     </main>
+  </div>
+
+  <!-- 新增/編輯班級 Modal -->
+  <div class="modal-overlay" id="class-modal">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="class-modal-title">➕ 新增班級</h3>
+        <button class="modal-close" id="class-modal-close">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group"><label>班級代碼（英數、不含空格、例：TP18）</label><input type="text" id="class-id" placeholder="TP18"></div>
+        <div class="form-group"><label>顯示名稱</label><input type="text" id="class-name" placeholder="新北 TP18"></div>
+        <div class="form-group"><label>課程類型</label>
+          <select id="class-course-type">
+            <option value="EMTP">EMTP（高級救護員）</option>
+            <option value="EMT2">EMT-2（中級救護員）</option>
+            <option value="EMT1">EMT-1（初級救護員）</option>
+          </select>
+        </div>
+        <div class="form-group"><label>年度</label><input type="number" id="class-year" value="2026"></div>
+        <div class="form-group"><label>備註（可選）</label><input type="text" id="class-description" placeholder="例：新北市消防局合辦"></div>
+        <div id="class-modal-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="class-modal-cancel">取消</button>
+        <button class="btn btn-green" id="class-modal-save">💾 儲存</button>
+      </div>
+    </div>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -153,20 +183,24 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-
-    // 🔐 Master 白名單
     const MASTER_EMAILS = ['sharky83920@gmail.com'];
+
+    let currentUser = null;
+    let showArchived = false;
 
     onAuthStateChanged(auth, (user) => {
       if (user && MASTER_EMAILS.includes(user.email)) {
+        currentUser = user;
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('dashboard').style.display = 'block';
         document.getElementById('user-email').textContent = user.email;
         loadOverviewStats();
+        loadClasses();
       } else if (user) {
-        document.getElementById('login-error').innerHTML = '<div class="err-msg">❌ 此帳號不是管理員、請聯絡系統管理員</div>';
+        document.getElementById('login-error').innerHTML = '<div class="err-msg">❌ 此帳號不是管理員</div>';
         signOut(auth);
       } else {
+        currentUser = null;
         document.getElementById('login-screen').style.display = 'flex';
         document.getElementById('dashboard').style.display = 'none';
       }
@@ -180,15 +214,9 @@
       errEl.innerHTML = '';
       if (!email || !password) { errEl.innerHTML = '<div class="err-msg">❌ 請填寫 Email 和密碼</div>'; return; }
       btn.disabled = true; btn.textContent = '⏳ 登入中...';
-      try {
-        await signInWithEmailAndPassword(auth, email, password);
-      } catch (e) {
-        let msg = '登入失敗';
-        if (e.code === 'auth/invalid-credential') msg = '❌ 帳號或密碼錯誤';
-        else if (e.code === 'auth/invalid-email') msg = '❌ Email 格式錯誤';
-        else if (e.code === 'auth/too-many-requests') msg = '❌ 嘗試太多次、稍後再試';
-        else if (e.code === 'auth/network-request-failed') msg = '❌ 網路連線失敗';
-        else msg = '❌ ' + e.message;
+      try { await signInWithEmailAndPassword(auth, email, password); }
+      catch (e) {
+        let msg = e.code === 'auth/invalid-credential' ? '❌ 帳號或密碼錯誤' : '❌ ' + e.message;
         errEl.innerHTML = `<div class="err-msg">${msg}</div>`;
         btn.disabled = false; btn.textContent = '登入';
       }
@@ -208,21 +236,145 @@
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        if (btn.dataset.tab === 'classes') loadClasses();
       });
     });
 
     async function loadOverviewStats() {
-      const collections = ['classes', 'students', 'instructors', 'questions'];
-      const elementMap = { classes: 'stat-classes', students: 'stat-students', instructors: 'stat-instructors', questions: 'stat-questions' };
-      for (const col of collections) {
-        try {
-          const snapshot = await getDocs(collection(db, col));
-          document.getElementById(elementMap[col]).textContent = snapshot.size;
-        } catch (e) {
-          document.getElementById(elementMap[col]).textContent = '0';
-        }
+      const cols = ['classes', 'students', 'instructors', 'questions'];
+      const map = { classes: 'stat-classes', students: 'stat-students', instructors: 'stat-instructors', questions: 'stat-questions' };
+      for (const col of cols) {
+        try { document.getElementById(map[col]).textContent = (await getDocs(collection(db, col))).size; }
+        catch (e) { document.getElementById(map[col]).textContent = '0'; }
       }
     }
+
+    document.getElementById('btn-refresh-stats').addEventListener('click', loadOverviewStats);
+
+    // === 班級管理 ===
+    async function loadClasses() {
+      const listEl = document.getElementById('classes-list');
+      listEl.innerHTML = '<div class="loading">⏳ 載入班級...</div>';
+      try {
+        const snapshot = await getDocs(collection(db, 'classes'));
+        const classes = [];
+        snapshot.forEach(d => classes.push({ id: d.id, ...d.data() }));
+
+        // 過濾 archived
+        const filtered = showArchived ? classes : classes.filter(c => c.isActive !== false);
+        filtered.sort((a, b) => (b.year || 0) - (a.year || 0));
+
+        if (filtered.length === 0) {
+          listEl.innerHTML = '<div class="placeholder"><div class="icon">📭</div><h3>還沒有班級</h3><p>點右上「➕ 新增班級」開始</p></div>';
+          return;
+        }
+
+        let html = '<table class="table"><thead><tr><th>代碼</th><th>顯示名稱</th><th>課程</th><th>年度</th><th>狀態</th><th>建立時間</th><th>動作</th></tr></thead><tbody>';
+        filtered.forEach(c => {
+          const isArchived = c.isActive === false;
+          const stateTag = isArchived ? '<span class="tag-pill gray">📦 已封存</span>' : '<span class="tag-pill">✅ 啟用中</span>';
+          const created = c.createdAt && c.createdAt.toDate ? c.createdAt.toDate().toLocaleDateString('zh-TW') : '—';
+          html += `<tr>
+            <td><code>${c.id}</code></td>
+            <td>${c.displayName || '—'}</td>
+            <td>${c.courseType || '—'}</td>
+            <td>${c.year || '—'}</td>
+            <td>${stateTag}</td>
+            <td style="color:#94a3b8;font-size:12px">${created}</td>
+            <td>${isArchived
+              ? `<button class="btn btn-ghost" data-unarchive="${c.id}">📂 恢復</button>`
+              : `<button class="btn btn-orange" data-archive="${c.id}">📦 封存</button>`}</td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+        listEl.innerHTML = html;
+
+        listEl.querySelectorAll('button[data-archive]').forEach(b => b.addEventListener('click', () => archiveClass(b.dataset.archive)));
+        listEl.querySelectorAll('button[data-unarchive]').forEach(b => b.addEventListener('click', () => unarchiveClass(b.dataset.unarchive)));
+      } catch (e) {
+        listEl.innerHTML = `<div class="err-msg">載入失敗: ${e.message}</div>`;
+      }
+    }
+
+    async function archiveClass(classId) {
+      if (!confirm(`確定要封存班級「${classId}」嗎？\n\n封存後學員端會看不到、但資料保留。\n可以從「顯示封存班級」按鈕恢復。`)) return;
+      try {
+        await updateDoc(doc(db, 'classes', classId), { isActive: false, archivedAt: serverTimestamp() });
+        loadClasses();
+        loadOverviewStats();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+
+    async function unarchiveClass(classId) {
+      if (!confirm(`恢復班級「${classId}」？`)) return;
+      try {
+        await updateDoc(doc(db, 'classes', classId), { isActive: true, archivedAt: null });
+        loadClasses();
+        loadOverviewStats();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+
+    document.getElementById('btn-toggle-archived').addEventListener('click', (e) => {
+      showArchived = !showArchived;
+      e.target.textContent = showArchived ? '隱藏封存班級' : '顯示封存班級';
+      loadClasses();
+    });
+
+    // 新增班級 Modal
+    document.getElementById('btn-add-class').addEventListener('click', () => {
+      document.getElementById('class-id').value = '';
+      document.getElementById('class-name').value = '';
+      document.getElementById('class-course-type').value = 'EMTP';
+      document.getElementById('class-year').value = new Date().getFullYear();
+      document.getElementById('class-description').value = '';
+      document.getElementById('class-modal-error').innerHTML = '';
+      document.getElementById('class-modal').classList.add('active');
+    });
+
+    document.getElementById('class-modal-close').addEventListener('click', () => document.getElementById('class-modal').classList.remove('active'));
+    document.getElementById('class-modal-cancel').addEventListener('click', () => document.getElementById('class-modal').classList.remove('active'));
+    document.getElementById('class-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('class-modal').classList.remove('active'); });
+
+    document.getElementById('class-modal-save').addEventListener('click', async () => {
+      const classId = document.getElementById('class-id').value.trim();
+      const name = document.getElementById('class-name').value.trim();
+      const courseType = document.getElementById('class-course-type').value;
+      const year = parseInt(document.getElementById('class-year').value);
+      const description = document.getElementById('class-description').value.trim();
+      const errEl = document.getElementById('class-modal-error');
+      errEl.innerHTML = '';
+
+      if (!classId || !name) { errEl.innerHTML = '<div class="err-msg">❌ 班級代碼跟顯示名稱必填</div>'; return; }
+      if (!/^[A-Za-z0-9_-]+$/.test(classId)) { errEl.innerHTML = '<div class="err-msg">❌ 班級代碼只能含英數字、-、_</div>'; return; }
+
+      const btn = document.getElementById('class-modal-save');
+      btn.disabled = true; btn.textContent = '⏳ 儲存中...';
+      try {
+        // 檢查 ID 是否已存在
+        const existing = await getDoc(doc(db, 'classes', classId));
+        if (existing.exists()) { errEl.innerHTML = `<div class="err-msg">❌ 班級代碼「${classId}」已存在</div>`; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+
+        await setDoc(doc(db, 'classes', classId), {
+          name: classId,
+          displayName: name,
+          courseType: courseType,
+          year: year,
+          description: description,
+          isActive: true,
+          archivedAt: null,
+          createdAt: serverTimestamp(),
+          createdBy: currentUser.email
+        });
+
+        document.getElementById('class-modal').classList.remove('active');
+        loadClasses();
+        loadOverviewStats();
+      } catch (e) {
+        errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 儲存';
+      }
+    });
   </script>
 </body>
 </html>
