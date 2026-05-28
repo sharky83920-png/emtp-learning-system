@@ -106,6 +106,15 @@
         <div class="class-info">🏫 班級：<span id="student-class">—</span> ・ 學號：<span id="student-no">—</span></div>
       </div>
 
+      <!-- F11-F: 6 角學科雷達（D1-D6） -->
+      <div class="milestone-section">
+        <h3>📊 學科綜合雷達（國考範圍）</h3>
+        <div class="radar-container">
+          <canvas id="academic-radar"></canvas>
+        </div>
+        <div class="empty-hint" id="academic-radar-empty-hint">⏳ 尚無考試成績、上傳考試後雷達會自動更新（F12 開發中）</div>
+      </div>
+
       <!-- F11-A: Milestone 群能力 5 角雷達 -->
       <div class="milestone-section">
         <h3>🎯 Milestone 群能力</h3>
@@ -311,15 +320,109 @@
         } else {
           html += `<div class="feature-card disabled"><div class="icon">⚡</div><h3>能量條 <span class="tag tag-disabled">未啟用</span></h3><div class="desc">指導員尚未開啟</div></div>`;
         }
-        html += `<div class="feature-card ${mb.enabled ? '' : 'disabled'}"><div class="icon">📓</div><h3>錯題本 <span class="tag ${mb.enabled ? 'tag-enabled' : 'tag-disabled'}">${mb.enabled ? '啟用中' : '未啟用'}</span></h3><div class="desc">⏳ F11 開發中</div></div>`;
-        html += `<div class="feature-card ${lb.enabled ? '' : 'disabled'}"><div class="icon">🏆</div><h3>戰力排行 <span class="tag ${lb.enabled ? 'tag-enabled' : 'tag-disabled'}">${lb.enabled ? '啟用中' : '未啟用'}</span></h3><div class="desc">⏳ F11 開發中</div></div>`;
-        html += `<div class="feature-card"><div class="icon">📝</div><h3>答題系統 <span class="tag tag-disabled">F11 建置中</span></h3><div class="desc">隨機綜合測驗、章節練習等</div></div>`;
+        html += `<div class="feature-card ${mb.enabled ? '' : 'disabled'}"><div class="icon">📓</div><h3>錯題本 <span class="tag ${mb.enabled ? 'tag-enabled' : 'tag-disabled'}">${mb.enabled ? '啟用中' : '未啟用'}</span></h3><div class="desc">⏳ F14 開發中</div></div>`;
+        html += `<div class="feature-card"><div class="icon">📝</div><h3>答題系統 <span class="tag tag-disabled">F13-F14 建置中</span></h3><div class="desc">隨機綜合測驗、章節練習等</div></div>`;
+        // ⚠️ 戰力排行只給指導員看、學員看不到（移除）
         document.getElementById('features').innerHTML = html;
 
-        // F11-A + F11-B: 載入 Milestone 雷達 + 核心技術簽核
-        await Promise.all([loadMilestoneRadar(), loadCoreSkills()]);
+        // F11-A + F11-B + F11-F: 載入 Milestone 雷達 + 核心技術簽核 + 6 角學科雷達
+        await Promise.all([loadAcademicRadar(), loadMilestoneRadar(), loadCoreSkills()]);
       } catch (e) {
         document.getElementById('features').innerHTML = `<div class="err-msg">${e.message}</div>`;
+      }
+    }
+
+    // ===== F11-F: 6 角學科雷達（D1-D6） =====
+    let academicRadarChart = null;
+    async function loadAcademicRadar() {
+      try {
+        const ctx = document.getElementById('academic-radar');
+        if (!ctx || !window.Chart) return;
+        const dims = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'];
+        const dimNames = ['緊急救護系統', '基礎醫學含評估', '創傷', '非創傷', '特殊族群', '災難及特殊情境'];
+
+        // 1. 讀此學員的考試成績（A1）
+        const myExamQuery = query(collection(db, 'exam_scores_radar'), where('studentId', '==', currentStudent.id));
+        const myExamSnap = await getDocs(myExamQuery);
+        const myExams = [];
+        myExamSnap.forEach(d => myExams.push(d.data()));
+
+        // 2. 讀同班所有學員的考試成績（算班級平均）
+        const classExamQuery = query(collection(db, 'exam_scores_radar'), where('classId', '==', currentStudent.classId));
+        const classExamSnap = await getDocs(classExamQuery);
+        const classExams = [];
+        classExamSnap.forEach(d => classExams.push(d.data()));
+
+        // 3. 計算 6 維度平均（換算 0-10 分）
+        function calcDimScores(exams) {
+          const sums = {};
+          dims.forEach(d => sums[d] = { correct: 0, total: 0 });
+          exams.forEach(e => {
+            if (!e.dimensions) return;
+            dims.forEach(d => {
+              const s = e.dimensions[d];
+              if (s) { sums[d].correct += s.correct || 0; sums[d].total += s.total || 0; }
+            });
+          });
+          return dims.map(d => sums[d].total === 0 ? 0 : (sums[d].correct / sums[d].total) * 10);
+        }
+        const myScores = calcDimScores(myExams);
+        const classScores = calcDimScores(classExams);
+
+        // 4. 畫雷達
+        if (academicRadarChart) academicRadarChart.destroy();
+        academicRadarChart = new Chart(ctx, {
+          type: 'radar',
+          data: {
+            labels: dimNames,
+            datasets: [
+              {
+                label: '你的得分',
+                data: myScores,
+                backgroundColor: 'rgba(59, 130, 246, 0.25)',
+                borderColor: 'rgba(59, 130, 246, 1)',
+                pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+                pointBorderColor: '#fff',
+                borderWidth: 2
+              },
+              {
+                label: '班級平均',
+                data: classScores,
+                backgroundColor: 'rgba(239, 68, 68, 0)',
+                borderColor: 'rgba(239, 68, 68, 0.7)',
+                borderDash: [6, 4],
+                pointBackgroundColor: 'rgba(239, 68, 68, 0.7)',
+                pointRadius: 3,
+                borderWidth: 1.5
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+              r: {
+                min: 0,
+                max: 10,
+                ticks: { stepSize: 2, color: '#94a3b8', backdropColor: 'transparent' },
+                pointLabels: { font: { size: 12, weight: '600' }, color: '#1e293b' },
+                grid: { color: 'rgba(148, 163, 184, 0.25)' },
+                angleLines: { color: 'rgba(148, 163, 184, 0.3)' }
+              }
+            },
+            plugins: {
+              legend: { position: 'bottom', labels: { padding: 12, font: { size: 12 } } }
+            }
+          }
+        });
+
+        // 5. 顯示提示（如果都是 0）
+        const hint = document.getElementById('academic-radar-empty-hint');
+        if (hint) hint.style.display = myScores.every(s => s === 0) ? 'block' : 'none';
+      } catch (e) {
+        console.error('[F11-F] loadAcademicRadar error:', e);
+        const hint = document.getElementById('academic-radar-empty-hint');
+        if (hint) hint.innerHTML = `❌ 載入失敗：${e.message}`;
       }
     }
 
