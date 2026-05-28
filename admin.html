@@ -1086,7 +1086,7 @@
       msGroupsCache.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
     }
     function renderMsGroups(el) {
-      let html = '<div class="sub-toolbar"><button class="btn btn-green" id="btn-add-ms-group">➕ 新增 Milestone 群</button><span style="color:#94a3b8;font-size:13px;margin-left:auto">建議：T 創傷 / N 非創傷 / K 兒科 / V 口試 / I 插管</span></div>';
+      let html = '<div class="sub-toolbar"><button class="btn btn-green" id="btn-add-ms-group">➕ 新增 Milestone 群</button><button class="btn btn-orange" id="btn-bulk-init">🚀 一鍵匯入官方資料</button><span style="color:#94a3b8;font-size:13px;margin-left:auto">建議：T 創傷 / N 非創傷 / K 兒科 / V 口試 / I 插管</span></div>';
       if (msGroupsCache.length === 0) {
         html += '<div class="placeholder"><div class="icon">📁</div><h3>還沒有 Milestone 群</h3><p>點上方「➕ 新增」開始</p></div>';
       } else {
@@ -1112,6 +1112,8 @@
       }
       el.innerHTML = html;
       document.getElementById('btn-add-ms-group').addEventListener('click', () => openMsGroupModal(null));
+      const bulkBtn = document.getElementById('btn-bulk-init');
+      if (bulkBtn) bulkBtn.addEventListener('click', bulkInitOfficialData);
       el.querySelectorAll('button[data-gedit]').forEach(b => b.addEventListener('click', () => openMsGroupModal(b.dataset.gedit)));
       el.querySelectorAll('button[data-gdel]').forEach(b => b.addEventListener('click', () => delMsGroup(b.dataset.gdel)));
       el.querySelectorAll('button[data-gup]').forEach(b => b.addEventListener('click', () => moveMsGroup(b.dataset.gup, -1)));
@@ -1566,6 +1568,150 @@
         await batch.commit();
         await loadMsItems(); renderMsContent();
       } catch (e) { alert('❌ ' + e.message); }
+    }
+
+    // ----- 一鍵匯入官方資料 (F10-A bonus) -----
+    async function bulkInitOfficialData() {
+      const OFFICIAL_GROUPS = [
+        { id: 'T', name: '創傷', displayOrder: 1 },
+        { id: 'N', name: '非創傷', displayOrder: 2 },
+        { id: 'K', name: '兒科', displayOrder: 3 },
+        { id: 'V', name: '口試', displayOrder: 4 },
+        { id: 'I', name: '插管', displayOrder: 5 }
+      ];
+      const OFFICIAL_MILESTONES = [
+        // T 創傷 11
+        { id: 'T001', groupId: 'T', step: '初步評估', name: '創傷初步評估', displayOrder: 1 },
+        { id: 'T002', groupId: 'T', step: '處置', name: '頭部創傷', displayOrder: 2 },
+        { id: 'T003', groupId: 'T', step: '處置', name: '胸封貼', displayOrder: 3 },
+        { id: 'T004', groupId: 'T', step: '處置', name: '針刺減壓', displayOrder: 4 },
+        { id: 'T005', groupId: 'T', step: '處置', name: '穿刺物固定', displayOrder: 5 },
+        { id: 'T006', groupId: 'T', step: '處置', name: '止血帶', displayOrder: 6 },
+        { id: 'T007', groupId: 'T', step: '處置', name: '骨盆帶', displayOrder: 7 },
+        { id: 'T008', groupId: 'T', step: '處置', name: '填塞止血', displayOrder: 8 },
+        { id: 'T009', groupId: 'T', step: '處置', name: '壓榨傷', displayOrder: 9 },
+        { id: 'T010', groupId: 'T', step: '二度評估', name: '創傷二度評估', displayOrder: 10 },
+        { id: 'T011', groupId: 'T', step: '交班', name: '交班', displayOrder: 11 },
+        // N 非創傷 13
+        { id: 'N001', groupId: 'N', step: '初步評估', name: '非創傷初步評估', displayOrder: 1 },
+        { id: 'N002', groupId: 'N', step: '處置', name: '氣切', displayOrder: 2 },
+        { id: 'N003', groupId: 'N', step: '處置', name: '心律不整', displayOrder: 3 },
+        { id: 'N004', groupId: 'N', step: '處置', name: '急性心肌梗塞', displayOrder: 4 },
+        { id: 'N005', groupId: 'N', step: '處置', name: '急性肺水腫', displayOrder: 5 },
+        { id: 'N006', groupId: 'N', step: '處置', name: '急性腦中風', displayOrder: 6 },
+        { id: 'N007', groupId: 'N', step: '處置', name: '肺栓塞', displayOrder: 7 },
+        { id: 'N008', groupId: 'N', step: '處置', name: '內分泌急症', displayOrder: 8 },
+        { id: 'N009', groupId: 'N', step: '處置', name: '環境急症', displayOrder: 9 },
+        { id: 'N010', groupId: 'N', step: '處置', name: '毒藥物相關', displayOrder: 10 },
+        { id: 'N011', groupId: 'N', step: '二度評估', name: '非創傷二度評估', displayOrder: 11 },
+        { id: 'N012', groupId: 'N', step: '交班', name: '非創傷交班', displayOrder: 12 },
+        { id: 'N013', groupId: 'N', step: '處置', name: '經皮心臟節律器', displayOrder: 13 },
+        // K 兒科 7
+        { id: 'K001', groupId: 'K', step: '新生兒', name: 'NRP', displayOrder: 1 },
+        { id: 'K002', groupId: 'K', step: '小兒', name: '快速三角評估', displayOrder: 2 },
+        { id: 'K003', groupId: 'K', step: '小兒', name: '小兒初步評估', displayOrder: 3 },
+        { id: 'K004', groupId: 'K', step: '小兒', name: '小兒創傷初步評估', displayOrder: 4 },
+        { id: 'K005', groupId: 'K', step: '小兒', name: '小兒心律不整', displayOrder: 5 },
+        { id: 'K006', groupId: 'K', step: '小兒', name: '兒科交班', displayOrder: 6 },
+        { id: 'K007', groupId: 'K', step: '小兒', name: '兒虐敏感度', displayOrder: 7 },
+        // V 口試 8
+        { id: 'V001', groupId: 'V', step: '核生化災難', name: '核災', displayOrder: 1 },
+        { id: 'V002', groupId: 'V', step: '核生化災難', name: '化災', displayOrder: 2 },
+        { id: 'V003', groupId: 'V', step: '核生化災難', name: '新興傳染病', displayOrder: 3 },
+        { id: 'V004', groupId: 'V', step: '大量傷病患', name: '大傷任務分配與回報', displayOrder: 4 },
+        { id: 'V005', groupId: 'V', step: '大量傷病患', name: '檢傷分類能力', displayOrder: 5 },
+        { id: 'V007', groupId: 'V', step: '緊急救護系統', name: '緊急救護系統', displayOrder: 7 },
+        { id: 'V008', groupId: 'V', step: '緊急救護系統', name: '品質管理', displayOrder: 8 },
+        { id: 'V009', groupId: 'V', step: '緊急救護系統', name: '教育訓練', displayOrder: 9 },
+        // I 插管 1
+        { id: 'I001', groupId: 'I', step: '氣管插管', name: '氣管插管', displayOrder: 1 }
+      ];
+      const OFFICIAL_ROLES = [
+        { name: '院前指導員', displayOrder: 1 },
+        { name: '醫院指導員', displayOrder: 2 }
+      ];
+      const OFFICIAL_UNITS = [
+        { name: '三重分隊', type: 'prehospital', displayOrder: 1 },
+        { name: '新莊分隊', type: 'prehospital', displayOrder: 2 },
+        { name: '蘆洲分隊', type: 'prehospital', displayOrder: 3 },
+        { name: '樹林分隊', type: 'prehospital', displayOrder: 4 },
+        { name: '亞東醫院', type: 'hospital', displayOrder: 5 },
+        { name: '馬偕醫院', type: 'hospital', displayOrder: 6 },
+        { name: '林口長庚', type: 'hospital', displayOrder: 7 },
+        { name: '雙和醫院', type: 'hospital', displayOrder: 8 }
+      ];
+
+      const total = OFFICIAL_GROUPS.length + OFFICIAL_MILESTONES.length + OFFICIAL_ROLES.length + OFFICIAL_UNITS.length;
+      if (!confirm(`📦 即將匯入 ${total} 筆官方資料：\n\n📁 Milestone 群：${OFFICIAL_GROUPS.length} 個（T/N/K/V/I）\n📋 Milestone 項目：${OFFICIAL_MILESTONES.length} 個（T11+N13+K7+V8+I1）\n👤 評核者身分：${OFFICIAL_ROLES.length} 個（院前/醫院指導員）\n📍 單位：${OFFICIAL_UNITS.length} 個（典型新北分隊+醫院）\n\n✅ 已存在的會跳過、不會覆蓋\n✅ 之後仍可手動編輯每一筆\n\n確定匯入？`)) return;
+
+      const btn = document.getElementById('btn-bulk-init');
+      btn.disabled = true;
+      let gNew = 0, gSkip = 0, mNew = 0, mSkip = 0, rNew = 0, rSkip = 0, uNew = 0, uSkip = 0;
+
+      try {
+        // 1. 群
+        for (let i = 0; i < OFFICIAL_GROUPS.length; i++) {
+          const g = OFFICIAL_GROUPS[i];
+          btn.textContent = `⏳ 群 ${i+1}/${OFFICIAL_GROUPS.length}`;
+          const ex = await getDoc(doc(db, 'milestone_groups', g.id));
+          if (ex.exists()) { gSkip++; continue; }
+          await setDoc(doc(db, 'milestone_groups', g.id), {
+            name: g.name, displayOrder: g.displayOrder, isActive: true,
+            createdAt: serverTimestamp(), createdBy: currentUser.email
+          });
+          gNew++;
+        }
+        // 2. Milestone
+        for (let i = 0; i < OFFICIAL_MILESTONES.length; i++) {
+          const m = OFFICIAL_MILESTONES[i];
+          btn.textContent = `⏳ Milestone ${i+1}/${OFFICIAL_MILESTONES.length}`;
+          const ex = await getDoc(doc(db, 'milestones', m.id));
+          if (ex.exists()) { mSkip++; continue; }
+          await setDoc(doc(db, 'milestones', m.id), {
+            groupId: m.groupId, step: m.step, name: m.name,
+            scoringGuide: '', countInRadar: true, isVisible: true,
+            displayOrder: m.displayOrder,
+            createdAt: serverTimestamp(), createdBy: currentUser.email
+          });
+          mNew++;
+        }
+        // 3. 身分
+        for (let i = 0; i < OFFICIAL_ROLES.length; i++) {
+          const r = OFFICIAL_ROLES[i];
+          btn.textContent = `⏳ 身分 ${i+1}/${OFFICIAL_ROLES.length}`;
+          const q = query(collection(db, 'evaluator_roles'), where('name', '==', r.name));
+          const snap = await getDocs(q);
+          if (!snap.empty) { rSkip++; continue; }
+          await setDoc(doc(collection(db, 'evaluator_roles')), {
+            name: r.name, displayOrder: r.displayOrder, isActive: true,
+            createdAt: serverTimestamp(), createdBy: currentUser.email
+          });
+          rNew++;
+        }
+        // 4. 單位
+        for (let i = 0; i < OFFICIAL_UNITS.length; i++) {
+          const u = OFFICIAL_UNITS[i];
+          btn.textContent = `⏳ 單位 ${i+1}/${OFFICIAL_UNITS.length}`;
+          const q = query(collection(db, 'units'), where('name', '==', u.name));
+          const snap = await getDocs(q);
+          if (!snap.empty) { uSkip++; continue; }
+          await setDoc(doc(collection(db, 'units')), {
+            name: u.name, type: u.type, displayOrder: u.displayOrder, isActive: true,
+            createdAt: serverTimestamp(), createdBy: currentUser.email
+          });
+          uNew++;
+        }
+
+        alert(`✅ 匯入完成！\n\n📁 群：新建 ${gNew}、跳過 ${gSkip}\n📋 Milestone：新建 ${mNew}、跳過 ${mSkip}\n👤 身分：新建 ${rNew}、跳過 ${rSkip}\n📍 單位：新建 ${uNew}、跳過 ${uSkip}\n\n切換 4 個子分頁可看到所有資料 🎉`);
+
+        await Promise.all([loadMsGroups(), loadMsUnits(), loadMsRoles(), loadMsItems()]);
+        renderMsContent();
+      } catch (e) {
+        alert('❌ 匯入失敗：' + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🚀 一鍵匯入官方資料';
+      }
     }
 
     // === 建立學員帳號 (用次要 auth 不踢出 Master) ===
