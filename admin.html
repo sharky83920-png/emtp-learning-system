@@ -336,8 +336,10 @@
         loadOverviewStats();
         loadClasses();
       } else if (user) {
-        document.getElementById('login-error').innerHTML = '<div class="err-msg">❌ 此帳號不是管理員</div>';
-        signOut(auth);
+        // 非 Master user 登入（可能是學員在別的 tab）、不要在這裡 signOut、會踢到學員
+        currentUser = null;
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('dashboard').style.display = 'none';
       } else {
         currentUser = null;
         document.getElementById('login-screen').style.display = 'flex';
