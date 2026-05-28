@@ -156,7 +156,15 @@
       </section>
 
       <section class="tab-content" id="tab-settings">
-        <div class="card"><div class="placeholder"><div class="icon">⚙️</div><h3>系統設定</h3><p>能量條、戰力排行等全域設定</p><span class="step-tag">F8 預定建置</span></div></div>
+        <div class="card">
+          <h2><span>⚙️ 系統設定（班級層級）</span>
+            <button class="btn btn-ghost" id="btn-refresh-settings">🔄 重新載入</button>
+          </h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
+            💡 設定每個班級的能量條、錯題本、戰力排行開關。儲存後立即生效。
+          </p>
+          <div id="settings-list"><div class="loading">載入中...</div></div>
+        </div>
       </section>
     </main>
   </div>
