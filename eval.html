@@ -8,6 +8,10 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; background: #f1f5f9; color: #1e293b; min-height: 100vh; line-height: 1.6; }
     .container { max-width: 640px; margin: 0 auto; padding: 16px; padding-bottom: 80px; }
+    /* F11-H: 嵌入模式（從 student.html iframe 開啟、隱藏外層 header） */
+    body.embed header { display: none; }
+    body.embed { background: white; }
+    body.embed .container { padding: 12px; padding-bottom: 40px; }
 
     header { background: linear-gradient(135deg, #14b8a6, #0d9488); color: white; padding: 24px; border-radius: 16px; margin-bottom: 16px; text-align: center; box-shadow: 0 10px 30px rgba(20, 184, 166, 0.3); }
     header h1 { font-size: 22px; margin-bottom: 4px; }
@@ -83,17 +87,28 @@
 
     .ms-detail { display: none; margin-top: 10px; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
     .ms-item.on .ms-detail { display: block; }
-    .ms-level-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-bottom: 10px; }
-    .ms-level-grid label { background: white; border: 2px solid #e2e8f0; padding: 10px 0; border-radius: 6px; text-align: center; cursor: pointer; font-weight: 700; font-size: 17px; transition: all 0.15s; }
-    .ms-level-grid label.lv0 { color: #6b7280; }
-    .ms-level-grid label.lv1 { color: #ef4444; }
-    .ms-level-grid label.lv2 { color: #dc2626; }
-    .ms-level-grid label.lv3 { color: #f59e0b; }
-    .ms-level-grid label.lv4 { color: #10b981; }
-    .ms-level-grid label.lv5 { color: #059669; }
-    .ms-level-grid label:hover { border-color: #14b8a6; }
-    .ms-level-grid label.selected { background: #14b8a6; color: white !important; border-color: #14b8a6; }
+    .ms-level-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 10px; }
+    .ms-level-grid label { background: white; border: 2px solid #e2e8f0; padding: 12px 0; border-radius: 8px; text-align: center; cursor: pointer; font-weight: 700; font-size: 18px; transition: all 0.15s; position: relative; }
+    .ms-level-grid label.lv1 { color: #ef4444; border-color: #fecaca; }
+    .ms-level-grid label.lv2 { color: #f59e0b; border-color: #fed7aa; }
+    .ms-level-grid label.lv3 { color: #ca8a04; border-color: #fde68a; }
+    .ms-level-grid label.lv4 { color: #3b82f6; border-color: #bfdbfe; }
+    .ms-level-grid label.lv5 { color: #059669; border-color: #bbf7d0; }
+    .ms-level-grid label:hover { transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    .ms-level-grid label.lv1.selected { background: #ef4444; }
+    .ms-level-grid label.lv2.selected { background: #f59e0b; }
+    .ms-level-grid label.lv3.selected { background: #ca8a04; }
+    .ms-level-grid label.lv4.selected { background: #3b82f6; }
+    .ms-level-grid label.lv5.selected { background: #059669; }
+    .ms-level-grid label.selected { color: white !important; border-color: transparent; }
     .ms-level-grid input[type=radio] { display: none; }
+    .ms-level-hint { padding: 10px 14px; border-radius: 8px; font-size: 13px; line-height: 1.6; background: #f8fafc; color: #64748b; margin-bottom: 10px; border-left: 4px solid #cbd5e1; transition: all 0.2s; }
+    .ms-level-hint.lv1 { background: #fef2f2; color: #b91c1c; border-left-color: #ef4444; }
+    .ms-level-hint.lv2 { background: #fff7ed; color: #9a3412; border-left-color: #f59e0b; }
+    .ms-level-hint.lv3 { background: #fefce8; color: #713f12; border-left-color: #ca8a04; }
+    .ms-level-hint.lv4 { background: #eff6ff; color: #1e40af; border-left-color: #3b82f6; }
+    .ms-level-hint.lv5 { background: #f0fdf4; color: #14532d; border-left-color: #059669; }
+    .ms-level-hint strong { font-size: 15px; }
     .ms-feedback { width: 100%; padding: 8px 12px; border: 2px solid #e2e8f0; border-radius: 6px; font-family: inherit; font-size: 14px; resize: vertical; min-height: 50px; background: white; }
     .ms-feedback:focus { outline: none; border-color: #14b8a6; }
     .scoring-guide { background: #fef3c7; padding: 8px 12px; border-radius: 6px; font-size: 12px; color: #78350f; white-space: pre-wrap; margin-bottom: 8px; }
@@ -194,9 +209,13 @@
       </div>
 
       <div class="panel">
-        <div class="section-title green">2. 評量對象</div>
+        <div class="section-title green">2. 評量對象（可改選同班其他學員）</div>
         <div class="panel-body">
-          <div class="student-display">
+          <div class="form-group">
+            <label>受評學員</label>
+            <select id="student-select"><option value="">請選擇學員...</option></select>
+          </div>
+          <div class="student-display" style="margin-top:10px">
             <div class="name" id="student-display">—</div>
             <div class="meta" id="student-meta">—</div>
           </div>
@@ -286,8 +305,22 @@
     const app = initializeApp(firebaseConfig, 'eval-app');
     const db = getFirestore(app);
 
+    // F11-H: 全系統共用 Level 1-5 預設描述（標準 EPA Milestone）
+    const DEFAULT_LEVEL_DESC = {
+      1: '無法執行，需全程指導才能完成',
+      2: '能執行，但需指導員持續從旁協助',
+      3: '能執行，偶爾需要指導員提醒',
+      4: '能獨立執行，能於演練情境中獨立判斷並執行完畢',
+      5: '完全獨立，且能指導他人，無需督導'
+    };
+
+    // 嵌入模式（從 student.html iframe 開啟）
+    const EMBED_MODE = new URLSearchParams(location.search).get('embed') === '1';
+    if (EMBED_MODE) document.body.classList.add('embed');
+
     let tokenData = null;
-    let studentData = null;
+    let studentData = null;        // 當前選定的學員（可變、從下拉選）
+    let classmates = [];           // 同班學員清單
     let groups = [];
     let milestones = [];
     let roles = [];
@@ -318,16 +351,37 @@
         const expiresAt = tokenData.expiresAt?.seconds ? tokenData.expiresAt.seconds * 1000 : 0;
         if (expiresAt && Date.now() > expiresAt) { showError('連結已過期（24 小時時效）。'); return; }
 
+        // 載入 token 對應學員（預選）
         const studentDoc = await getDoc(doc(db, 'students', tokenData.studentId));
         if (!studentDoc.exists()) { showError('找不到學員資料。'); return; }
         studentData = { id: studentDoc.id, ...studentDoc.data() };
+
+        // 載入班級顯示名
         let classDisplay = studentData.classId;
         try {
           const classDoc = await getDoc(doc(db, 'classes', studentData.classId));
           if (classDoc.exists()) classDisplay = classDoc.data().displayName || studentData.classId;
         } catch (e) {}
-        document.getElementById('student-display').textContent = studentData.name;
-        document.getElementById('student-meta').textContent = `${classDisplay} ・ 學號 ${studentData.studentNo}`;
+        window._classDisplay = classDisplay;
+
+        // 載入同班所有學員（供下拉切換）
+        const classmateQuery = query(collection(db, 'students'), where('classId', '==', studentData.classId));
+        const classmateSnap = await getDocs(classmateQuery);
+        classmates = [];
+        classmateSnap.forEach(d => {
+          const data = d.data();
+          if (data.isActive !== false && data.hasAuthAccount) classmates.push({ id: d.id, ...data });
+        });
+        classmates.sort((a, b) => (a.studentNo || 0) - (b.studentNo || 0));
+
+        // 填學員下拉、預選 token 學員
+        const stSel = document.getElementById('student-select');
+        let stHtml = '';
+        classmates.forEach(s => {
+          stHtml += `<option value="${s.id}"${s.id === studentData.id ? ' selected' : ''}>${s.studentNo}. ${s.name}</option>`;
+        });
+        stSel.innerHTML = stHtml;
+        updateStudentDisplay();
 
         await Promise.all([loadAllData()]);
         showStep('step1');
@@ -381,6 +435,21 @@
       uh += '<option value="__custom__">📝 其他（自訂）</option>';
       unitSel.innerHTML = uh;
     }
+
+    function updateStudentDisplay() {
+      document.getElementById('student-display').textContent = studentData.name;
+      document.getElementById('student-meta').textContent = `${window._classDisplay} ・ 學號 ${studentData.studentNo}`;
+    }
+
+    // 學員下拉切換
+    document.getElementById('student-select').addEventListener('change', () => {
+      const sid = document.getElementById('student-select').value;
+      const found = classmates.find(s => s.id === sid);
+      if (found) {
+        studentData = found;
+        updateStudentDisplay();
+      }
+    });
 
     // 自訂切換
     document.getElementById('role-select').addEventListener('change', () => {
@@ -455,24 +524,15 @@
         items.forEach(m => {
           const draft = evalDraft[m.id] || {};
           const isOn = !!draft.enabled;
-          // F11-G: Level 1-5 評核標準
+          // F11-H: Level 1-5 hint（點 Level 後即時顯示對應描述、優先用 milestone 自訂、否則用全系統預設）
           const lds = m.levelDescriptions || {};
-          const hasAnyLevel = [1,2,3,4,5].some(lv => lds[lv] || lds[String(lv)]);
-          const levelCriteriaHtml = hasAnyLevel ? `
-            <details class="level-criteria" data-msid="${m.id}">
-              <summary>📖 點看本 Milestone 的 Level 1-5 評核標準</summary>
-              <div class="lc-list">
-                ${[1,2,3,4,5].map(lv => {
-                  const desc = lds[lv] || lds[String(lv)] || '';
-                  if (!desc) return '';
-                  const isSel = draft.level === lv;
-                  return `<div class="lc-item lv${lv}${isSel ? ' highlighted' : ''}" data-lcid="${m.id}-${lv}">
-                    <div><span class="lc-label lv${lv}">Level ${lv}</span></div>
-                    <div class="lc-desc">${desc}</div>
-                  </div>`;
-                }).join('')}
-              </div>
-            </details>` : '';
+          function getLevelDesc(lv) {
+            return lds[lv] || lds[String(lv)] || DEFAULT_LEVEL_DESC[lv] || '';
+          }
+          const initialHint = draft.level
+            ? `<strong>Level ${draft.level}</strong> ｜ ${getLevelDesc(draft.level)}`
+            : '👇 點下方任一 Level 看評核標準';
+          const initialHintClass = draft.level ? `ms-level-hint lv${draft.level}` : 'ms-level-hint';
 
           html += `<div class="ms-item${isOn ? ' on' : ''}" data-msid="${m.id}">
             <div class="ms-header">
@@ -484,10 +544,10 @@
             </div>
             <div class="ms-detail">
               ${m.scoringGuide ? `<div class="scoring-guide">💡 ${m.scoringGuide}</div>` : ''}
-              ${levelCriteriaHtml}
               <div class="ms-level-grid">
-                ${[0,1,2,3,4,5].map(lv => `<label class="lv${lv}${draft.level === lv ? ' selected' : ''}" data-ms-level="${m.id}" data-lv="${lv}"><input type="radio" name="ms-level-${m.id}" value="${lv}"${draft.level === lv ? ' checked' : ''}>${lv}</label>`).join('')}
+                ${[1,2,3,4,5].map(lv => `<label class="lv${lv}${draft.level === lv ? ' selected' : ''}" data-ms-level="${m.id}" data-lv="${lv}"><input type="radio" name="ms-level-${m.id}" value="${lv}"${draft.level === lv ? ' checked' : ''}>${lv}</label>`).join('')}
               </div>
+              <div class="${initialHintClass}" id="hint-${m.id}" data-default-desc='${JSON.stringify({1:getLevelDesc(1),2:getLevelDesc(2),3:getLevelDesc(3),4:getLevelDesc(4),5:getLevelDesc(5)}).replace(/'/g, "&apos;")}'>${initialHint}</div>
               <textarea class="ms-feedback" placeholder="質性回饋（選填）" data-ms-fb="${m.id}">${draft.feedback || ''}</textarea>
             </div>
           </div>`;
@@ -532,16 +592,13 @@
             toggle.closest('.ms-item').classList.add('on');
             evalDraft[msid].enabled = true;
           }
-          // F11-G: 對應的 Level 評核標準高亮
-          const lcContainer = document.querySelector(`.level-criteria[data-msid="${msid}"]`);
-          if (lcContainer) {
-            lcContainer.querySelectorAll('.lc-item').forEach(it => it.classList.remove('highlighted'));
-            const matched = lcContainer.querySelector(`.lc-item[data-lcid="${msid}-${lv}"]`);
-            if (matched) {
-              matched.classList.add('highlighted');
-              // 自動展開（如果還沒開）
-              lcContainer.open = true;
-            }
+          // F11-H: 顯示對應 Level 的描述（即時提示）
+          const hint = document.getElementById(`hint-${msid}`);
+          if (hint) {
+            const descs = JSON.parse(hint.dataset.defaultDesc);
+            const desc = descs[lv] || DEFAULT_LEVEL_DESC[lv] || '';
+            hint.innerHTML = `<strong>Level ${lv}</strong> ｜ ${desc}`;
+            hint.className = `ms-level-hint lv${lv}`;
           }
           updateReviewCount();
         });

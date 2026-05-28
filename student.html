@@ -123,12 +123,28 @@
         </div>
         <div class="empty-hint" id="radar-empty-hint">⏳ 尚無評核資料、教官評核後雷達會自動更新</div>
         <div class="radar-actions">
-          <button class="btn-eval" id="btn-eval-epa">📝 請教官評核 Milestone</button>
+          <button class="btn-eval" id="btn-eval-epa">📝 填寫 Milestone 評核</button>
           <button class="btn-copy" id="btn-copy-link">🔗 複製連結</button>
         </div>
       </div>
 
-      <!-- F11-D: 評核連結 Modal -->
+      <!-- F11-H: 評核 iframe Modal（按「填寫 Milestone 評核」彈出來） -->
+      <div id="eval-iframe-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1100;justify-content:center;align-items:center;padding:10px">
+        <div style="background:white;border-radius:14px;width:100%;max-width:680px;height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.4)">
+          <div style="background:linear-gradient(135deg,#14b8a6,#0d9488);color:white;padding:14px 18px;display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:16px;font-weight:700">📝 Milestone 臨床實習評量</div>
+              <div style="font-size:12px;opacity:0.9">教官評量專用</div>
+            </div>
+            <button id="btn-eval-iframe-close" style="background:rgba(255,255,255,0.2);border:none;color:white;width:36px;height:36px;border-radius:50%;font-size:22px;cursor:pointer;line-height:1">×</button>
+          </div>
+          <div style="flex:1;overflow:hidden;background:#f1f5f9">
+            <iframe id="eval-iframe" src="about:blank" style="width:100%;height:100%;border:none"></iframe>
+          </div>
+        </div>
+      </div>
+
+      <!-- F11-D: 複製連結 Modal（保留給「複製連結」按鈕用） -->
       <div id="eval-link-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;padding:20px">
         <div style="background:white;border-radius:16px;padding:28px;max-width:500px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
           <h3 style="color:#1e293b;font-size:20px;margin-bottom:8px">📝 教官 Milestone 評量連結</h3>
@@ -975,18 +991,31 @@
 
     document.getElementById('btn-eval-epa').addEventListener('click', async () => {
       const btn = document.getElementById('btn-eval-epa');
-      btn.disabled = true; btn.textContent = '⏳ 產生連結中...';
+      btn.disabled = true; btn.textContent = '⏳ 準備評核...';
       try {
+        // F11-H: 產生 token、用 iframe 彈出（不開新分頁）
         const token = await generateEvalToken();
-        const url = buildEvalUrl(token);
-        document.getElementById('eval-link-url').textContent = url;
-        document.getElementById('eval-link-status').innerHTML = '';
-        document.getElementById('eval-link-modal').style.display = 'flex';
+        const url = buildEvalUrl(token) + '&embed=1';
+        const iframe = document.getElementById('eval-iframe');
+        iframe.src = url;
+        document.getElementById('eval-iframe-modal').style.display = 'flex';
       } catch (e) {
-        alert('❌ 產生連結失敗：' + e.message);
+        alert('❌ 準備失敗：' + e.message);
       } finally {
-        btn.disabled = false; btn.textContent = '📝 請教官評核 Milestone';
+        btn.disabled = false; btn.textContent = '📝 填寫 Milestone 評核';
       }
+    });
+
+    // 關閉 iframe 評核 modal、順便重整雷達
+    document.getElementById('btn-eval-iframe-close').addEventListener('click', async () => {
+      if (!confirm('關閉評核視窗？\n\n若已送出評核、關閉後雷達會自動更新。')) return;
+      document.getElementById('eval-iframe-modal').style.display = 'none';
+      document.getElementById('eval-iframe').src = 'about:blank';
+      // 重新整理雷達 + 核心技術（教官可能剛評完）
+      try { await Promise.all([loadMilestoneRadar(), loadCoreSkills()]); } catch (e) {}
+    });
+    document.getElementById('eval-iframe-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) document.getElementById('btn-eval-iframe-close').click();
     });
 
     document.getElementById('btn-copy-link').addEventListener('click', async () => {
