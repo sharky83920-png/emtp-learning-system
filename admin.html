@@ -232,6 +232,36 @@
     </div>
   </div>
 
+  <!-- 指導員 Modal (F7) -->
+  <div class="modal-overlay" id="instructor-modal">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3 id="instructor-modal-title">➕ 新增指導員</h3><button class="modal-close" id="instructor-modal-close">×</button></div>
+      <div class="modal-body">
+        <div class="form-group"><label>Email（指導員登入用）</label><input type="email" id="instructor-email" placeholder="instructor@example.com"></div>
+        <div class="form-group"><label>姓名</label><input type="text" id="instructor-name" placeholder="某教官"></div>
+        <div class="form-group">
+          <label>能管哪些班級（可多選）</label>
+          <div id="instructor-classes-checkboxes" style="background:#0f172a;border:1px solid #334155;border-radius:6px;padding:12px;display:flex;flex-wrap:wrap;gap:8px;"></div>
+        </div>
+        <div class="form-group">
+          <label>權限設定</label>
+          <div style="background:#0f172a;border:1px solid #334155;border-radius:6px;padding:12px;">
+            <h4 style="color:#6ee7b7;margin-bottom:8px;font-size:13px;">🟢 Tier A：基本權限（強制開、不可關）</h4>
+            <div style="margin-bottom:12px;color:#94a3b8;font-size:13px;line-height:1.8;">
+              ✅ 查看自己班學員清單 / 雷達圖 / 河流圖 / 能量條 / 戰力排行 / 班級題庫
+            </div>
+            <h4 style="color:#60a5fa;margin-bottom:8px;font-size:13px;">🔵 Tier B：進階權限（可開關）</h4>
+            <div id="instructor-permissions" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px;"></div>
+          </div>
+        </div>
+        <div id="instructor-modal-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="instructor-modal-cancel">取消</button>
+        <button class="btn btn-green" id="instructor-modal-save">💾 儲存</button>
+      </div>
+    </div>
+  </div>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
