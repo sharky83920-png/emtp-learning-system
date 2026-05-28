@@ -72,6 +72,16 @@
     .modal-body { padding: 20px 24px; max-height: 70vh; overflow-y: auto; }
     .modal-footer { padding: 16px 24px; border-top: 1px solid #334155; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
     .loading { color: #94a3b8; text-align: center; padding: 30px; }
+    /* F10-A: Milestone 主檔子分頁 */
+    .sub-tabs { display: flex; gap: 6px; margin-bottom: 18px; border-bottom: 1px solid #334155; padding-bottom: 12px; flex-wrap: wrap; }
+    .sub-tab { background: #273449; color: #94a3b8; border: 1px solid #334155; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 14px; transition: all 0.15s; }
+    .sub-tab:hover { background: #334155; color: #e2e8f0; }
+    .sub-tab.active { background: #1d4ed8; color: white; border-color: #1d4ed8; font-weight: 600; }
+    .sub-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+    .order-btn { background: #334155; border: none; color: #cbd5e1; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+    .order-btn:hover { background: #475569; }
+    .order-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .scoring-guide { white-space: pre-wrap; color: #94a3b8; font-size: 12px; line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -101,6 +111,7 @@
       <button class="tab-button" data-tab="classes">🏫 班級管理</button>
       <button class="tab-button" data-tab="students">👥 學員管理</button>
       <button class="tab-button" data-tab="instructors">👨‍🏫 指導員管理</button>
+      <button class="tab-button" data-tab="milestones">🎯 Milestone 主檔</button>
       <button class="tab-button" data-tab="settings">⚙️ 系統設定</button>
     </nav>
 
@@ -152,6 +163,24 @@
             </span>
           </h2>
           <div id="instructors-list"><div class="loading">載入中...</div></div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-milestones">
+        <div class="card">
+          <h2><span>🎯 Milestone 主檔管理</span>
+            <button class="btn btn-ghost" id="btn-refresh-milestones">🔄 重新整理</button>
+          </h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
+            💡 管理 5 大維度群、Milestone 項目、評核者單位 / 身分。所有變更立即生效（Firestore 即時）。
+          </p>
+          <div class="sub-tabs">
+            <button class="sub-tab active" data-subtab="ms-groups">📁 Milestone 群</button>
+            <button class="sub-tab" data-subtab="ms-items">📋 Milestone 項目</button>
+            <button class="sub-tab" data-subtab="ms-units">📍 單位</button>
+            <button class="sub-tab" data-subtab="ms-roles">👤 評核者身分</button>
+          </div>
+          <div id="ms-content"><div class="loading">⏳ 載入中...</div></div>
         </div>
       </section>
 
@@ -299,6 +328,103 @@
       </div>
     </div>
   </div>
+  <!-- F10-A: Milestone 群 Modal -->
+  <div class="modal-overlay" id="ms-group-modal">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3 id="ms-group-modal-title">➕ 新增 Milestone 群</h3><button class="modal-close" id="ms-group-close">×</button></div>
+      <div class="modal-body">
+        <div class="form-group"><label>群代碼（單一英文字母、例：T / N / K / V / I）</label><input type="text" id="ms-group-id" maxlength="2" style="font-family:monospace;text-transform:uppercase;font-size:16px" placeholder="T"></div>
+        <div class="form-group"><label>群名稱</label><input type="text" id="ms-group-name" placeholder="創傷"></div>
+        <div class="form-group"><label>排序（數字、由小到大）</label><input type="number" id="ms-group-order" value="1" min="1"></div>
+        <div class="form-group"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ms-group-active" checked style="width:18px;height:18px"> 啟用</label></div>
+        <div id="ms-group-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="ms-group-cancel">取消</button>
+        <button class="btn btn-green" id="ms-group-save">💾 儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- F10-A: 單位 Modal -->
+  <div class="modal-overlay" id="ms-unit-modal">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3 id="ms-unit-modal-title">➕ 新增單位</h3><button class="modal-close" id="ms-unit-close">×</button></div>
+      <div class="modal-body">
+        <div class="form-group"><label>單位名稱</label><input type="text" id="ms-unit-name" placeholder="三重分隊"></div>
+        <div class="form-group"><label>類型</label>
+          <select id="ms-unit-type">
+            <option value="prehospital">院前</option>
+            <option value="hospital">醫院</option>
+            <option value="other">其他</option>
+          </select>
+        </div>
+        <div class="form-group"><label>排序</label><input type="number" id="ms-unit-order" value="1" min="1"></div>
+        <div class="form-group"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ms-unit-active" checked style="width:18px;height:18px"> 啟用</label></div>
+        <div id="ms-unit-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="ms-unit-cancel">取消</button>
+        <button class="btn btn-green" id="ms-unit-save">💾 儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- F10-A: 評核者身分 Modal -->
+  <div class="modal-overlay" id="ms-role-modal">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3 id="ms-role-modal-title">➕ 新增評核者身分</h3><button class="modal-close" id="ms-role-close">×</button></div>
+      <div class="modal-body">
+        <div class="form-group"><label>身分名稱</label><input type="text" id="ms-role-name" placeholder="院前指導員"></div>
+        <div class="form-group"><label>排序</label><input type="number" id="ms-role-order" value="1" min="1"></div>
+        <div class="form-group"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ms-role-active" checked style="width:18px;height:18px"> 啟用</label></div>
+        <div id="ms-role-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="ms-role-cancel">取消</button>
+        <button class="btn btn-green" id="ms-role-save">💾 儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- F10-A: Milestone 項目 Modal -->
+  <div class="modal-overlay" id="ms-item-modal">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3 id="ms-item-modal-title">➕ 新增 Milestone 項目</h3><button class="modal-close" id="ms-item-close">×</button></div>
+      <div class="modal-body">
+        <div class="form-group"><label>ID（前綴 + 流水號、例：T012、N014、K008）</label><input type="text" id="ms-item-id" maxlength="6" style="font-family:monospace;text-transform:uppercase;font-size:16px" placeholder="T012"></div>
+        <div class="form-group"><label>所屬群</label>
+          <select id="ms-item-group"><option value="">請選群...</option></select>
+        </div>
+        <div class="form-group"><label>步驟（建議：初步評估 / 處置 / 二度評估 / 交班、可自訂）</label><input type="text" id="ms-item-step" placeholder="初步評估" list="ms-step-list"></div>
+        <datalist id="ms-step-list">
+          <option value="初步評估">
+          <option value="處置">
+          <option value="二度評估">
+          <option value="交班">
+          <option value="新生兒">
+          <option value="小兒">
+          <option value="核生化災難">
+          <option value="大量傷病患">
+          <option value="緊急救護系統">
+          <option value="氣管插管">
+        </datalist>
+        <div class="form-group"><label>項目名稱</label><input type="text" id="ms-item-name" placeholder="創傷初步評估"></div>
+        <div class="form-group"><label>評分指引（選填、多行）</label><textarea id="ms-item-guide" rows="4" placeholder="OPQRST / SAMPLE / DCAP-BTLS&#10;注意 ICP 變化..."></textarea></div>
+        <div class="form-group"><label>排序（同群內由小到大）</label><input type="number" id="ms-item-order" value="1" min="1"></div>
+        <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <label style="display:flex;align-items:center;gap:8px;background:#0f172a;padding:10px 12px;border-radius:6px;border:1px solid #334155"><input type="checkbox" id="ms-item-count" checked style="width:18px;height:18px"> ✅ 計入雷達分數</label>
+          <label style="display:flex;align-items:center;gap:8px;background:#0f172a;padding:10px 12px;border-radius:6px;border:1px solid #334155"><input type="checkbox" id="ms-item-visible" checked style="width:18px;height:18px"> 👁️ EPA 表單顯示</label>
+        </div>
+        <div id="ms-item-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="ms-item-cancel">取消</button>
+        <button class="btn btn-green" id="ms-item-save">💾 儲存</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
@@ -374,6 +500,7 @@
         if (btn.dataset.tab === 'classes') loadClasses();
         if (btn.dataset.tab === 'students') loadClassDropdown();
         if (btn.dataset.tab === 'instructors') loadInstructors();
+        if (btn.dataset.tab === 'milestones') loadMilestonesPage();
         if (btn.dataset.tab === 'settings') loadSettings();
       });
     });
@@ -914,7 +1041,533 @@
     }
 
     document.getElementById('btn-refresh-settings').addEventListener('click', loadSettings);
-    
+
+    // ===== F10-A: Milestone 主檔管理 =====
+    let msCurrentSubTab = 'ms-groups';
+    let msGroupsCache = [];
+    let msUnitsCache = [];
+    let msRolesCache = [];
+    let msItemsCache = [];
+    let msEditingId = null;
+
+    async function loadMilestonesPage() {
+      document.getElementById('ms-content').innerHTML = '<div class="loading">⏳ 載入中...</div>';
+      try {
+        await Promise.all([loadMsGroups(), loadMsUnits(), loadMsRoles(), loadMsItems()]);
+        renderMsContent();
+      } catch (e) {
+        document.getElementById('ms-content').innerHTML = `<div class="err-msg">${e.message}</div>`;
+      }
+    }
+    document.getElementById('btn-refresh-milestones').addEventListener('click', loadMilestonesPage);
+
+    document.querySelectorAll('#tab-milestones .sub-tab').forEach(b => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('#tab-milestones .sub-tab').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        msCurrentSubTab = b.dataset.subtab;
+        renderMsContent();
+      });
+    });
+
+    function renderMsContent() {
+      const el = document.getElementById('ms-content');
+      if (msCurrentSubTab === 'ms-groups') renderMsGroups(el);
+      else if (msCurrentSubTab === 'ms-units') renderMsUnits(el);
+      else if (msCurrentSubTab === 'ms-roles') renderMsRoles(el);
+      else if (msCurrentSubTab === 'ms-items') renderMsItems(el);
+    }
+
+    // ----- Milestone 群 -----
+    async function loadMsGroups() {
+      const snap = await getDocs(collection(db, 'milestone_groups'));
+      msGroupsCache = [];
+      snap.forEach(d => msGroupsCache.push({ id: d.id, ...d.data() }));
+      msGroupsCache.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    }
+    function renderMsGroups(el) {
+      let html = '<div class="sub-toolbar"><button class="btn btn-green" id="btn-add-ms-group">➕ 新增 Milestone 群</button><span style="color:#94a3b8;font-size:13px;margin-left:auto">建議：T 創傷 / N 非創傷 / K 兒科 / V 口試 / I 插管</span></div>';
+      if (msGroupsCache.length === 0) {
+        html += '<div class="placeholder"><div class="icon">📁</div><h3>還沒有 Milestone 群</h3><p>點上方「➕ 新增」開始</p></div>';
+      } else {
+        html += '<table class="table"><thead><tr><th>ID</th><th>名稱</th><th>排序</th><th>狀態</th><th>動作</th></tr></thead><tbody>';
+        msGroupsCache.forEach((g, idx) => {
+          const state = g.isActive === false ? '<span class="tag-pill gray">⏸ 停用</span>' : '<span class="tag-pill">✅ 啟用</span>';
+          html += `<tr>
+            <td><code style="font-size:15px;background:#0f172a;padding:4px 10px;border-radius:4px">${g.id}</code></td>
+            <td><strong>${g.name || '—'}</strong></td>
+            <td>
+              <button class="order-btn" data-gup="${g.id}" ${idx === 0 ? 'disabled' : ''}>↑</button>
+              <button class="order-btn" data-gdown="${g.id}" ${idx === msGroupsCache.length - 1 ? 'disabled' : ''}>↓</button>
+              <span style="margin-left:6px;color:#94a3b8">${g.displayOrder || 0}</span>
+            </td>
+            <td>${state}</td>
+            <td>
+              <button class="btn" data-gedit="${g.id}">✏️ 編輯</button>
+              <button class="btn btn-red" data-gdel="${g.id}">🗑️ 刪除</button>
+            </td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      document.getElementById('btn-add-ms-group').addEventListener('click', () => openMsGroupModal(null));
+      el.querySelectorAll('button[data-gedit]').forEach(b => b.addEventListener('click', () => openMsGroupModal(b.dataset.gedit)));
+      el.querySelectorAll('button[data-gdel]').forEach(b => b.addEventListener('click', () => delMsGroup(b.dataset.gdel)));
+      el.querySelectorAll('button[data-gup]').forEach(b => b.addEventListener('click', () => moveMsGroup(b.dataset.gup, -1)));
+      el.querySelectorAll('button[data-gdown]').forEach(b => b.addEventListener('click', () => moveMsGroup(b.dataset.gdown, 1)));
+    }
+    function openMsGroupModal(id) {
+      msEditingId = id;
+      document.getElementById('ms-group-modal-title').textContent = id ? '✏️ 編輯 Milestone 群' : '➕ 新增 Milestone 群';
+      document.getElementById('ms-group-error').innerHTML = '';
+      if (id) {
+        const g = msGroupsCache.find(x => x.id === id);
+        document.getElementById('ms-group-id').value = g.id;
+        document.getElementById('ms-group-id').readOnly = true;
+        document.getElementById('ms-group-name').value = g.name || '';
+        document.getElementById('ms-group-order').value = g.displayOrder || 1;
+        document.getElementById('ms-group-active').checked = g.isActive !== false;
+      } else {
+        document.getElementById('ms-group-id').value = '';
+        document.getElementById('ms-group-id').readOnly = false;
+        document.getElementById('ms-group-name').value = '';
+        document.getElementById('ms-group-order').value = msGroupsCache.length + 1;
+        document.getElementById('ms-group-active').checked = true;
+      }
+      document.getElementById('ms-group-modal').classList.add('active');
+    }
+    document.getElementById('ms-group-close').addEventListener('click', () => document.getElementById('ms-group-modal').classList.remove('active'));
+    document.getElementById('ms-group-cancel').addEventListener('click', () => document.getElementById('ms-group-modal').classList.remove('active'));
+    document.getElementById('ms-group-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('ms-group-modal').classList.remove('active'); });
+    document.getElementById('ms-group-save').addEventListener('click', async () => {
+      const id = document.getElementById('ms-group-id').value.trim().toUpperCase();
+      const name = document.getElementById('ms-group-name').value.trim();
+      const order = parseInt(document.getElementById('ms-group-order').value);
+      const active = document.getElementById('ms-group-active').checked;
+      const errEl = document.getElementById('ms-group-error');
+      errEl.innerHTML = '';
+      if (!id || !/^[A-Z]{1,2}$/.test(id)) { errEl.innerHTML = '<div class="err-msg">❌ ID 必須是 1-2 個英文大寫字母</div>'; return; }
+      if (!name) { errEl.innerHTML = '<div class="err-msg">❌ 名稱必填</div>'; return; }
+      const btn = document.getElementById('ms-group-save');
+      btn.disabled = true; btn.textContent = '⏳';
+      try {
+        if (!msEditingId) {
+          const existing = await getDoc(doc(db, 'milestone_groups', id));
+          if (existing.exists()) { errEl.innerHTML = `<div class="err-msg">❌ ID「${id}」已存在</div>`; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+        }
+        await setDoc(doc(db, 'milestone_groups', id), {
+          name, displayOrder: order, isActive: active,
+          updatedAt: serverTimestamp(), updatedBy: currentUser.email,
+          ...(msEditingId ? {} : { createdAt: serverTimestamp(), createdBy: currentUser.email })
+        }, { merge: true });
+        document.getElementById('ms-group-modal').classList.remove('active');
+        await loadMsGroups(); renderMsContent();
+      } catch (e) { errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
+    });
+    async function delMsGroup(id) {
+      const itemCount = msItemsCache.filter(m => m.groupId === id).length;
+      if (itemCount > 0) { alert(`❌ 此群下還有 ${itemCount} 個 Milestone 項目、無法刪除。請先刪除項目或改變項目歸屬。`); return; }
+      if (!confirm(`確定刪除 Milestone 群「${id}」？`)) return;
+      try {
+        await updateDoc(doc(db, 'milestone_groups', id), { isActive: false, archivedAt: serverTimestamp() });
+        await loadMsGroups(); renderMsContent();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+    async function moveMsGroup(id, dir) {
+      const idx = msGroupsCache.findIndex(g => g.id === id);
+      const target = msGroupsCache[idx + dir];
+      if (!target) return;
+      const a = msGroupsCache[idx], b = target;
+      try {
+        const batch = writeBatch(db);
+        batch.update(doc(db, 'milestone_groups', a.id), { displayOrder: b.displayOrder });
+        batch.update(doc(db, 'milestone_groups', b.id), { displayOrder: a.displayOrder });
+        await batch.commit();
+        await loadMsGroups(); renderMsContent();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+
+    // ----- 單位 -----
+    async function loadMsUnits() {
+      const snap = await getDocs(collection(db, 'units'));
+      msUnitsCache = [];
+      snap.forEach(d => msUnitsCache.push({ id: d.id, ...d.data() }));
+      msUnitsCache.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    }
+    function renderMsUnits(el) {
+      const typeLabel = { prehospital: '🚑 院前', hospital: '🏥 醫院', other: '📍 其他' };
+      let html = '<div class="sub-toolbar"><button class="btn btn-green" id="btn-add-ms-unit">➕ 新增單位</button><span style="color:#94a3b8;font-size:13px;margin-left:auto">評核者所屬單位、如：三重分隊、亞東醫院</span></div>';
+      if (msUnitsCache.length === 0) {
+        html += '<div class="placeholder"><div class="icon">📍</div><h3>還沒有單位</h3><p>新增評核者所屬單位</p></div>';
+      } else {
+        html += '<table class="table"><thead><tr><th>名稱</th><th>類型</th><th>排序</th><th>狀態</th><th>動作</th></tr></thead><tbody>';
+        msUnitsCache.forEach((u, idx) => {
+          const state = u.isActive === false ? '<span class="tag-pill gray">⏸ 停用</span>' : '<span class="tag-pill">✅ 啟用</span>';
+          html += `<tr>
+            <td><strong>${u.name || '—'}</strong></td>
+            <td>${typeLabel[u.type] || '—'}</td>
+            <td>
+              <button class="order-btn" data-uup="${u.id}" ${idx === 0 ? 'disabled' : ''}>↑</button>
+              <button class="order-btn" data-udown="${u.id}" ${idx === msUnitsCache.length - 1 ? 'disabled' : ''}>↓</button>
+              <span style="margin-left:6px;color:#94a3b8">${u.displayOrder || 0}</span>
+            </td>
+            <td>${state}</td>
+            <td>
+              <button class="btn" data-uedit="${u.id}">✏️ 編輯</button>
+              <button class="btn btn-red" data-udel="${u.id}">🗑️ 刪除</button>
+            </td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      document.getElementById('btn-add-ms-unit').addEventListener('click', () => openMsUnitModal(null));
+      el.querySelectorAll('button[data-uedit]').forEach(b => b.addEventListener('click', () => openMsUnitModal(b.dataset.uedit)));
+      el.querySelectorAll('button[data-udel]').forEach(b => b.addEventListener('click', () => delMsUnit(b.dataset.udel)));
+      el.querySelectorAll('button[data-uup]').forEach(b => b.addEventListener('click', () => moveMsUnit(b.dataset.uup, -1)));
+      el.querySelectorAll('button[data-udown]').forEach(b => b.addEventListener('click', () => moveMsUnit(b.dataset.udown, 1)));
+    }
+    function openMsUnitModal(id) {
+      msEditingId = id;
+      document.getElementById('ms-unit-modal-title').textContent = id ? '✏️ 編輯單位' : '➕ 新增單位';
+      document.getElementById('ms-unit-error').innerHTML = '';
+      if (id) {
+        const u = msUnitsCache.find(x => x.id === id);
+        document.getElementById('ms-unit-name').value = u.name || '';
+        document.getElementById('ms-unit-type').value = u.type || 'prehospital';
+        document.getElementById('ms-unit-order').value = u.displayOrder || 1;
+        document.getElementById('ms-unit-active').checked = u.isActive !== false;
+      } else {
+        document.getElementById('ms-unit-name').value = '';
+        document.getElementById('ms-unit-type').value = 'prehospital';
+        document.getElementById('ms-unit-order').value = msUnitsCache.length + 1;
+        document.getElementById('ms-unit-active').checked = true;
+      }
+      document.getElementById('ms-unit-modal').classList.add('active');
+    }
+    document.getElementById('ms-unit-close').addEventListener('click', () => document.getElementById('ms-unit-modal').classList.remove('active'));
+    document.getElementById('ms-unit-cancel').addEventListener('click', () => document.getElementById('ms-unit-modal').classList.remove('active'));
+    document.getElementById('ms-unit-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('ms-unit-modal').classList.remove('active'); });
+    document.getElementById('ms-unit-save').addEventListener('click', async () => {
+      const name = document.getElementById('ms-unit-name').value.trim();
+      const type = document.getElementById('ms-unit-type').value;
+      const order = parseInt(document.getElementById('ms-unit-order').value);
+      const active = document.getElementById('ms-unit-active').checked;
+      const errEl = document.getElementById('ms-unit-error');
+      errEl.innerHTML = '';
+      if (!name) { errEl.innerHTML = '<div class="err-msg">❌ 名稱必填</div>'; return; }
+      const btn = document.getElementById('ms-unit-save');
+      btn.disabled = true; btn.textContent = '⏳';
+      try {
+        const data = { name, type, displayOrder: order, isActive: active, updatedAt: serverTimestamp(), updatedBy: currentUser.email };
+        if (msEditingId) {
+          await updateDoc(doc(db, 'units', msEditingId), data);
+        } else {
+          data.createdAt = serverTimestamp(); data.createdBy = currentUser.email;
+          await setDoc(doc(collection(db, 'units')), data);
+        }
+        document.getElementById('ms-unit-modal').classList.remove('active');
+        await loadMsUnits(); renderMsContent();
+      } catch (e) { errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
+    });
+    async function delMsUnit(id) {
+      if (!confirm(`確定刪除（停用）此單位？`)) return;
+      try {
+        await updateDoc(doc(db, 'units', id), { isActive: false, archivedAt: serverTimestamp() });
+        await loadMsUnits(); renderMsContent();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+    async function moveMsUnit(id, dir) {
+      const idx = msUnitsCache.findIndex(u => u.id === id);
+      const target = msUnitsCache[idx + dir];
+      if (!target) return;
+      const a = msUnitsCache[idx], b = target;
+      try {
+        const batch = writeBatch(db);
+        batch.update(doc(db, 'units', a.id), { displayOrder: b.displayOrder });
+        batch.update(doc(db, 'units', b.id), { displayOrder: a.displayOrder });
+        await batch.commit();
+        await loadMsUnits(); renderMsContent();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+
+    // ----- 評核者身分 -----
+    async function loadMsRoles() {
+      const snap = await getDocs(collection(db, 'evaluator_roles'));
+      msRolesCache = [];
+      snap.forEach(d => msRolesCache.push({ id: d.id, ...d.data() }));
+      msRolesCache.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    }
+    function renderMsRoles(el) {
+      let html = '<div class="sub-toolbar"><button class="btn btn-green" id="btn-add-ms-role">➕ 新增評核者身分</button><span style="color:#94a3b8;font-size:13px;margin-left:auto">如：院前指導員、醫院指導員</span></div>';
+      if (msRolesCache.length === 0) {
+        html += '<div class="placeholder"><div class="icon">👤</div><h3>還沒有評核者身分</h3><p>新增評核者可選的身分</p></div>';
+      } else {
+        html += '<table class="table"><thead><tr><th>名稱</th><th>排序</th><th>狀態</th><th>動作</th></tr></thead><tbody>';
+        msRolesCache.forEach((r, idx) => {
+          const state = r.isActive === false ? '<span class="tag-pill gray">⏸ 停用</span>' : '<span class="tag-pill">✅ 啟用</span>';
+          html += `<tr>
+            <td><strong>${r.name || '—'}</strong></td>
+            <td>
+              <button class="order-btn" data-rup="${r.id}" ${idx === 0 ? 'disabled' : ''}>↑</button>
+              <button class="order-btn" data-rdown="${r.id}" ${idx === msRolesCache.length - 1 ? 'disabled' : ''}>↓</button>
+              <span style="margin-left:6px;color:#94a3b8">${r.displayOrder || 0}</span>
+            </td>
+            <td>${state}</td>
+            <td>
+              <button class="btn" data-redit="${r.id}">✏️ 編輯</button>
+              <button class="btn btn-red" data-rdel="${r.id}">🗑️ 刪除</button>
+            </td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      document.getElementById('btn-add-ms-role').addEventListener('click', () => openMsRoleModal(null));
+      el.querySelectorAll('button[data-redit]').forEach(b => b.addEventListener('click', () => openMsRoleModal(b.dataset.redit)));
+      el.querySelectorAll('button[data-rdel]').forEach(b => b.addEventListener('click', () => delMsRole(b.dataset.rdel)));
+      el.querySelectorAll('button[data-rup]').forEach(b => b.addEventListener('click', () => moveMsRole(b.dataset.rup, -1)));
+      el.querySelectorAll('button[data-rdown]').forEach(b => b.addEventListener('click', () => moveMsRole(b.dataset.rdown, 1)));
+    }
+    function openMsRoleModal(id) {
+      msEditingId = id;
+      document.getElementById('ms-role-modal-title').textContent = id ? '✏️ 編輯評核者身分' : '➕ 新增評核者身分';
+      document.getElementById('ms-role-error').innerHTML = '';
+      if (id) {
+        const r = msRolesCache.find(x => x.id === id);
+        document.getElementById('ms-role-name').value = r.name || '';
+        document.getElementById('ms-role-order').value = r.displayOrder || 1;
+        document.getElementById('ms-role-active').checked = r.isActive !== false;
+      } else {
+        document.getElementById('ms-role-name').value = '';
+        document.getElementById('ms-role-order').value = msRolesCache.length + 1;
+        document.getElementById('ms-role-active').checked = true;
+      }
+      document.getElementById('ms-role-modal').classList.add('active');
+    }
+    document.getElementById('ms-role-close').addEventListener('click', () => document.getElementById('ms-role-modal').classList.remove('active'));
+    document.getElementById('ms-role-cancel').addEventListener('click', () => document.getElementById('ms-role-modal').classList.remove('active'));
+    document.getElementById('ms-role-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('ms-role-modal').classList.remove('active'); });
+    document.getElementById('ms-role-save').addEventListener('click', async () => {
+      const name = document.getElementById('ms-role-name').value.trim();
+      const order = parseInt(document.getElementById('ms-role-order').value);
+      const active = document.getElementById('ms-role-active').checked;
+      const errEl = document.getElementById('ms-role-error');
+      errEl.innerHTML = '';
+      if (!name) { errEl.innerHTML = '<div class="err-msg">❌ 名稱必填</div>'; return; }
+      const btn = document.getElementById('ms-role-save');
+      btn.disabled = true; btn.textContent = '⏳';
+      try {
+        const data = { name, displayOrder: order, isActive: active, updatedAt: serverTimestamp(), updatedBy: currentUser.email };
+        if (msEditingId) {
+          await updateDoc(doc(db, 'evaluator_roles', msEditingId), data);
+        } else {
+          data.createdAt = serverTimestamp(); data.createdBy = currentUser.email;
+          await setDoc(doc(collection(db, 'evaluator_roles')), data);
+        }
+        document.getElementById('ms-role-modal').classList.remove('active');
+        await loadMsRoles(); renderMsContent();
+      } catch (e) { errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
+    });
+    async function delMsRole(id) {
+      if (!confirm(`確定刪除（停用）此評核者身分？`)) return;
+      try {
+        await updateDoc(doc(db, 'evaluator_roles', id), { isActive: false, archivedAt: serverTimestamp() });
+        await loadMsRoles(); renderMsContent();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+    async function moveMsRole(id, dir) {
+      const idx = msRolesCache.findIndex(r => r.id === id);
+      const target = msRolesCache[idx + dir];
+      if (!target) return;
+      const a = msRolesCache[idx], b = target;
+      try {
+        const batch = writeBatch(db);
+        batch.update(doc(db, 'evaluator_roles', a.id), { displayOrder: b.displayOrder });
+        batch.update(doc(db, 'evaluator_roles', b.id), { displayOrder: a.displayOrder });
+        await batch.commit();
+        await loadMsRoles(); renderMsContent();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+
+    // ----- Milestone 項目 -----
+    async function loadMsItems() {
+      const snap = await getDocs(collection(db, 'milestones'));
+      msItemsCache = [];
+      snap.forEach(d => msItemsCache.push({ id: d.id, ...d.data() }));
+      msItemsCache.sort((a, b) => {
+        if (a.groupId !== b.groupId) return (a.groupId || '').localeCompare(b.groupId || '');
+        return (a.displayOrder || 0) - (b.displayOrder || 0);
+      });
+    }
+    function renderMsItems(el) {
+      let html = '<div class="sub-toolbar"><button class="btn btn-green" id="btn-add-ms-item">➕ 新增 Milestone 項目</button>';
+      html += '<select id="ms-item-filter-group" style="min-width:180px"><option value="">全部群</option>';
+      msGroupsCache.filter(g => g.isActive !== false).forEach(g => { html += `<option value="${g.id}">${g.id} - ${g.name}</option>`; });
+      html += '</select><span style="color:#94a3b8;font-size:13px;margin-left:auto">共 ' + msItemsCache.length + ' 個項目</span></div>';
+
+      if (msGroupsCache.length === 0) {
+        html += '<div class="placeholder"><div class="icon">⚠️</div><h3>請先建立 Milestone 群</h3><p>先到「📁 Milestone 群」分頁新增 T/N/K/V/I 等群</p></div>';
+        el.innerHTML = html;
+        return;
+      }
+      if (msItemsCache.length === 0) {
+        html += '<div class="placeholder"><div class="icon">📋</div><h3>還沒有 Milestone 項目</h3><p>建議建立 40 個（T11 + N13 + K7 + V8 + I1）</p></div>';
+        el.innerHTML = html;
+        document.getElementById('btn-add-ms-item').addEventListener('click', () => openMsItemModal(null));
+        return;
+      }
+
+      // 按群分組顯示
+      const byGroup = {};
+      msItemsCache.forEach(m => { if (!byGroup[m.groupId]) byGroup[m.groupId] = []; byGroup[m.groupId].push(m); });
+
+      msGroupsCache.forEach(g => {
+        const items = byGroup[g.id] || [];
+        if (items.length === 0) return;
+        html += `<div style="margin-top:18px"><h3 style="color:#60a5fa;font-size:15px;margin-bottom:8px">📁 ${g.id} ${g.name} <span style="color:#94a3b8;font-size:13px">(${items.length})</span></h3>`;
+        html += '<table class="table"><thead><tr><th style="width:80px">ID</th><th>步驟</th><th>項目名稱</th><th style="width:60px">計入</th><th style="width:60px">啟用</th><th style="width:100px">排序</th><th>動作</th></tr></thead><tbody>';
+        items.forEach((m, idx) => {
+          const countTag = m.countInRadar !== false ? '✅' : '❌';
+          const visTag = m.isVisible !== false ? '👁️' : '🚫';
+          html += `<tr>
+            <td><code style="background:#0f172a;padding:3px 8px;border-radius:4px;font-size:13px">${m.id}</code></td>
+            <td><span class="tag-pill gray">${m.step || '—'}</span></td>
+            <td><strong>${m.name || '—'}</strong>${m.scoringGuide ? `<div class="scoring-guide">${m.scoringGuide.substring(0, 60)}${m.scoringGuide.length > 60 ? '...' : ''}</div>` : ''}</td>
+            <td style="text-align:center">${countTag}</td>
+            <td style="text-align:center">${visTag}</td>
+            <td>
+              <button class="order-btn" data-mup="${m.id}" ${idx === 0 ? 'disabled' : ''}>↑</button>
+              <button class="order-btn" data-mdown="${m.id}" ${idx === items.length - 1 ? 'disabled' : ''}>↓</button>
+              <span style="margin-left:4px;color:#94a3b8;font-size:12px">${m.displayOrder || 0}</span>
+            </td>
+            <td>
+              <button class="btn" data-medit="${m.id}">✏️</button>
+              <button class="btn btn-red" data-mdel="${m.id}">🗑️</button>
+            </td>
+          </tr>`;
+        });
+        html += '</tbody></table></div>';
+      });
+
+      el.innerHTML = html;
+      document.getElementById('btn-add-ms-item').addEventListener('click', () => openMsItemModal(null));
+      document.getElementById('ms-item-filter-group').addEventListener('change', (e) => filterMsItems(e.target.value));
+      el.querySelectorAll('button[data-medit]').forEach(b => b.addEventListener('click', () => openMsItemModal(b.dataset.medit)));
+      el.querySelectorAll('button[data-mdel]').forEach(b => b.addEventListener('click', () => delMsItem(b.dataset.mdel)));
+      el.querySelectorAll('button[data-mup]').forEach(b => b.addEventListener('click', () => moveMsItem(b.dataset.mup, -1)));
+      el.querySelectorAll('button[data-mdown]').forEach(b => b.addEventListener('click', () => moveMsItem(b.dataset.mdown, 1)));
+    }
+    function filterMsItems(groupId) {
+      // 簡單過濾、可以直接全部重整時加 filter、這版先 show/hide rows
+      const allTables = document.querySelectorAll('#ms-content > div');
+      allTables.forEach(div => {
+        const h3 = div.querySelector('h3');
+        if (!h3) return;
+        if (!groupId) { div.style.display = ''; return; }
+        const text = h3.textContent;
+        div.style.display = text.startsWith(`📁 ${groupId} `) ? '' : 'none';
+      });
+    }
+    function openMsItemModal(id) {
+      msEditingId = id;
+      document.getElementById('ms-item-modal-title').textContent = id ? '✏️ 編輯 Milestone 項目' : '➕ 新增 Milestone 項目';
+      document.getElementById('ms-item-error').innerHTML = '';
+      // 填群下拉
+      const sel = document.getElementById('ms-item-group');
+      let opts = '<option value="">請選群...</option>';
+      msGroupsCache.filter(g => g.isActive !== false).forEach(g => { opts += `<option value="${g.id}">${g.id} - ${g.name}</option>`; });
+      sel.innerHTML = opts;
+      if (id) {
+        const m = msItemsCache.find(x => x.id === id);
+        document.getElementById('ms-item-id').value = m.id;
+        document.getElementById('ms-item-id').readOnly = true;
+        document.getElementById('ms-item-group').value = m.groupId || '';
+        document.getElementById('ms-item-step').value = m.step || '';
+        document.getElementById('ms-item-name').value = m.name || '';
+        document.getElementById('ms-item-guide').value = m.scoringGuide || '';
+        document.getElementById('ms-item-order').value = m.displayOrder || 1;
+        document.getElementById('ms-item-count').checked = m.countInRadar !== false;
+        document.getElementById('ms-item-visible').checked = m.isVisible !== false;
+      } else {
+        document.getElementById('ms-item-id').value = '';
+        document.getElementById('ms-item-id').readOnly = false;
+        document.getElementById('ms-item-group').value = '';
+        document.getElementById('ms-item-step').value = '';
+        document.getElementById('ms-item-name').value = '';
+        document.getElementById('ms-item-guide').value = '';
+        document.getElementById('ms-item-order').value = 1;
+        document.getElementById('ms-item-count').checked = true;
+        document.getElementById('ms-item-visible').checked = true;
+      }
+      document.getElementById('ms-item-modal').classList.add('active');
+    }
+    document.getElementById('ms-item-close').addEventListener('click', () => document.getElementById('ms-item-modal').classList.remove('active'));
+    document.getElementById('ms-item-cancel').addEventListener('click', () => document.getElementById('ms-item-modal').classList.remove('active'));
+    document.getElementById('ms-item-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('ms-item-modal').classList.remove('active'); });
+    document.getElementById('ms-item-save').addEventListener('click', async () => {
+      const id = document.getElementById('ms-item-id').value.trim().toUpperCase();
+      const groupId = document.getElementById('ms-item-group').value;
+      const step = document.getElementById('ms-item-step').value.trim();
+      const name = document.getElementById('ms-item-name').value.trim();
+      const guide = document.getElementById('ms-item-guide').value.trim();
+      const order = parseInt(document.getElementById('ms-item-order').value);
+      const countInRadar = document.getElementById('ms-item-count').checked;
+      const isVisible = document.getElementById('ms-item-visible').checked;
+      const errEl = document.getElementById('ms-item-error');
+      errEl.innerHTML = '';
+      if (!id || !/^[A-Z]+\d+$/.test(id)) { errEl.innerHTML = '<div class="err-msg">❌ ID 格式：英文大寫前綴 + 數字（如 T001、N013）</div>'; return; }
+      if (!groupId) { errEl.innerHTML = '<div class="err-msg">❌ 請選所屬群</div>'; return; }
+      if (!step) { errEl.innerHTML = '<div class="err-msg">❌ 步驟必填</div>'; return; }
+      if (!name) { errEl.innerHTML = '<div class="err-msg">❌ 項目名稱必填</div>'; return; }
+      const btn = document.getElementById('ms-item-save');
+      btn.disabled = true; btn.textContent = '⏳';
+      try {
+        if (!msEditingId) {
+          const existing = await getDoc(doc(db, 'milestones', id));
+          if (existing.exists()) { errEl.innerHTML = `<div class="err-msg">❌ ID「${id}」已存在</div>`; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+        }
+        await setDoc(doc(db, 'milestones', id), {
+          groupId, step, name,
+          scoringGuide: guide,
+          countInRadar, isVisible,
+          displayOrder: order,
+          updatedAt: serverTimestamp(), updatedBy: currentUser.email,
+          ...(msEditingId ? {} : { createdAt: serverTimestamp(), createdBy: currentUser.email })
+        }, { merge: true });
+        document.getElementById('ms-item-modal').classList.remove('active');
+        await loadMsItems(); renderMsContent();
+      } catch (e) { errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
+    });
+    async function delMsItem(id) {
+      if (!confirm(`確定刪除 Milestone 項目「${id}」？\n（會真刪除、有評核紀錄前不要刪）`)) return;
+      try {
+        // 第一版用真刪除（之後改隱藏）
+        await updateDoc(doc(db, 'milestones', id), { isVisible: false, isActive: false, archivedAt: serverTimestamp() });
+        await loadMsItems(); renderMsContent();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+    async function moveMsItem(id, dir) {
+      const item = msItemsCache.find(m => m.id === id);
+      if (!item) return;
+      const sameGroup = msItemsCache.filter(m => m.groupId === item.groupId);
+      const idx = sameGroup.findIndex(m => m.id === id);
+      const target = sameGroup[idx + dir];
+      if (!target) return;
+      try {
+        const batch = writeBatch(db);
+        batch.update(doc(db, 'milestones', item.id), { displayOrder: target.displayOrder });
+        batch.update(doc(db, 'milestones', target.id), { displayOrder: item.displayOrder });
+        await batch.commit();
+        await loadMsItems(); renderMsContent();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+
     // === 建立學員帳號 (用次要 auth 不踢出 Master) ===
     let currentCreateAuthStudent = null;
 
