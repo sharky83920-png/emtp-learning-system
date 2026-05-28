@@ -331,6 +331,7 @@
         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
         if (btn.dataset.tab === 'classes') loadClasses();
         if (btn.dataset.tab === 'students') loadClassDropdown();
+        if (btn.dataset.tab === 'instructors') loadInstructors();
       });
     });
 
