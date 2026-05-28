@@ -270,6 +270,31 @@
       </div>
     </div>
   </div>
+  
+  <!-- 建立學員帳號 Modal -->
+  <div class="modal-overlay" id="create-auth-modal">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3>🔑 建立學員 Firebase 帳號</h3><button class="modal-close" id="create-auth-close">×</button></div>
+      <div class="modal-body">
+        <div style="background:#0f172a;padding:12px;border-radius:6px;margin-bottom:16px">
+          <div style="color:#94a3b8;font-size:12px;margin-bottom:4px">為這位學員建立帳號</div>
+          <div style="color:#e2e8f0;font-size:16px;font-weight:600" id="create-auth-student">—</div>
+        </div>
+        <div class="form-group"><label>學員 Email（自動帶入）</label><input type="email" id="create-auth-email" readonly style="background:#0a0f1f;color:#94a3b8"></div>
+        <div class="form-group"><label>身分證字號（10 字元、當作初始密碼）</label><input type="text" id="create-auth-id" maxlength="10" placeholder="A123456789" style="font-family:monospace;text-transform:uppercase;font-size:16px"></div>
+        <div class="warn-msg" style="background:#78350f;color:#fef3c7">
+          ⚠️ <strong>建立後請通知學員：</strong><br>
+          1. 學員 Email = 上面 email、初始密碼 = 身分證字號（含英文大寫）<br>
+          2. 學員第一次登入後請自行修改密碼
+        </div>
+        <div id="create-auth-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="create-auth-cancel">取消</button>
+        <button class="btn btn-green" id="create-auth-save">🔑 建立帳號</button>
+      </div>
+    </div>
+  </div>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
