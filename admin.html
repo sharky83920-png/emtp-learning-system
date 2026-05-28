@@ -771,6 +771,74 @@
       } catch (e) { errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
       finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
     });
+    
+    // === 系統設定 (F8) ===
+    async function loadSettings() {
+      const listEl = document.getElementById('settings-list');
+      listEl.innerHTML = '<div class="loading">⏳ 載入班級設定...</div>';
+      try {
+        const snapshot = await getDocs(collection(db, 'classes'));
+        const classes = [];
+        snapshot.forEach(d => { const data = d.data(); if (data.isActive !== false) classes.push({ id: d.id, ...data }); });
+        classes.sort((a, b) => (b.year || 0) - (a.year || 0));
+        if (classes.length === 0) {
+          listEl.innerHTML = '<div class="placeholder"><div class="icon">📭</div><h3>還沒有班級</h3><p>先去班級管理新增</p></div>';
+          return;
+        }
+        let html = '<table class="table"><thead><tr><th>班級</th><th>⚡ 能量條</th><th>目標趟數</th><th>週期</th><th>📓 錯題本</th><th>🏆 戰力排行</th><th>動作</th></tr></thead><tbody>';
+        classes.forEach(c => {
+          const s = c.settings || {};
+          const eb = s.energyBar || { enabled: false, target: 15, period: 'weekly' };
+          const mb = s.mistakeBook || { enabled: false };
+          const lb = s.leaderboard || { enabled: true };
+          html += `<tr id="settings-row-${c.id}">
+            <td><strong>${c.displayName || c.id}</strong><br><small style="color:#94a3b8">(${c.id})</small></td>
+            <td style="text-align:center"><input type="checkbox" class="settings-eb-enabled" data-id="${c.id}" ${eb.enabled ? 'checked' : ''} style="width:18px;height:18px;cursor:pointer"></td>
+            <td><input type="number" class="settings-eb-target" data-id="${c.id}" value="${eb.target || 15}" min="1" max="100" style="width:80px;padding:4px 8px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:4px"></td>
+            <td>
+              <select class="settings-eb-period" data-id="${c.id}" style="padding:4px 8px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:4px">
+                <option value="weekly" ${eb.period === 'weekly' ? 'selected' : ''}>每週</option>
+                <option value="monthly" ${eb.period === 'monthly' ? 'selected' : ''}>每月</option>
+              </select>
+            </td>
+            <td style="text-align:center"><input type="checkbox" class="settings-mb-enabled" data-id="${c.id}" ${mb.enabled ? 'checked' : ''} style="width:18px;height:18px;cursor:pointer"></td>
+            <td style="text-align:center"><input type="checkbox" class="settings-lb-enabled" data-id="${c.id}" ${lb.enabled ? 'checked' : ''} style="width:18px;height:18px;cursor:pointer"></td>
+            <td><button class="btn btn-green" data-save-settings="${c.id}">💾 儲存</button></td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+        listEl.innerHTML = html;
+        listEl.querySelectorAll('button[data-save-settings]').forEach(b => b.addEventListener('click', () => saveClassSettings(b.dataset.saveSettings)));
+      } catch (e) { listEl.innerHTML = `<div class="err-msg">${e.message}</div>`; }
+    }
+
+    async function saveClassSettings(classId) {
+      const ebEnabled = document.querySelector(`.settings-eb-enabled[data-id="${classId}"]`).checked;
+      const ebTarget = parseInt(document.querySelector(`.settings-eb-target[data-id="${classId}"]`).value) || 15;
+      const ebPeriod = document.querySelector(`.settings-eb-period[data-id="${classId}"]`).value;
+      const mbEnabled = document.querySelector(`.settings-mb-enabled[data-id="${classId}"]`).checked;
+      const lbEnabled = document.querySelector(`.settings-lb-enabled[data-id="${classId}"]`).checked;
+      const btn = document.querySelector(`button[data-save-settings="${classId}"]`);
+      btn.disabled = true; btn.textContent = '⏳';
+      try {
+        await updateDoc(doc(db, 'classes', classId), {
+          settings: {
+            energyBar: { enabled: ebEnabled, target: ebTarget, period: ebPeriod },
+            mistakeBook: { enabled: mbEnabled },
+            leaderboard: { enabled: lbEnabled }
+          },
+          settingsUpdatedAt: serverTimestamp(),
+          settingsUpdatedBy: currentUser.email
+        });
+        btn.textContent = '✅ 已儲存';
+        setTimeout(() => { btn.textContent = '💾 儲存'; btn.disabled = false; }, 1500);
+      } catch (e) {
+        alert('❌ ' + e.message);
+        btn.disabled = false; btn.textContent = '💾 儲存';
+      }
+    }
+
+    document.getElementById('btn-refresh-settings').addEventListener('click', loadSettings);
   </script>
 </body>
 </html>
