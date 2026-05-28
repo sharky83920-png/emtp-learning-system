@@ -872,6 +872,64 @@
     }
 
     document.getElementById('btn-refresh-settings').addEventListener('click', loadSettings);
+    
+    // === 建立學員帳號 (用次要 auth 不踢出 Master) ===
+    let currentCreateAuthStudent = null;
+
+    async function openCreateAuthModal(studentId) {
+      const sDoc = await getDoc(doc(db, 'students', studentId));
+      if (!sDoc.exists()) { alert('找不到學員'); return; }
+      const s = { id: sDoc.id, ...sDoc.data() };
+      if (!s.email) { alert('此學員沒有 Email、請先編輯學員補 Email'); return; }
+      if (s.hasAuthAccount) { alert('此學員已建帳號'); return; }
+      currentCreateAuthStudent = s;
+      document.getElementById('create-auth-student').textContent = `${s.name} (學號 ${s.studentNo} / 班級 ${s.classId})`;
+      document.getElementById('create-auth-email').value = s.email;
+      document.getElementById('create-auth-id').value = '';
+      document.getElementById('create-auth-error').innerHTML = '';
+      document.getElementById('create-auth-modal').classList.add('active');
+    }
+
+    document.getElementById('create-auth-close').addEventListener('click', () => document.getElementById('create-auth-modal').classList.remove('active'));
+    document.getElementById('create-auth-cancel').addEventListener('click', () => document.getElementById('create-auth-modal').classList.remove('active'));
+    document.getElementById('create-auth-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('create-auth-modal').classList.remove('active'); });
+
+    document.getElementById('create-auth-save').addEventListener('click', async () => {
+      if (!currentCreateAuthStudent) return;
+      const idNumber = document.getElementById('create-auth-id').value.trim().toUpperCase();
+      const errEl = document.getElementById('create-auth-error');
+      errEl.innerHTML = '';
+      if (!/^[A-Z]\d{9}$/.test(idNumber)) {
+        errEl.innerHTML = '<div class="err-msg">❌ 身分證格式錯誤、應為 1 個英文字母 + 9 個數字（例：A123456789）</div>';
+        return;
+      }
+      const btn = document.getElementById('create-auth-save');
+      btn.disabled = true; btn.textContent = '⏳ 建立中...';
+      try {
+        // 用次要 auth 建 user、不會踢出 Master
+        const cred = await createUserWithEmailAndPassword(secondaryAuth, currentCreateAuthStudent.email, idNumber);
+        // 更新 student doc
+        await updateDoc(doc(db, 'students', currentCreateAuthStudent.id), {
+          hasAuthAccount: true,
+          authAccountCreatedAt: serverTimestamp(),
+          authAccountCreatedBy: currentUser.email,
+          authUid: cred.user.uid
+        });
+        // 登出次要 auth、回到 Master 環境
+        await signOut(secondaryAuth);
+        alert(`✅ 帳號建立成功！\n\n學員：${currentCreateAuthStudent.name}\nEmail：${currentCreateAuthStudent.email}\n初始密碼：${idNumber}\n\n請通知學員登入學員端：\nhttps://sharky83920-png.github.io/emtp-learning-system/student.html`);
+        document.getElementById('create-auth-modal').classList.remove('active');
+        loadStudents();
+      } catch (e) {
+        let msg = e.message;
+        if (e.code === 'auth/email-already-in-use') msg = '此 Email 已有 Firebase 帳號（可能之前建過）';
+        else if (e.code === 'auth/weak-password') msg = '密碼太短（至少 6 字元）';
+        else if (e.code === 'auth/invalid-email') msg = 'Email 格式錯誤';
+        errEl.innerHTML = `<div class="err-msg">❌ ${msg}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = '🔑 建立帳號';
+      }
+    });
   </script>
 </body>
 </html>
