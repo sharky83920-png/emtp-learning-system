@@ -289,6 +289,9 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
     const MASTER_EMAILS = ['sharky83920@gmail.com'];
+   // 次要 Auth 實例：用來建學員帳號、不會把 Master 踢出
+    const secondaryApp = initializeApp(firebaseConfig, 'secondary');
+    const secondaryAuth = getAuth(secondaryApp);
 
     let currentUser = null;
     let showArchivedClasses = false;
