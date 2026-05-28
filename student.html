@@ -103,7 +103,7 @@
       measurementId: "G-HQRYX3NJ78"
     };
 
-    const app = initializeApp(firebaseConfig);
+    const app = initializeApp(firebaseConfig, 'student-app');
     const auth = getAuth(app);
     setPersistence(auth, inMemoryPersistence);
     const db = getFirestore(app);
