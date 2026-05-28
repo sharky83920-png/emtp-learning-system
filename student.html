@@ -43,7 +43,28 @@
     .tag-enabled { background: #d1fae5; color: #065f46; }
     .tag-disabled { background: #f3f4f6; color: #6b7280; }
     .loading { text-align: center; padding: 40px; color: #64748b; }
+    /* F11-A: Milestone 雷達 + F11-B: 核心技術簽核 */
+    .milestone-section { background: white; padding: 24px; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+    .milestone-section h3 { color: #1e293b; font-size: 18px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    .radar-container { max-width: 380px; margin: 0 auto; position: relative; padding: 10px; }
+    .radar-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; justify-content: center; }
+    .btn-eval { background: #14b8a6; color: white; border: none; padding: 11px 22px; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-eval:hover { background: #0d9488; }
+    .btn-eval:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-copy { background: white; color: #14b8a6; border: 2px solid #14b8a6; padding: 9px 20px; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 600; }
+    .btn-copy:disabled { opacity: 0.5; cursor: not-allowed; }
+    .empty-hint { text-align: center; color: #94a3b8; font-size: 13px; padding: 14px; background: #f8fafc; border-radius: 8px; margin-top: 12px; }
+    .skill-item { background: #f8fafc; padding: 14px 18px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid #3b82f6; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .skill-item.done { border-left-color: #10b981; background: #f0fdf4; }
+    .skill-info { flex: 1; min-width: 200px; }
+    .skill-name { color: #1e293b; font-weight: 600; font-size: 15px; }
+    .skill-progress { color: #64748b; font-size: 12px; margin-top: 3px; }
+    .skill-blocks { display: flex; gap: 4px; }
+    .skill-block { width: 22px; height: 22px; border-radius: 4px; background: #e2e8f0; }
+    .skill-block.filled { background: #10b981; }
+    .skill-overflow { color: #10b981; font-size: 13px; font-weight: 600; margin-left: 6px; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -84,6 +105,26 @@
         <h2>👋 歡迎、<span id="student-name">同學</span></h2>
         <div class="class-info">🏫 班級：<span id="student-class">—</span> ・ 學號：<span id="student-no">—</span></div>
       </div>
+
+      <!-- F11-A: Milestone 群能力 5 角雷達 -->
+      <div class="milestone-section">
+        <h3>🎯 Milestone 群能力</h3>
+        <div class="radar-container">
+          <canvas id="milestone-radar"></canvas>
+        </div>
+        <div class="empty-hint" id="radar-empty-hint">⏳ 尚無評核資料、教官評核後雷達會自動更新</div>
+        <div class="radar-actions">
+          <button class="btn-eval" id="btn-eval-epa" disabled title="F11-D 開發中">📝 請教官評核 EPA</button>
+          <button class="btn-copy" id="btn-copy-link" disabled title="F11-D 開發中">🔗 複製連結</button>
+        </div>
+      </div>
+
+      <!-- F11-B: 核心技術簽核清單 -->
+      <div class="milestone-section">
+        <h3>🛠️ 核心技術簽核清單</h3>
+        <div id="core-skills-list"><div class="loading">⏳ 載入中...</div></div>
+      </div>
+
       <div class="feature-grid" id="features"><div class="loading">⏳ 載入中...</div></div>
     </main>
   </div>
@@ -274,8 +315,197 @@
         html += `<div class="feature-card ${lb.enabled ? '' : 'disabled'}"><div class="icon">🏆</div><h3>戰力排行 <span class="tag ${lb.enabled ? 'tag-enabled' : 'tag-disabled'}">${lb.enabled ? '啟用中' : '未啟用'}</span></h3><div class="desc">⏳ F11 開發中</div></div>`;
         html += `<div class="feature-card"><div class="icon">📝</div><h3>答題系統 <span class="tag tag-disabled">F11 建置中</span></h3><div class="desc">隨機綜合測驗、章節練習等</div></div>`;
         document.getElementById('features').innerHTML = html;
+
+        // F11-A + F11-B: 載入 Milestone 雷達 + 核心技術簽核
+        await Promise.all([loadMilestoneRadar(), loadCoreSkills()]);
       } catch (e) {
         document.getElementById('features').innerHTML = `<div class="err-msg">${e.message}</div>`;
+      }
+    }
+
+    // ===== F11-A: Milestone 5 角雷達 =====
+    let radarChart = null;
+    async function loadMilestoneRadar() {
+      try {
+        // 1. 讀啟用的 milestone 群（5 角）
+        const groupsSnap = await getDocs(collection(db, 'milestone_groups'));
+        const groups = [];
+        groupsSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) groups.push({ id: d.id, ...data }); });
+        groups.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+
+        if (groups.length === 0) {
+          document.querySelector('.radar-container').style.display = 'none';
+          document.getElementById('radar-empty-hint').innerHTML = '⚠️ 系統尚未建立 Milestone 群、請聯絡管理員';
+          return;
+        }
+
+        // 2. 讀啟用的 milestones（計入雷達）
+        const milestonesSnap = await getDocs(collection(db, 'milestones'));
+        const milestones = [];
+        milestonesSnap.forEach(d => {
+          const data = d.data();
+          if (data.isActive !== false && data.isVisible !== false && data.countInRadar !== false) {
+            milestones.push({ id: d.id, ...data });
+          }
+        });
+
+        // 3. 讀此學員的所有評核（新到舊）
+        const evalQuery = query(collection(db, 'milestone_evaluations'), where('studentId', '==', currentStudent.id));
+        const evalSnap = await getDocs(evalQuery);
+        const evaluations = [];
+        evalSnap.forEach(d => evaluations.push({ id: d.id, ...d.data() }));
+        evaluations.sort((a, b) => {
+          const at = a.evaluatedAt?.seconds || 0;
+          const bt = b.evaluatedAt?.seconds || 0;
+          return bt - at;
+        });
+
+        // 4. 讀系統設定（取 recentN）
+        let recentN = 3;
+        try {
+          const settingsDoc = await getDoc(doc(db, 'system_settings', 'global'));
+          if (settingsDoc.exists()) recentN = settingsDoc.data().milestoneRecentN || 3;
+        } catch (e) {}
+
+        // 5. 計算每個 milestone 的最近 N 次平均
+        const milestoneScores = {};
+        milestones.forEach(m => {
+          const myEvals = evaluations.filter(e => e.milestoneId === m.id);
+          if (myEvals.length === 0) { milestoneScores[m.id] = null; return; }
+          const recent = myEvals.slice(0, recentN);
+          const sum = recent.reduce((acc, e) => acc + (e.level || 0), 0);
+          milestoneScores[m.id] = sum / recent.length;
+        });
+
+        // 6. 計算每個 group 的分數（該群下所有 milestone 平均的平均、忽略沒分數的）
+        const groupScores = groups.map(g => {
+          const inGroup = milestones.filter(m => m.groupId === g.id);
+          const scores = inGroup.map(m => milestoneScores[m.id]).filter(s => s !== null);
+          if (scores.length === 0) return 0;
+          return scores.reduce((a, b) => a + b, 0) / scores.length;
+        });
+
+        // 7. 畫雷達
+        const labels = groups.map(g => g.name);
+        const ctx = document.getElementById('milestone-radar');
+        if (!ctx || !window.Chart) {
+          document.getElementById('radar-empty-hint').innerHTML = '⚠️ 圖表庫載入失敗、請重整頁面';
+          return;
+        }
+
+        if (radarChart) radarChart.destroy();
+        radarChart = new Chart(ctx, {
+          type: 'radar',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: '當前 Milestone 等級',
+                data: groupScores,
+                backgroundColor: 'rgba(20, 184, 166, 0.2)',
+                borderColor: 'rgba(20, 184, 166, 1)',
+                pointBackgroundColor: 'rgba(20, 184, 166, 1)',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgba(20, 184, 166, 1)',
+                borderWidth: 2
+              },
+              {
+                label: '獨立執行門檻 (Level 4)',
+                data: groups.map(() => 4),
+                backgroundColor: 'rgba(239, 68, 68, 0)',
+                borderColor: 'rgba(239, 68, 68, 0.7)',
+                borderDash: [6, 4],
+                pointRadius: 0,
+                borderWidth: 1.5
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+              r: {
+                min: 0,
+                max: 5,
+                ticks: { stepSize: 1, color: '#94a3b8', backdropColor: 'transparent' },
+                pointLabels: { font: { size: 13, weight: '600' }, color: '#1e293b' },
+                grid: { color: 'rgba(148, 163, 184, 0.25)' },
+                angleLines: { color: 'rgba(148, 163, 184, 0.3)' }
+              }
+            },
+            plugins: {
+              legend: { position: 'bottom', labels: { padding: 12, font: { size: 12 } } }
+            }
+          }
+        });
+
+        // 8. 顯示「尚無資料」提示（如果所有分數都 0）
+        const hint = document.getElementById('radar-empty-hint');
+        if (hint) hint.style.display = groupScores.every(s => s === 0) ? 'block' : 'none';
+
+      } catch (e) {
+        console.error('[F11-A] loadMilestoneRadar error:', e);
+        document.getElementById('radar-empty-hint').innerHTML = `❌ 載入失敗：${e.message}`;
+      }
+    }
+
+    // ===== F11-B: 核心技術簽核清單 =====
+    async function loadCoreSkills() {
+      try {
+        const listEl = document.getElementById('core-skills-list');
+
+        // 1. 讀啟用的核心技術項目
+        const skillsSnap = await getDocs(collection(db, 'core_skills'));
+        const skills = [];
+        skillsSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) skills.push({ id: d.id, ...data }); });
+        skills.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+
+        if (skills.length === 0) {
+          listEl.innerHTML = '<div class="empty-hint">尚無核心技術項目（請聯絡管理員設定）</div>';
+          return;
+        }
+
+        // 2. 讀此學員的所有簽核紀錄
+        const signoffsQuery = query(collection(db, 'core_skill_signoffs'), where('studentId', '==', currentStudent.id));
+        const signoffsSnap = await getDocs(signoffsQuery);
+        const signoffsBySkill = {};
+        signoffsSnap.forEach(d => {
+          const data = d.data();
+          if (!signoffsBySkill[data.skillId]) signoffsBySkill[data.skillId] = 0;
+          signoffsBySkill[data.skillId]++;
+        });
+
+        // 3. 渲染每個項目（綠方塊進度）
+        let html = '';
+        skills.forEach(skill => {
+          const target = skill.targetCount || 1;
+          const done = signoffsBySkill[skill.id] || 0;
+          const displayDone = Math.min(done, target);
+          const isDone = done >= target;
+          const overflow = done > target ? done - target : 0;
+
+          let blocks = '';
+          for (let i = 0; i < target; i++) {
+            blocks += `<div class="skill-block${i < displayDone ? ' filled' : ''}"></div>`;
+          }
+
+          const overflowText = overflow > 0 ? `<span class="skill-overflow">+${overflow}</span>` : '';
+          const doneIcon = isDone ? '✅' : '';
+
+          html += `<div class="skill-item${isDone ? ' done' : ''}">
+            <div class="skill-info">
+              <div class="skill-name">${skill.name} ${doneIcon}</div>
+              <div class="skill-progress">目標 ${target} 次 ・ 完成 ${done} 次</div>
+            </div>
+            <div class="skill-blocks">${blocks}${overflowText}</div>
+          </div>`;
+        });
+
+        listEl.innerHTML = html;
+      } catch (e) {
+        console.error('[F11-B] loadCoreSkills error:', e);
+        document.getElementById('core-skills-list').innerHTML = `<div class="empty-hint">❌ 載入失敗：${e.message}</div>`;
       }
     }
 

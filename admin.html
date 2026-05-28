@@ -528,7 +528,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, serverTimestamp, query, where, writeBatch } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, where, writeBatch } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -2040,10 +2040,14 @@
       if (booksCache.length === 0) {
         html += '<div class="placeholder"><div class="icon">📚</div><h3>還沒有書籍</h3><p>點橘色按鈕一鍵匯入</p></div>';
       } else {
-        html += '<table class="table"><thead><tr><th style="width:120px">代碼</th><th>完整名稱</th><th style="width:100px">章節數</th><th style="width:100px">排序</th><th style="width:70px">狀態</th><th>動作</th></tr></thead><tbody>';
+        html += '<table class="table"><thead><tr><th style="width:120px">代碼</th><th>完整名稱</th><th style="width:100px">章節數</th><th style="width:100px">排序</th><th style="width:80px">狀態</th><th>動作</th></tr></thead><tbody>';
         booksCache.forEach((bk, idx) => {
-          const state = bk.isActive === false ? '<span class="tag-pill gray">⏸</span>' : '<span class="tag-pill">✅</span>';
+          const isArchived = bk.isActive === false;
+          const state = isArchived ? '<span class="tag-pill gray">⏸ 停用</span>' : '<span class="tag-pill">✅ 啟用</span>';
           const chCount = chaptersCache.filter(c => c.bookId === bk.id).length;
+          const actions = isArchived
+            ? `<button class="btn btn-ghost" data-bkrestore="${bk.id}">📂 恢復</button> <button class="btn btn-red" data-bkharddel="${bk.id}">💀 真刪除</button>`
+            : `<button class="btn" data-bkedit="${bk.id}">✏️ 編輯</button> <button class="btn btn-orange" data-bkdel="${bk.id}">⏸ 停用</button>`;
           html += `<tr>
             <td><code style="background:#0f172a;padding:3px 8px;border-radius:4px">${bk.id}</code></td>
             <td><strong>${bk.fullName || bk.id}</strong></td>
@@ -2053,10 +2057,7 @@
               <button class="order-btn" data-bkdown="${bk.id}" ${idx === booksCache.length - 1 ? 'disabled' : ''}>↓</button>
             </td>
             <td>${state}</td>
-            <td>
-              <button class="btn" data-bkedit="${bk.id}">✏️</button>
-              <button class="btn btn-red" data-bkdel="${bk.id}">🗑️</button>
-            </td>
+            <td>${actions}</td>
           </tr>`;
         });
         html += '</tbody></table>';
@@ -2067,8 +2068,26 @@
       if (bulkBtn) bulkBtn.addEventListener('click', bulkInitBooks);
       el.querySelectorAll('button[data-bkedit]').forEach(b => b.addEventListener('click', () => openBookModal(b.dataset.bkedit)));
       el.querySelectorAll('button[data-bkdel]').forEach(b => b.addEventListener('click', () => delBook(b.dataset.bkdel)));
+      el.querySelectorAll('button[data-bkrestore]').forEach(b => b.addEventListener('click', () => restoreBook(b.dataset.bkrestore)));
+      el.querySelectorAll('button[data-bkharddel]').forEach(b => b.addEventListener('click', () => hardDeleteBook(b.dataset.bkharddel)));
       el.querySelectorAll('button[data-bkup]').forEach(b => b.addEventListener('click', () => moveBook(b.dataset.bkup, -1)));
       el.querySelectorAll('button[data-bkdown]').forEach(b => b.addEventListener('click', () => moveBook(b.dataset.bkdown, 1)));
+    }
+    async function restoreBook(id) {
+      try {
+        await updateDoc(doc(db, 'books', id), { isActive: true, archivedAt: null });
+        await loadBooks(); renderBooksContent();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+    async function hardDeleteBook(id) {
+      const chCount = chaptersCache.filter(c => c.bookId === id).length;
+      if (chCount > 0) { alert(`❌ 此書籍還有 ${chCount} 章節、無法真刪除\n請先刪除/封存所有章節`); return; }
+      if (!confirm(`💀 即將永久刪除書籍「${id}」\n\n⚠️ 此操作不可復原！\n（章節數已為 0、可安全刪除）\n\n確定？`)) return;
+      try {
+        await deleteDoc(doc(db, 'books', id));
+        await loadBooks(); renderBooksContent();
+        alert(`✅ 已永久刪除「${id}」`);
+      } catch (e) { alert('❌ ' + e.message); }
     }
 
     function openBookModal(id) {
