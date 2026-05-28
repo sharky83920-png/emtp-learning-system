@@ -112,6 +112,8 @@
       <button class="tab-button" data-tab="students">👥 學員管理</button>
       <button class="tab-button" data-tab="instructors">👨‍🏫 指導員管理</button>
       <button class="tab-button" data-tab="milestones">🎯 Milestone 主檔</button>
+      <button class="tab-button" data-tab="skills">🛠️ 核心技術簽核</button>
+      <button class="tab-button" data-tab="books">📚 書籍 / 章節</button>
       <button class="tab-button" data-tab="settings">⚙️ 系統設定</button>
     </nav>
 
@@ -181,6 +183,34 @@
             <button class="sub-tab" data-subtab="ms-roles">👤 評核者身分</button>
           </div>
           <div id="ms-content"><div class="loading">⏳ 載入中...</div></div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-skills">
+        <div class="card">
+          <h2><span>🛠️ 核心技術簽核項目管理</span>
+            <button class="btn btn-ghost" id="btn-refresh-skills">🔄 重新整理</button>
+          </h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
+            💡 額外指定給學員的「核心技術考試項目」、跟 Milestone 系統獨立。學員端用「綠方塊」進度條呈現。每項目可設定目標完成次數。
+          </p>
+          <div id="skills-content"><div class="loading">⏳ 載入中...</div></div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-books">
+        <div class="card">
+          <h2><span>📚 書籍 / 章節 / 維度管理</span>
+            <button class="btn btn-ghost" id="btn-refresh-books">🔄 重新整理</button>
+          </h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
+            💡 管理題庫題目的出處（EMT-P、ACLS、APLS、PHTLS 等）+ 章節 + 對應雷達維度（D1-D6）。學員出題選章節時、系統自動帶出維度。
+          </p>
+          <div class="sub-tabs">
+            <button class="sub-tab active" data-subtab="bks-books">📚 書籍</button>
+            <button class="sub-tab" data-subtab="bks-chapters">📖 章節</button>
+          </div>
+          <div id="books-content"><div class="loading">⏳ 載入中...</div></div>
         </div>
       </section>
 
@@ -425,6 +455,76 @@
     </div>
   </div>
 
+  <!-- F10-B: 核心技術簽核項目 Modal -->
+  <div class="modal-overlay" id="ms-skill-modal">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3 id="ms-skill-modal-title">➕ 新增核心技術項目</h3><button class="modal-close" id="ms-skill-close">×</button></div>
+      <div class="modal-body">
+        <div class="form-group"><label>ID（前綴 CS + 流水、如 CS001）</label><input type="text" id="ms-skill-id" maxlength="8" style="font-family:monospace;text-transform:uppercase;font-size:16px" placeholder="CS001"></div>
+        <div class="form-group"><label>項目名稱</label><input type="text" id="ms-skill-name" placeholder="非外傷初評"></div>
+        <div class="form-group"><label>目標完成次數（學員端綠方塊數）</label><input type="number" id="ms-skill-target" value="3" min="1" max="99"></div>
+        <div class="form-group"><label>考試標準（選填、多行、學員看得到）</label><textarea id="ms-skill-standard" rows="4" placeholder="例：須能在 5 分鐘內完成 SAMPLE、OPQRST、生命徵象..."></textarea></div>
+        <div class="form-group"><label>排序</label><input type="number" id="ms-skill-order" value="1" min="1"></div>
+        <div class="form-group"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ms-skill-active" checked style="width:18px;height:18px"> 啟用</label></div>
+        <div id="ms-skill-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="ms-skill-cancel">取消</button>
+        <button class="btn btn-green" id="ms-skill-save">💾 儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- F10-C: 書籍 Modal -->
+  <div class="modal-overlay" id="ms-book-modal">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3 id="ms-book-modal-title">➕ 新增書籍</h3><button class="modal-close" id="ms-book-close">×</button></div>
+      <div class="modal-body">
+        <div class="form-group"><label>書籍代碼（短名、英數、如 EMT-P、ACLS、APLS、PHTLS）</label><input type="text" id="ms-book-id" maxlength="20" style="font-family:monospace;text-transform:uppercase;font-size:16px" placeholder="EMT-P"></div>
+        <div class="form-group"><label>完整名稱</label><input type="text" id="ms-book-fullname" placeholder="高級救護技術員教科書"></div>
+        <div class="form-group"><label>排序</label><input type="number" id="ms-book-order" value="1" min="1"></div>
+        <div class="form-group"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ms-book-active" checked style="width:18px;height:18px"> 啟用</label></div>
+        <div id="ms-book-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="ms-book-cancel">取消</button>
+        <button class="btn btn-green" id="ms-book-save">💾 儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- F10-C: 章節 Modal -->
+  <div class="modal-overlay" id="ms-chapter-modal">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3 id="ms-chapter-modal-title">➕ 新增章節</h3><button class="modal-close" id="ms-chapter-close">×</button></div>
+      <div class="modal-body">
+        <div class="form-group"><label>所屬書籍</label>
+          <select id="ms-chapter-book"><option value="">請選書籍...</option></select>
+        </div>
+        <div class="form-group"><label>章節編號（如 1、27、A1）</label><input type="text" id="ms-chapter-number" placeholder="27"></div>
+        <div class="form-group"><label>章節名稱</label><input type="text" id="ms-chapter-name" placeholder="頭部與脊椎創傷"></div>
+        <div class="form-group"><label>對應雷達維度（自動帶到題目）</label>
+          <select id="ms-chapter-dim">
+            <option value="">不對應</option>
+            <option value="D1">D1 緊急救護系統</option>
+            <option value="D2">D2 基礎醫學含評估</option>
+            <option value="D3">D3 創傷</option>
+            <option value="D4">D4 非創傷</option>
+            <option value="D5">D5 特殊族群</option>
+            <option value="D6">D6 災難及特殊情境</option>
+          </select>
+        </div>
+        <div class="form-group"><label>排序</label><input type="number" id="ms-chapter-order" value="1" min="1"></div>
+        <div class="form-group"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ms-chapter-active" checked style="width:18px;height:18px"> 啟用</label></div>
+        <div id="ms-chapter-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="ms-chapter-cancel">取消</button>
+        <button class="btn btn-green" id="ms-chapter-save">💾 儲存</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
@@ -501,6 +601,8 @@
         if (btn.dataset.tab === 'students') loadClassDropdown();
         if (btn.dataset.tab === 'instructors') loadInstructors();
         if (btn.dataset.tab === 'milestones') loadMilestonesPage();
+        if (btn.dataset.tab === 'skills') loadSkillsPage();
+        if (btn.dataset.tab === 'books') loadBooksPage();
         if (btn.dataset.tab === 'settings') loadSettings();
       });
     });
@@ -1712,6 +1814,510 @@
         btn.disabled = false;
         btn.textContent = '🚀 一鍵匯入官方資料';
       }
+    }
+
+    // ===== F10-B: 核心技術簽核 =====
+    let skillsCache = [];
+    let skillEditingId = null;
+
+    async function loadSkillsPage() {
+      const el = document.getElementById('skills-content');
+      el.innerHTML = '<div class="loading">⏳ 載入中...</div>';
+      try { await loadSkills(); renderSkills(); }
+      catch (e) { el.innerHTML = `<div class="err-msg">${e.message}</div>`; }
+    }
+    document.getElementById('btn-refresh-skills').addEventListener('click', loadSkillsPage);
+
+    async function loadSkills() {
+      const snap = await getDocs(collection(db, 'core_skills'));
+      skillsCache = [];
+      snap.forEach(d => skillsCache.push({ id: d.id, ...d.data() }));
+      skillsCache.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    }
+
+    function renderSkills() {
+      const el = document.getElementById('skills-content');
+      let html = '<div class="sub-toolbar"><button class="btn btn-green" id="btn-add-skill">➕ 新增核心技術項目</button><button class="btn btn-orange" id="btn-bulk-skills">🚀 一鍵匯入官方 13 項</button><span style="color:#94a3b8;font-size:13px;margin-left:auto">共 ' + skillsCache.length + ' 個項目</span></div>';
+      if (skillsCache.length === 0) {
+        html += '<div class="placeholder"><div class="icon">🛠️</div><h3>還沒有核心技術項目</h3><p>點橘色按鈕一鍵匯入 13 項官方項目</p></div>';
+      } else {
+        html += '<table class="table"><thead><tr><th style="width:80px">ID</th><th>名稱</th><th style="width:100px">目標次數</th><th>考試標準</th><th style="width:100px">排序</th><th style="width:70px">狀態</th><th>動作</th></tr></thead><tbody>';
+        skillsCache.forEach((s, idx) => {
+          const state = s.isActive === false ? '<span class="tag-pill gray">⏸</span>' : '<span class="tag-pill">✅</span>';
+          const standard = s.testStandard ? `<span class="scoring-guide">${s.testStandard.substring(0, 60)}${s.testStandard.length > 60 ? '...' : ''}</span>` : '<span style="color:#475569">—</span>';
+          html += `<tr>
+            <td><code style="background:#0f172a;padding:3px 8px;border-radius:4px">${s.id}</code></td>
+            <td><strong>${s.name}</strong></td>
+            <td style="text-align:center"><span class="tag-pill gray">目標 ${s.targetCount || 1} 次</span></td>
+            <td>${standard}</td>
+            <td>
+              <button class="order-btn" data-skup="${s.id}" ${idx === 0 ? 'disabled' : ''}>↑</button>
+              <button class="order-btn" data-skdown="${s.id}" ${idx === skillsCache.length - 1 ? 'disabled' : ''}>↓</button>
+              <span style="margin-left:4px;color:#94a3b8;font-size:12px">${s.displayOrder || 0}</span>
+            </td>
+            <td>${state}</td>
+            <td>
+              <button class="btn" data-skedit="${s.id}">✏️</button>
+              <button class="btn btn-red" data-skdel="${s.id}">🗑️</button>
+            </td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      document.getElementById('btn-add-skill').addEventListener('click', () => openSkillModal(null));
+      const bulkBtn = document.getElementById('btn-bulk-skills');
+      if (bulkBtn) bulkBtn.addEventListener('click', bulkInitSkills);
+      el.querySelectorAll('button[data-skedit]').forEach(b => b.addEventListener('click', () => openSkillModal(b.dataset.skedit)));
+      el.querySelectorAll('button[data-skdel]').forEach(b => b.addEventListener('click', () => delSkill(b.dataset.skdel)));
+      el.querySelectorAll('button[data-skup]').forEach(b => b.addEventListener('click', () => moveSkill(b.dataset.skup, -1)));
+      el.querySelectorAll('button[data-skdown]').forEach(b => b.addEventListener('click', () => moveSkill(b.dataset.skdown, 1)));
+    }
+
+    function openSkillModal(id) {
+      skillEditingId = id;
+      document.getElementById('ms-skill-modal-title').textContent = id ? '✏️ 編輯核心技術項目' : '➕ 新增核心技術項目';
+      document.getElementById('ms-skill-error').innerHTML = '';
+      if (id) {
+        const s = skillsCache.find(x => x.id === id);
+        document.getElementById('ms-skill-id').value = s.id;
+        document.getElementById('ms-skill-id').readOnly = true;
+        document.getElementById('ms-skill-name').value = s.name || '';
+        document.getElementById('ms-skill-target').value = s.targetCount || 3;
+        document.getElementById('ms-skill-standard').value = s.testStandard || '';
+        document.getElementById('ms-skill-order').value = s.displayOrder || 1;
+        document.getElementById('ms-skill-active').checked = s.isActive !== false;
+      } else {
+        const nextId = 'CS' + String(skillsCache.length + 1).padStart(3, '0');
+        document.getElementById('ms-skill-id').value = nextId;
+        document.getElementById('ms-skill-id').readOnly = false;
+        document.getElementById('ms-skill-name').value = '';
+        document.getElementById('ms-skill-target').value = 3;
+        document.getElementById('ms-skill-standard').value = '';
+        document.getElementById('ms-skill-order').value = skillsCache.length + 1;
+        document.getElementById('ms-skill-active').checked = true;
+      }
+      document.getElementById('ms-skill-modal').classList.add('active');
+    }
+    document.getElementById('ms-skill-close').addEventListener('click', () => document.getElementById('ms-skill-modal').classList.remove('active'));
+    document.getElementById('ms-skill-cancel').addEventListener('click', () => document.getElementById('ms-skill-modal').classList.remove('active'));
+    document.getElementById('ms-skill-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('ms-skill-modal').classList.remove('active'); });
+    document.getElementById('ms-skill-save').addEventListener('click', async () => {
+      const id = document.getElementById('ms-skill-id').value.trim().toUpperCase();
+      const name = document.getElementById('ms-skill-name').value.trim();
+      const target = parseInt(document.getElementById('ms-skill-target').value);
+      const standard = document.getElementById('ms-skill-standard').value.trim();
+      const order = parseInt(document.getElementById('ms-skill-order').value);
+      const active = document.getElementById('ms-skill-active').checked;
+      const errEl = document.getElementById('ms-skill-error');
+      errEl.innerHTML = '';
+      if (!id) { errEl.innerHTML = '<div class="err-msg">❌ ID 必填</div>'; return; }
+      if (!name) { errEl.innerHTML = '<div class="err-msg">❌ 名稱必填</div>'; return; }
+      if (isNaN(target) || target < 1) { errEl.innerHTML = '<div class="err-msg">❌ 目標次數至少 1</div>'; return; }
+      const btn = document.getElementById('ms-skill-save');
+      btn.disabled = true; btn.textContent = '⏳';
+      try {
+        if (!skillEditingId) {
+          const ex = await getDoc(doc(db, 'core_skills', id));
+          if (ex.exists()) { errEl.innerHTML = `<div class="err-msg">❌ ID「${id}」已存在</div>`; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+        }
+        await setDoc(doc(db, 'core_skills', id), {
+          name, targetCount: target, testStandard: standard,
+          displayOrder: order, isActive: active,
+          updatedAt: serverTimestamp(), updatedBy: currentUser.email,
+          ...(skillEditingId ? {} : { createdAt: serverTimestamp(), createdBy: currentUser.email })
+        }, { merge: true });
+        document.getElementById('ms-skill-modal').classList.remove('active');
+        await loadSkills(); renderSkills();
+      } catch (e) { errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
+    });
+    async function delSkill(id) {
+      if (!confirm(`確定停用核心技術項目「${id}」？`)) return;
+      try {
+        await updateDoc(doc(db, 'core_skills', id), { isActive: false, archivedAt: serverTimestamp() });
+        await loadSkills(); renderSkills();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+    async function moveSkill(id, dir) {
+      const idx = skillsCache.findIndex(s => s.id === id);
+      const target = skillsCache[idx + dir];
+      if (!target) return;
+      try {
+        const batch = writeBatch(db);
+        batch.update(doc(db, 'core_skills', skillsCache[idx].id), { displayOrder: target.displayOrder });
+        batch.update(doc(db, 'core_skills', target.id), { displayOrder: skillsCache[idx].displayOrder });
+        await batch.commit();
+        await loadSkills(); renderSkills();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+    async function bulkInitSkills() {
+      const OFFICIAL_SKILLS = [
+        { id: 'CS001', name: '非外傷初評', targetCount: 3 },
+        { id: 'CS002', name: '外傷初評', targetCount: 3 },
+        { id: 'CS003', name: '藥物小考', targetCount: 1 },
+        { id: 'CS004', name: '氣管插管', targetCount: 3 },
+        { id: 'CS005', name: '針刺減壓', targetCount: 3 },
+        { id: 'CS006', name: '同步整律', targetCount: 3 },
+        { id: 'CS007', name: '經皮心臟節律器', targetCount: 3 },
+        { id: 'CS008', name: '靜脈輸液', targetCount: 3 },
+        { id: 'CS009', name: '聲門上呼吸道', targetCount: 3 },
+        { id: 'CS010', name: '止血帶', targetCount: 3 },
+        { id: 'CS011', name: '頸圈長背板', targetCount: 3 },
+        { id: 'CS012', name: '新生兒急救', targetCount: 3 },
+        { id: 'CS013', name: '小兒非外傷評估', targetCount: 3 }
+      ];
+      if (!confirm(`📦 即將匯入 13 個官方核心技術項目：\n\n${OFFICIAL_SKILLS.map((s, i) => `${i+1}. ${s.name}（目標 ${s.targetCount} 次）`).join('\n')}\n\n✅ 已存在的會跳過。確定？`)) return;
+      const btn = document.getElementById('btn-bulk-skills');
+      btn.disabled = true;
+      let nNew = 0, nSkip = 0;
+      try {
+        for (let i = 0; i < OFFICIAL_SKILLS.length; i++) {
+          const s = OFFICIAL_SKILLS[i];
+          btn.textContent = `⏳ ${i+1}/${OFFICIAL_SKILLS.length}`;
+          const ex = await getDoc(doc(db, 'core_skills', s.id));
+          if (ex.exists()) { nSkip++; continue; }
+          await setDoc(doc(db, 'core_skills', s.id), {
+            name: s.name, targetCount: s.targetCount,
+            testStandard: '', displayOrder: i + 1, isActive: true,
+            createdAt: serverTimestamp(), createdBy: currentUser.email
+          });
+          nNew++;
+        }
+        alert(`✅ 完成！新建 ${nNew} 個、跳過 ${nSkip} 個（已存在）`);
+        await loadSkills(); renderSkills();
+      } catch (e) { alert('❌ ' + e.message); }
+      finally { btn.disabled = false; btn.textContent = '🚀 一鍵匯入官方 13 項'; }
+    }
+
+    // ===== F10-C: 書籍 / 章節 / 維度 =====
+    let bksCurrentSubTab = 'bks-books';
+    let booksCache = [];
+    let chaptersCache = [];
+    let bksEditingId = null;
+
+    async function loadBooksPage() {
+      const el = document.getElementById('books-content');
+      el.innerHTML = '<div class="loading">⏳ 載入中...</div>';
+      try { await Promise.all([loadBooks(), loadChapters()]); renderBooksContent(); }
+      catch (e) { el.innerHTML = `<div class="err-msg">${e.message}</div>`; }
+    }
+    document.getElementById('btn-refresh-books').addEventListener('click', loadBooksPage);
+
+    document.querySelectorAll('#tab-books .sub-tab').forEach(b => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('#tab-books .sub-tab').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        bksCurrentSubTab = b.dataset.subtab;
+        renderBooksContent();
+      });
+    });
+
+    function renderBooksContent() {
+      const el = document.getElementById('books-content');
+      if (bksCurrentSubTab === 'bks-books') renderBooks(el);
+      else if (bksCurrentSubTab === 'bks-chapters') renderChapters(el);
+    }
+
+    async function loadBooks() {
+      const snap = await getDocs(collection(db, 'books'));
+      booksCache = [];
+      snap.forEach(d => booksCache.push({ id: d.id, ...d.data() }));
+      booksCache.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    }
+    async function loadChapters() {
+      const snap = await getDocs(collection(db, 'chapters'));
+      chaptersCache = [];
+      snap.forEach(d => chaptersCache.push({ id: d.id, ...d.data() }));
+      chaptersCache.sort((a, b) => {
+        if (a.bookId !== b.bookId) return (a.bookId || '').localeCompare(b.bookId || '');
+        return (a.displayOrder || 0) - (b.displayOrder || 0);
+      });
+    }
+
+    function renderBooks(el) {
+      let html = '<div class="sub-toolbar"><button class="btn btn-green" id="btn-add-book">➕ 新增書籍</button><button class="btn btn-orange" id="btn-bulk-books">🚀 一鍵匯入官方資料（4 書 + EMT-P 60 章自動對應維度）</button><span style="color:#94a3b8;font-size:13px;margin-left:auto">EMT-P / ACLS / APLS / PHTLS</span></div>';
+      if (booksCache.length === 0) {
+        html += '<div class="placeholder"><div class="icon">📚</div><h3>還沒有書籍</h3><p>點橘色按鈕一鍵匯入</p></div>';
+      } else {
+        html += '<table class="table"><thead><tr><th style="width:120px">代碼</th><th>完整名稱</th><th style="width:100px">章節數</th><th style="width:100px">排序</th><th style="width:70px">狀態</th><th>動作</th></tr></thead><tbody>';
+        booksCache.forEach((bk, idx) => {
+          const state = bk.isActive === false ? '<span class="tag-pill gray">⏸</span>' : '<span class="tag-pill">✅</span>';
+          const chCount = chaptersCache.filter(c => c.bookId === bk.id).length;
+          html += `<tr>
+            <td><code style="background:#0f172a;padding:3px 8px;border-radius:4px">${bk.id}</code></td>
+            <td><strong>${bk.fullName || bk.id}</strong></td>
+            <td><span class="tag-pill gray">${chCount} 章</span></td>
+            <td>
+              <button class="order-btn" data-bkup="${bk.id}" ${idx === 0 ? 'disabled' : ''}>↑</button>
+              <button class="order-btn" data-bkdown="${bk.id}" ${idx === booksCache.length - 1 ? 'disabled' : ''}>↓</button>
+            </td>
+            <td>${state}</td>
+            <td>
+              <button class="btn" data-bkedit="${bk.id}">✏️</button>
+              <button class="btn btn-red" data-bkdel="${bk.id}">🗑️</button>
+            </td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      document.getElementById('btn-add-book').addEventListener('click', () => openBookModal(null));
+      const bulkBtn = document.getElementById('btn-bulk-books');
+      if (bulkBtn) bulkBtn.addEventListener('click', bulkInitBooks);
+      el.querySelectorAll('button[data-bkedit]').forEach(b => b.addEventListener('click', () => openBookModal(b.dataset.bkedit)));
+      el.querySelectorAll('button[data-bkdel]').forEach(b => b.addEventListener('click', () => delBook(b.dataset.bkdel)));
+      el.querySelectorAll('button[data-bkup]').forEach(b => b.addEventListener('click', () => moveBook(b.dataset.bkup, -1)));
+      el.querySelectorAll('button[data-bkdown]').forEach(b => b.addEventListener('click', () => moveBook(b.dataset.bkdown, 1)));
+    }
+
+    function openBookModal(id) {
+      bksEditingId = id;
+      document.getElementById('ms-book-modal-title').textContent = id ? '✏️ 編輯書籍' : '➕ 新增書籍';
+      document.getElementById('ms-book-error').innerHTML = '';
+      if (id) {
+        const bk = booksCache.find(x => x.id === id);
+        document.getElementById('ms-book-id').value = bk.id;
+        document.getElementById('ms-book-id').readOnly = true;
+        document.getElementById('ms-book-fullname').value = bk.fullName || '';
+        document.getElementById('ms-book-order').value = bk.displayOrder || 1;
+        document.getElementById('ms-book-active').checked = bk.isActive !== false;
+      } else {
+        document.getElementById('ms-book-id').value = '';
+        document.getElementById('ms-book-id').readOnly = false;
+        document.getElementById('ms-book-fullname').value = '';
+        document.getElementById('ms-book-order').value = booksCache.length + 1;
+        document.getElementById('ms-book-active').checked = true;
+      }
+      document.getElementById('ms-book-modal').classList.add('active');
+    }
+    document.getElementById('ms-book-close').addEventListener('click', () => document.getElementById('ms-book-modal').classList.remove('active'));
+    document.getElementById('ms-book-cancel').addEventListener('click', () => document.getElementById('ms-book-modal').classList.remove('active'));
+    document.getElementById('ms-book-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('ms-book-modal').classList.remove('active'); });
+    document.getElementById('ms-book-save').addEventListener('click', async () => {
+      const id = document.getElementById('ms-book-id').value.trim().toUpperCase();
+      const fullName = document.getElementById('ms-book-fullname').value.trim();
+      const order = parseInt(document.getElementById('ms-book-order').value);
+      const active = document.getElementById('ms-book-active').checked;
+      const errEl = document.getElementById('ms-book-error');
+      errEl.innerHTML = '';
+      if (!id) { errEl.innerHTML = '<div class="err-msg">❌ 書籍代碼必填</div>'; return; }
+      if (!fullName) { errEl.innerHTML = '<div class="err-msg">❌ 完整名稱必填</div>'; return; }
+      const btn = document.getElementById('ms-book-save');
+      btn.disabled = true; btn.textContent = '⏳';
+      try {
+        if (!bksEditingId) {
+          const ex = await getDoc(doc(db, 'books', id));
+          if (ex.exists()) { errEl.innerHTML = `<div class="err-msg">❌ ID「${id}」已存在</div>`; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+        }
+        await setDoc(doc(db, 'books', id), {
+          fullName, displayOrder: order, isActive: active,
+          updatedAt: serverTimestamp(), updatedBy: currentUser.email,
+          ...(bksEditingId ? {} : { createdAt: serverTimestamp(), createdBy: currentUser.email })
+        }, { merge: true });
+        document.getElementById('ms-book-modal').classList.remove('active');
+        await loadBooks(); renderBooksContent();
+      } catch (e) { errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
+    });
+    async function delBook(id) {
+      const chCount = chaptersCache.filter(c => c.bookId === id).length;
+      if (chCount > 0) { alert(`❌ 此書籍還有 ${chCount} 章節、無法停用。請先處理章節。`); return; }
+      if (!confirm(`確定停用書籍「${id}」？`)) return;
+      try {
+        await updateDoc(doc(db, 'books', id), { isActive: false, archivedAt: serverTimestamp() });
+        await loadBooks(); renderBooksContent();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+    async function moveBook(id, dir) {
+      const idx = booksCache.findIndex(b => b.id === id);
+      const target = booksCache[idx + dir];
+      if (!target) return;
+      try {
+        const batch = writeBatch(db);
+        batch.update(doc(db, 'books', booksCache[idx].id), { displayOrder: target.displayOrder });
+        batch.update(doc(db, 'books', target.id), { displayOrder: booksCache[idx].displayOrder });
+        await batch.commit();
+        await loadBooks(); renderBooksContent();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+
+    // ----- 章節 -----
+    function renderChapters(el) {
+      let html = '<div class="sub-toolbar"><button class="btn btn-green" id="btn-add-chapter">➕ 新增章節</button>';
+      html += '<select id="ms-chapter-filter" style="min-width:160px"><option value="">全部書籍</option>';
+      booksCache.filter(b => b.isActive !== false).forEach(b => { html += `<option value="${b.id}">${b.id}</option>`; });
+      html += '</select>';
+      html += '<span style="color:#94a3b8;font-size:13px;margin-left:auto">共 ' + chaptersCache.length + ' 章</span></div>';
+      if (booksCache.length === 0) {
+        html += '<div class="placeholder"><div class="icon">⚠️</div><h3>請先建立書籍</h3><p>切到「📚 書籍」分頁新增</p></div>';
+        el.innerHTML = html; return;
+      }
+      if (chaptersCache.length === 0) {
+        html += '<div class="placeholder"><div class="icon">📖</div><h3>還沒有章節</h3><p>到「📚 書籍」分頁點「🚀 一鍵匯入」或手動新增</p></div>';
+        el.innerHTML = html;
+        document.getElementById('btn-add-chapter').addEventListener('click', () => openChapterModal(null));
+        return;
+      }
+      const dimLabel = { D1: 'D1 緊急救護系統', D2: 'D2 基礎醫學含評估', D3: 'D3 創傷', D4: 'D4 非創傷', D5: 'D5 特殊族群', D6: 'D6 災難及特殊情境' };
+      const byBook = {};
+      chaptersCache.forEach(c => { if (!byBook[c.bookId]) byBook[c.bookId] = []; byBook[c.bookId].push(c); });
+      booksCache.forEach(bk => {
+        const chs = byBook[bk.id] || [];
+        if (chs.length === 0) return;
+        html += `<div style="margin-top:18px"><h3 style="color:#60a5fa;font-size:15px;margin-bottom:8px">📚 ${bk.id} <span style="color:#94a3b8;font-size:13px">(${chs.length} 章)</span></h3>`;
+        html += '<table class="table"><thead><tr><th style="width:80px">章節</th><th>名稱</th><th>對應維度</th><th style="width:80px">啟用</th><th>動作</th></tr></thead><tbody>';
+        chs.forEach(c => {
+          const state = c.isActive === false ? '<span class="tag-pill gray">⏸</span>' : '<span class="tag-pill">✅</span>';
+          const dim = c.dimension ? `<span class="tag-pill">${dimLabel[c.dimension] || c.dimension}</span>` : '<span style="color:#475569">—</span>';
+          html += `<tr>
+            <td><code style="background:#0f172a;padding:3px 8px;border-radius:4px">${c.chapterNumber || '?'}</code></td>
+            <td><strong>${c.chapterName || '—'}</strong></td>
+            <td>${dim}</td>
+            <td>${state}</td>
+            <td>
+              <button class="btn" data-chedit="${c.id}">✏️</button>
+              <button class="btn btn-red" data-chdel="${c.id}">🗑️</button>
+            </td>
+          </tr>`;
+        });
+        html += '</tbody></table></div>';
+      });
+      el.innerHTML = html;
+      document.getElementById('btn-add-chapter').addEventListener('click', () => openChapterModal(null));
+      document.getElementById('ms-chapter-filter').addEventListener('change', (e) => filterChapters(e.target.value));
+      el.querySelectorAll('button[data-chedit]').forEach(b => b.addEventListener('click', () => openChapterModal(b.dataset.chedit)));
+      el.querySelectorAll('button[data-chdel]').forEach(b => b.addEventListener('click', () => delChapter(b.dataset.chdel)));
+    }
+    function filterChapters(bookId) {
+      const allDivs = document.querySelectorAll('#books-content > div');
+      allDivs.forEach(div => {
+        const h3 = div.querySelector('h3');
+        if (!h3) return;
+        if (!bookId) { div.style.display = ''; return; }
+        div.style.display = h3.textContent.startsWith(`📚 ${bookId} `) ? '' : 'none';
+      });
+    }
+    function openChapterModal(id) {
+      bksEditingId = id;
+      document.getElementById('ms-chapter-modal-title').textContent = id ? '✏️ 編輯章節' : '➕ 新增章節';
+      document.getElementById('ms-chapter-error').innerHTML = '';
+      const sel = document.getElementById('ms-chapter-book');
+      let opts = '<option value="">請選書籍...</option>';
+      booksCache.filter(b => b.isActive !== false).forEach(b => { opts += `<option value="${b.id}">${b.id}</option>`; });
+      sel.innerHTML = opts;
+      if (id) {
+        const c = chaptersCache.find(x => x.id === id);
+        document.getElementById('ms-chapter-book').value = c.bookId || '';
+        document.getElementById('ms-chapter-number').value = c.chapterNumber || '';
+        document.getElementById('ms-chapter-name').value = c.chapterName || '';
+        document.getElementById('ms-chapter-dim').value = c.dimension || '';
+        document.getElementById('ms-chapter-order').value = c.displayOrder || 1;
+        document.getElementById('ms-chapter-active').checked = c.isActive !== false;
+      } else {
+        document.getElementById('ms-chapter-book').value = '';
+        document.getElementById('ms-chapter-number').value = '';
+        document.getElementById('ms-chapter-name').value = '';
+        document.getElementById('ms-chapter-dim').value = '';
+        document.getElementById('ms-chapter-order').value = chaptersCache.length + 1;
+        document.getElementById('ms-chapter-active').checked = true;
+      }
+      document.getElementById('ms-chapter-modal').classList.add('active');
+    }
+    document.getElementById('ms-chapter-close').addEventListener('click', () => document.getElementById('ms-chapter-modal').classList.remove('active'));
+    document.getElementById('ms-chapter-cancel').addEventListener('click', () => document.getElementById('ms-chapter-modal').classList.remove('active'));
+    document.getElementById('ms-chapter-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('ms-chapter-modal').classList.remove('active'); });
+    document.getElementById('ms-chapter-save').addEventListener('click', async () => {
+      const bookId = document.getElementById('ms-chapter-book').value;
+      const num = document.getElementById('ms-chapter-number').value.trim();
+      const name = document.getElementById('ms-chapter-name').value.trim();
+      const dim = document.getElementById('ms-chapter-dim').value;
+      const order = parseInt(document.getElementById('ms-chapter-order').value);
+      const active = document.getElementById('ms-chapter-active').checked;
+      const errEl = document.getElementById('ms-chapter-error');
+      errEl.innerHTML = '';
+      if (!bookId) { errEl.innerHTML = '<div class="err-msg">❌ 請選書籍</div>'; return; }
+      if (!num) { errEl.innerHTML = '<div class="err-msg">❌ 章節編號必填</div>'; return; }
+      if (!name) { errEl.innerHTML = '<div class="err-msg">❌ 章節名稱必填</div>'; return; }
+      const btn = document.getElementById('ms-chapter-save');
+      btn.disabled = true; btn.textContent = '⏳';
+      try {
+        const data = {
+          bookId, chapterNumber: num, chapterName: name,
+          dimension: dim || null, displayOrder: order, isActive: active,
+          updatedAt: serverTimestamp(), updatedBy: currentUser.email
+        };
+        if (bksEditingId) {
+          await updateDoc(doc(db, 'chapters', bksEditingId), data);
+        } else {
+          data.createdAt = serverTimestamp(); data.createdBy = currentUser.email;
+          await setDoc(doc(collection(db, 'chapters')), data);
+        }
+        document.getElementById('ms-chapter-modal').classList.remove('active');
+        await loadChapters(); renderBooksContent();
+      } catch (e) { errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
+    });
+    async function delChapter(id) {
+      if (!confirm(`確定停用章節？`)) return;
+      try {
+        await updateDoc(doc(db, 'chapters', id), { isActive: false, archivedAt: serverTimestamp() });
+        await loadChapters(); renderBooksContent();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+    async function bulkInitBooks() {
+      const OFFICIAL_BOOKS = [
+        { id: 'EMT-P', fullName: '高級救護技術員教科書', displayOrder: 1 },
+        { id: 'ACLS', fullName: '高級心臟救命術', displayOrder: 2 },
+        { id: 'APLS', fullName: '高級小兒救命術', displayOrder: 3 },
+        { id: 'PHTLS', fullName: '院前創傷救命術', displayOrder: 4 }
+      ];
+      const EMTP_CHAPTERS = [];
+      for (let i = 1; i <= 60; i++) {
+        let dim;
+        if ((i >= 1 && i <= 11) || i === 59 || i === 60) dim = 'D1';
+        else if (i >= 12 && i <= 24) dim = 'D2';
+        else if (i >= 25 && i <= 32) dim = 'D3';
+        else if (i >= 33 && i <= 43) dim = 'D4';
+        else if (i >= 44 && i <= 51) dim = 'D5';
+        else if (i >= 52 && i <= 58) dim = 'D6';
+        EMTP_CHAPTERS.push({ bookId: 'EMT-P', chapterNumber: String(i), chapterName: `第 ${i} 章`, dimension: dim, displayOrder: i });
+      }
+      const total = OFFICIAL_BOOKS.length + EMTP_CHAPTERS.length;
+      if (!confirm(`📦 即將匯入 ${total} 筆書籍 / 章節資料：\n\n📚 書籍：${OFFICIAL_BOOKS.length} 本（EMT-P / ACLS / APLS / PHTLS）\n📖 EMT-P 章節：${EMTP_CHAPTERS.length} 章（含 D1-D6 維度自動對應）\n\n✅ 已存在的會跳過\n✅ 章節名稱預設「第 X 章」、可手動編輯成正式名稱\n✅ ACLS/APLS/PHTLS 章節之後手動新增\n\n確定？`)) return;
+      const btn = document.getElementById('btn-bulk-books');
+      btn.disabled = true;
+      let bNew = 0, bSkip = 0, cNew = 0, cSkip = 0;
+      try {
+        for (let i = 0; i < OFFICIAL_BOOKS.length; i++) {
+          const b = OFFICIAL_BOOKS[i];
+          btn.textContent = `⏳ 書籍 ${i+1}/${OFFICIAL_BOOKS.length}`;
+          const ex = await getDoc(doc(db, 'books', b.id));
+          if (ex.exists()) { bSkip++; continue; }
+          await setDoc(doc(db, 'books', b.id), {
+            fullName: b.fullName, displayOrder: b.displayOrder, isActive: true,
+            createdAt: serverTimestamp(), createdBy: currentUser.email
+          });
+          bNew++;
+        }
+        for (let i = 0; i < EMTP_CHAPTERS.length; i++) {
+          const c = EMTP_CHAPTERS[i];
+          btn.textContent = `⏳ 章節 ${i+1}/${EMTP_CHAPTERS.length}`;
+          const q = query(collection(db, 'chapters'), where('bookId', '==', c.bookId), where('chapterNumber', '==', c.chapterNumber));
+          const snap = await getDocs(q);
+          if (!snap.empty) { cSkip++; continue; }
+          await setDoc(doc(collection(db, 'chapters')), {
+            bookId: c.bookId, chapterNumber: c.chapterNumber, chapterName: c.chapterName,
+            dimension: c.dimension, displayOrder: c.displayOrder, isActive: true,
+            createdAt: serverTimestamp(), createdBy: currentUser.email
+          });
+          cNew++;
+        }
+        alert(`✅ 完成！\n\n📚 書籍：新建 ${bNew}、跳過 ${bSkip}\n📖 章節：新建 ${cNew}、跳過 ${cSkip}\n\n切到「📖 章節」分頁查看！`);
+        await Promise.all([loadBooks(), loadChapters()]);
+        renderBooksContent();
+      } catch (e) { alert('❌ ' + e.message); }
+      finally { btn.disabled = false; btn.textContent = '🚀 一鍵匯入官方資料'; }
     }
 
     // === 建立學員帳號 (用次要 auth 不踢出 Master) ===
