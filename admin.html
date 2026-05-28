@@ -614,6 +614,154 @@
         loadStudents(); loadOverviewStats();
       } catch (e) { alert('❌ ' + e.message); btn.disabled = false; btn.textContent = `💾 寫入 ${rows.length} 筆`; }
     });
+    
+    // === 指導員管理 (F7) ===
+    const TIER_B_PERMISSIONS = [
+      { key: 'canEditEnergyBar', label: '修改能量條目標' },
+      { key: 'canToggleMistakeBook', label: '開關錯題本' },
+      { key: 'canEditSourceAuth', label: '設定題庫權限' },
+      { key: 'canEditChapterAuth', label: '設定章節權限' },
+      { key: 'canHandleCorrections', label: '處理勘誤' },
+      { key: 'canUploadScores', label: '上傳成績（批次）' },
+      { key: 'canEditScores', label: '個人成績修正' },
+      { key: 'canViewMistakeBook', label: '查看學員錯題本' }
+    ];
+
+    let showArchivedInstructors = false;
+    let currentEditingInstructor = null;
+
+    async function loadInstructors() {
+      const listEl = document.getElementById('instructors-list');
+      listEl.innerHTML = '<div class="loading">⏳ 載入指導員...</div>';
+      try {
+        const snapshot = await getDocs(collection(db, 'instructors'));
+        const instructors = [];
+        snapshot.forEach(d => instructors.push({ id: d.id, ...d.data() }));
+        const filtered = showArchivedInstructors ? instructors : instructors.filter(i => i.isActive !== false);
+        if (filtered.length === 0) {
+          listEl.innerHTML = '<div class="placeholder"><div class="icon">📭</div><h3>還沒有指導員</h3><p>點「➕ 新增指導員」</p></div>';
+          return;
+        }
+        let html = '<table class="table"><thead><tr><th>Email</th><th>姓名</th><th>能管班級</th><th>權限數</th><th>狀態</th><th>動作</th></tr></thead><tbody>';
+        filtered.forEach(ins => {
+          const isArchived = ins.isActive === false;
+          const stateTag = isArchived ? '<span class="tag-pill gray">📦 封存</span>' : '<span class="tag-pill">✅</span>';
+          const classes = (ins.managedClassIds || []).join(', ') || '—';
+          const permCount = Object.values(ins.permissions || {}).filter(v => v).length;
+          html += `<tr>
+            <td style="font-family:monospace;font-size:13px">${ins.email || '—'}</td>
+            <td>${ins.name || '—'}</td>
+            <td>${classes}</td>
+            <td><span class="tag-pill gray">Tier B: ${permCount}/${TIER_B_PERMISSIONS.length}</span></td>
+            <td>${stateTag}</td>
+            <td>${isArchived
+              ? `<button class="btn btn-ghost" data-unarchive-i="${ins.id}">📂 恢復</button>`
+              : `<button class="btn" data-edit-i="${ins.id}">✏️ 編輯</button> <button class="btn btn-orange" data-archive-i="${ins.id}">📦 封存</button>`}</td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+        listEl.innerHTML = html;
+        listEl.querySelectorAll('button[data-archive-i]').forEach(b => b.addEventListener('click', () => archiveInstructor(b.dataset.archiveI)));
+        listEl.querySelectorAll('button[data-unarchive-i]').forEach(b => b.addEventListener('click', () => unarchiveInstructor(b.dataset.unarchiveI)));
+        listEl.querySelectorAll('button[data-edit-i]').forEach(b => b.addEventListener('click', () => openInstructorModal(b.dataset.editI)));
+      } catch (e) { listEl.innerHTML = `<div class="err-msg">${e.message}</div>`; }
+    }
+
+    document.getElementById('btn-toggle-archived-instructors').addEventListener('click', (e) => {
+      showArchivedInstructors = !showArchivedInstructors;
+      e.target.textContent = showArchivedInstructors ? '隱藏封存指導員' : '顯示封存指導員';
+      loadInstructors();
+    });
+
+    async function archiveInstructor(id) {
+      if (!confirm('封存此指導員？')) return;
+      try { await updateDoc(doc(db, 'instructors', id), { isActive: false, archivedAt: serverTimestamp() }); loadInstructors(); loadOverviewStats(); }
+      catch (e) { alert('❌ ' + e.message); }
+    }
+    async function unarchiveInstructor(id) {
+      try { await updateDoc(doc(db, 'instructors', id), { isActive: true, archivedAt: null }); loadInstructors(); loadOverviewStats(); }
+      catch (e) { alert('❌ ' + e.message); }
+    }
+
+    async function openInstructorModal(instructorId) {
+      currentEditingInstructor = instructorId;
+      document.getElementById('instructor-modal-title').textContent = instructorId ? '✏️ 編輯指導員' : '➕ 新增指導員';
+      // 班級 checkboxes
+      const classSnapshot = await getDocs(collection(db, 'classes'));
+      const classes = [];
+      classSnapshot.forEach(d => { const data = d.data(); if (data.isActive !== false) classes.push({ id: d.id, ...data }); });
+      classes.sort((a, b) => (b.year || 0) - (a.year || 0));
+      let classHtml = '';
+      classes.forEach(c => { classHtml += `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;background:#1e293b;padding:6px 12px;border-radius:6px;color:#cbd5e1"><input type="checkbox" value="${c.id}" class="instructor-class-cb"> ${c.displayName || c.id}</label>`; });
+      document.getElementById('instructor-classes-checkboxes').innerHTML = classHtml || '<span style="color:#94a3b8">沒有可用班級、先去班級管理新增</span>';
+      // 權限 checkboxes
+      let permHtml = '';
+      TIER_B_PERMISSIONS.forEach(p => {
+        permHtml += `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#cbd5e1"><input type="checkbox" value="${p.key}" class="instructor-perm-cb"> ${p.label}</label>`;
+      });
+      document.getElementById('instructor-permissions').innerHTML = permHtml;
+
+      if (instructorId) {
+        const insDoc = await getDoc(doc(db, 'instructors', instructorId));
+        if (insDoc.exists()) {
+          const ins = insDoc.data();
+          document.getElementById('instructor-email').value = ins.email || '';
+          document.getElementById('instructor-email').readOnly = true;
+          document.getElementById('instructor-name').value = ins.name || '';
+          (ins.managedClassIds || []).forEach(cid => { const cb = document.querySelector(`.instructor-class-cb[value="${cid}"]`); if (cb) cb.checked = true; });
+          const perms = ins.permissions || {};
+          Object.keys(perms).forEach(k => { const cb = document.querySelector(`.instructor-perm-cb[value="${k}"]`); if (cb && perms[k]) cb.checked = true; });
+        }
+      } else {
+        document.getElementById('instructor-email').value = '';
+        document.getElementById('instructor-email').readOnly = false;
+        document.getElementById('instructor-name').value = '';
+      }
+      document.getElementById('instructor-modal-error').innerHTML = '';
+      document.getElementById('instructor-modal').classList.add('active');
+    }
+
+    document.getElementById('btn-add-instructor').addEventListener('click', () => openInstructorModal(null));
+    document.getElementById('instructor-modal-close').addEventListener('click', () => document.getElementById('instructor-modal').classList.remove('active'));
+    document.getElementById('instructor-modal-cancel').addEventListener('click', () => document.getElementById('instructor-modal').classList.remove('active'));
+    document.getElementById('instructor-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('instructor-modal').classList.remove('active'); });
+
+    document.getElementById('instructor-modal-save').addEventListener('click', async () => {
+      const email = document.getElementById('instructor-email').value.trim().toLowerCase();
+      const name = document.getElementById('instructor-name').value.trim();
+      const errEl = document.getElementById('instructor-modal-error');
+      errEl.innerHTML = '';
+      if (!email || !email.includes('@')) { errEl.innerHTML = '<div class="err-msg">❌ Email 格式錯誤</div>'; return; }
+      if (!name) { errEl.innerHTML = '<div class="err-msg">❌ 姓名必填</div>'; return; }
+      const managedClassIds = Array.from(document.querySelectorAll('.instructor-class-cb:checked')).map(cb => cb.value);
+      const permissions = {};
+      TIER_B_PERMISSIONS.forEach(p => { permissions[p.key] = false; });
+      Array.from(document.querySelectorAll('.instructor-perm-cb:checked')).forEach(cb => { permissions[cb.value] = true; });
+
+      const btn = document.getElementById('instructor-modal-save');
+      btn.disabled = true; btn.textContent = '⏳';
+      try {
+        if (currentEditingInstructor) {
+          await updateDoc(doc(db, 'instructors', currentEditingInstructor), {
+            name, managedClassIds, permissions,
+            updatedAt: serverTimestamp(), updatedBy: currentUser.email
+          });
+        } else {
+          const q = query(collection(db, 'instructors'), where('email', '==', email));
+          const existing = await getDocs(q);
+          if (!existing.empty) { errEl.innerHTML = '<div class="err-msg">❌ 此 Email 已有指導員資料</div>'; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+          const newRef = doc(collection(db, 'instructors'));
+          await setDoc(newRef, {
+            email, name, managedClassIds, permissions,
+            isActive: true, archivedAt: null,
+            createdAt: serverTimestamp(), createdBy: currentUser.email
+          });
+        }
+        document.getElementById('instructor-modal').classList.remove('active');
+        loadInstructors(); loadOverviewStats();
+      } catch (e) { errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
+    });
   </script>
 </body>
 </html>
