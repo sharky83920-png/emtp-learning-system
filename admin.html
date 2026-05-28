@@ -550,23 +550,35 @@
     document.getElementById('student-modal-cancel').addEventListener('click', () => document.getElementById('student-modal').classList.remove('active'));
     document.getElementById('student-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('student-modal').classList.remove('active'); });
 
-    document.getElementById('student-modal-save').addEventListener('click', async () => {
+   document.getElementById('student-modal-save').addEventListener('click', async () => {
       const classId = document.getElementById('student-class-display').value;
       const studentNo = parseInt(document.getElementById('student-no').value);
       const name = document.getElementById('student-name').value.trim();
+      const idNumber = document.getElementById('student-id-number').value.trim().toUpperCase();
       const email = document.getElementById('student-email').value.trim();
       const errEl = document.getElementById('student-modal-error');
       errEl.innerHTML = '';
       if (isNaN(studentNo) || studentNo < 1) { errEl.innerHTML = '<div class="err-msg">❌ 學號必須是 1 以上數字</div>'; return; }
       if (!name) { errEl.innerHTML = '<div class="err-msg">❌ 姓名必填</div>'; return; }
+      if (!/^[A-Z]\d{9}$/.test(idNumber)) { errEl.innerHTML = '<div class="err-msg">❌ 身分證格式錯誤（1 個英文字母 + 9 個數字、例：A123456789）</div>'; return; }
       const studentId = `${classId.toLowerCase()}-${studentNo}`;
+      const fakeEmail = `${classId.toLowerCase()}-${studentNo}@emtp.local`;
       const btn = document.getElementById('student-modal-save');
-      btn.disabled = true; btn.textContent = '⏳';
+      btn.disabled = true; btn.textContent = '⏳ 建立中...';
       try {
         const existing = await getDoc(doc(db, 'students', studentId));
         if (existing.exists()) { errEl.innerHTML = `<div class="err-msg">❌ ${classId} 已有學號 ${studentNo}</div>`; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+        let authUid = null;
+        try {
+          const cred = await createUserWithEmailAndPassword(secondaryAuth, fakeEmail, idNumber);
+          authUid = cred.user.uid;
+          await signOut(secondaryAuth);
+        } catch (authErr) {
+          if (authErr.code !== 'auth/email-already-in-use') throw authErr;
+        }
         await setDoc(doc(db, 'students', studentId), {
-          classId: classId, studentNo: studentNo, name: name, email: email,
+          classId, studentNo, name, idNumber, email,
+          hasAuthAccount: true, authUid,
           isActive: true, archivedAt: null,
           createdAt: serverTimestamp(), createdBy: currentUser.email
         });
