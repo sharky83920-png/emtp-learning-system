@@ -225,7 +225,8 @@
           return;
         }
         currentStudent = { id: sDoc.id, ...sDoc.data() };
-        if (currentStudent.isActive === false) {
+        console.log('[Auth] student data:', { isActive: currentStudent.isActive, archivedAt: currentStudent.archivedAt, fullData: currentStudent });
+        if (currentStudent.archivedAt) {
           await signOut(auth);
           showLogin('帳號已封存、請聯絡管理員');
           return;
