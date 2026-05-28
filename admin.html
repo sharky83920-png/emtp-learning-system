@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🛠 EMTP 管理後台</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", "微軟正黑體", sans-serif;
+      background: #0f172a; color: #e2e8f0; min-height: 100vh; line-height: 1.6;
+    }
+    .login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+    .login-card { background: #1e293b; padding: 40px; border-radius: 12px; width: 100%; max-width: 420px; border: 1px solid #334155; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+    .login-card h1 { color: #f1f5f9; font-size: 24px; margin-bottom: 8px; }
+    .login-card .subtitle { color: #94a3b8; font-size: 14px; margin-bottom: 30px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; color: #94a3b8; font-size: 12px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .form-group input { width: 100%; padding: 10px 14px; background: #0f172a; border: 1px solid #334155; color: #e2e8f0; border-radius: 6px; font-family: inherit; font-size: 15px; }
+    .form-group input:focus { outline: none; border-color: #60a5fa; }
+    .btn-primary { width: 100%; background: #3b82f6; color: white; border: none; padding: 12px; border-radius: 6px; font-family: inherit; font-size: 15px; cursor: pointer; font-weight: 600; margin-top: 4px; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-primary:disabled { background: #475569; cursor: not-allowed; }
+    .err-msg { background: #7f1d1d; color: #fecaca; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-top: 12px; }
+    .dashboard { display: none; }
+    .header { background: #1e293b; padding: 16px 24px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .header h1 { font-size: 20px; color: #f1f5f9; }
+    .user-info { display: flex; align-items: center; gap: 12px; color: #94a3b8; font-size: 13px; font-family: monospace; }
+    .btn-logout { background: #475569; color: white; padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit; }
+    .btn-logout:hover { background: #64748b; }
+    .tab-bar { display: flex; background: #1e293b; border-bottom: 1px solid #334155; overflow-x: auto; padding: 0 12px; gap: 4px; }
+    .tab-button { background: none; border: none; color: #94a3b8; padding: 14px 18px; font-size: 15px; cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; font-family: inherit; transition: all 0.15s; }
+    .tab-button:hover { color: #e2e8f0; background: #273449; }
+    .tab-button.active { color: #60a5fa; border-bottom-color: #60a5fa; font-weight: 600; }
+    main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+    .tab-content { display: none; animation: fadeIn 0.2s ease; }
+    .tab-content.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .card { background: #1e293b; border-radius: 10px; padding: 24px; margin-bottom: 20px; border: 1px solid #334155; }
+    .card h2 { color: #f1f5f9; font-size: 18px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #334155; }
+    .placeholder { text-align: center; padding: 60px 20px; color: #94a3b8; }
+    .placeholder .icon { font-size: 72px; margin-bottom: 16px; }
+    .placeholder h3 { color: #e2e8f0; margin-bottom: 8px; font-size: 22px; }
+    .placeholder .step-tag { display: inline-block; background: #334155; color: #cbd5e1; padding: 4px 14px; border-radius: 14px; font-size: 12px; margin-top: 14px; font-family: monospace; }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .stat-card { background: #273449; padding: 18px; border-radius: 8px; border: 1px solid #334155; }
+    .stat-card .label { color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .value { color: #60a5fa; font-size: 32px; font-weight: bold; margin-top: 4px; }
+    .progress-list { list-style: none; color: #cbd5e1; }
+    .progress-list li { padding: 10px 0; border-bottom: 1px solid #2d3a52; display: flex; align-items: center; gap: 10px; }
+    .progress-list li:last-child { border-bottom: none; }
+    .progress-list .done { color: #6ee7b7; }
+    .progress-list .pending { color: #94a3b8; }
+  </style>
+</head>
+<body>
+
+  <div class="login-screen" id="login-screen">
+    <div class="login-card">
+      <h1>🛠 EMTP 管理後台</h1>
+      <p class="subtitle">請使用管理員 Email + 密碼登入</p>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="admin@example.com" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label>密碼</label>
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn-primary" id="btn-login">登入</button>
+      <div id="login-error"></div>
+    </div>
+  </div>
+
+  <div class="dashboard" id="dashboard">
+    <header class="header">
+      <h1>🛠 EMTP 管理後台</h1>
+      <div class="user-info">
+        <span id="user-email">—</span>
+        <button class="btn-logout" id="btn-logout">登出</button>
+      </div>
+    </header>
+
+    <nav class="tab-bar">
+      <button class="tab-button active" data-tab="overview">📊 總覽</button>
+      <button class="tab-button" data-tab="classes">🏫 班級管理</button>
+      <button class="tab-button" data-tab="students">👥 學員管理</button>
+      <button class="tab-button" data-tab="instructors">👨‍🏫 指導員管理</button>
+      <button class="tab-button" data-tab="settings">⚙️ 系統設定</button>
+    </nav>
+
+    <main>
+      <section class="tab-content active" id="tab-overview">
+        <div class="card">
+          <h2>📊 系統健康度</h2>
+          <div class="stat-grid">
+            <div class="stat-card"><div class="label">班級</div><div class="value" id="stat-classes">—</div></div>
+            <div class="stat-card"><div class="label">學員</div><div class="value" id="stat-students">—</div></div>
+            <div class="stat-card"><div class="label">指導員</div><div class="value" id="stat-instructors">—</div></div>
+            <div class="stat-card"><div class="label">題目</div><div class="value" id="stat-questions">—</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>📋 建置進度</h2>
+          <ul class="progress-list">
+            <li><span class="done">✅</span> F1：Firebase 專案 + Firestore + Auth</li>
+            <li><span class="done">✅</span> F2：Email/密碼登入啟用</li>
+            <li><span class="done">✅</span> F3：第一個 Hello World 頁面（GitHub Pages）</li>
+            <li><span class="done">✅</span> F4：管理後台框架（你現在看到的）</li>
+            <li><span class="pending">⏳</span> F5：班級管理（CRUD + Archive）</li>
+            <li><span class="pending">⏳</span> F6：學員管理（CRUD + 批次匯入）</li>
+            <li><span class="pending">⏳</span> F7：指導員管理 + 班級權限</li>
+            <li><span class="pending">⏳</span> F8：系統設定（能量條、戰力排行等）</li>
+            <li><span class="pending">⏳</span> F9：學員端入口 + 答題介面</li>
+            <li><span class="pending">⏳</span> F10：指導員端</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-classes">
+        <div class="card"><div class="placeholder"><div class="icon">🏫</div><h3>班級管理</h3><p>列出所有班級、新增、archive（封存）、開新班</p><span class="step-tag">F5 預定建置</span></div></div>
+      </section>
+
+      <section class="tab-content" id="tab-students">
+        <div class="card"><div class="placeholder"><div class="icon">👥</div><h3>學員管理</h3><p>列出學員、批次匯入、編輯、archive</p><span class="step-tag">F6 預定建置</span></div></div>
+      </section>
+
+      <section class="tab-content" id="tab-instructors">
+        <div class="card"><div class="placeholder"><div class="icon">👨‍🏫</div><h3>指導員管理</h3><p>列出指導員、設定他能管哪些班級</p><span class="step-tag">F7 預定建置</span></div></div>
+      </section>
+
+      <section class="tab-content" id="tab-settings">
+        <div class="card"><div class="placeholder"><div class="icon">⚙️</div><h3>系統設定</h3><p>能量條、戰力排行、權限矩陣等全域設定</p><span class="step-tag">F8 預定建置</span></div></div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+    import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
+      authDomain: "emtp-learning-system.firebaseapp.com",
+      projectId: "emtp-learning-system",
+      storageBucket: "emtp-learning-system.firebasestorage.app",
+      messagingSenderId: "1057617665185",
+      appId: "1:1057617665185:web:2d1902083fa21af0e7a4e0",
+      measurementId: "G-HQRYX3NJ78"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // 🔐 Master 白名單
+    const MASTER_EMAILS = ['sharky83920@gmail.com'];
+
+    onAuthStateChanged(auth, (user) => {
+      if (user && MASTER_EMAILS.includes(user.email)) {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+        document.getElementById('user-email').textContent = user.email;
+        loadOverviewStats();
+      } else if (user) {
+        document.getElementById('login-error').innerHTML = '<div class="err-msg">❌ 此帳號不是管理員、請聯絡系統管理員</div>';
+        signOut(auth);
+      } else {
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('dashboard').style.display = 'none';
+      }
+    });
+
+    document.getElementById('btn-login').addEventListener('click', async () => {
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+      const btn = document.getElementById('btn-login');
+      const errEl = document.getElementById('login-error');
+      errEl.innerHTML = '';
+      if (!email || !password) { errEl.innerHTML = '<div class="err-msg">❌ 請填寫 Email 和密碼</div>'; return; }
+      btn.disabled = true; btn.textContent = '⏳ 登入中...';
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (e) {
+        let msg = '登入失敗';
+        if (e.code === 'auth/invalid-credential') msg = '❌ 帳號或密碼錯誤';
+        else if (e.code === 'auth/invalid-email') msg = '❌ Email 格式錯誤';
+        else if (e.code === 'auth/too-many-requests') msg = '❌ 嘗試太多次、稍後再試';
+        else if (e.code === 'auth/network-request-failed') msg = '❌ 網路連線失敗';
+        else msg = '❌ ' + e.message;
+        errEl.innerHTML = `<div class="err-msg">${msg}</div>`;
+        btn.disabled = false; btn.textContent = '登入';
+      }
+    });
+
+    document.getElementById('login-password').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('btn-login').click();
+    });
+
+    document.getElementById('btn-logout').addEventListener('click', () => {
+      if (confirm('確定要登出嗎？')) signOut(auth);
+    });
+
+    document.querySelectorAll('.tab-button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      });
+    });
+
+    async function loadOverviewStats() {
+      const collections = ['classes', 'students', 'instructors', 'questions'];
+      const elementMap = { classes: 'stat-classes', students: 'stat-students', instructors: 'stat-instructors', questions: 'stat-questions' };
+      for (const col of collections) {
+        try {
+          const snapshot = await getDocs(collection(db, col));
+          document.getElementById(elementMap[col]).textContent = snapshot.size;
+        } catch (e) {
+          document.getElementById(elementMap[col]).textContent = '0';
+        }
+      }
+    }
+  </script>
+</body>
+</html>
