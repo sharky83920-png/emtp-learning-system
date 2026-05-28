@@ -3,142 +3,248 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>📝 EPA Milestone 評核</title>
+  <title>📝 Milestone 臨床實習評量</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; background: #f1f5f9; color: #1e293b; min-height: 100vh; line-height: 1.6; }
-    .container { max-width: 580px; margin: 0 auto; padding: 20px; }
+    .container { max-width: 640px; margin: 0 auto; padding: 16px; padding-bottom: 80px; }
+
     header { background: linear-gradient(135deg, #14b8a6, #0d9488); color: white; padding: 24px; border-radius: 16px; margin-bottom: 16px; text-align: center; box-shadow: 0 10px 30px rgba(20, 184, 166, 0.3); }
     header h1 { font-size: 22px; margin-bottom: 4px; }
-    header .sub { opacity: 0.85; font-size: 13px; }
-    .panel { background: white; padding: 24px; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
-    .loading, .error, .success { text-align: center; padding: 40px 20px; }
+    header .sub { opacity: 0.9; font-size: 13px; }
+
+    .panel { background: white; border-radius: 12px; margin-bottom: 14px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+    .section-title { padding: 10px 18px; color: white; font-weight: 600; font-size: 15px; }
+    .section-title.blue { background: #3b82f6; }
+    .section-title.green { background: #10b981; }
+    .section-title.orange { background: #f59e0b; }
+    .section-title.teal { background: #14b8a6; }
+    .panel-body { padding: 18px; }
+
+    .loading, .error, .success { text-align: center; padding: 50px 20px; }
     .loading .icon, .error .icon, .success .icon { font-size: 56px; margin-bottom: 16px; }
     .error h2, .success h2 { color: #1e293b; margin-bottom: 8px; font-size: 22px; }
     .error p { color: #64748b; font-size: 14px; line-height: 1.6; }
     .success h2 { color: #14b8a6; }
-    .student-info { background: #f0fdfa; border-left: 4px solid #14b8a6; padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; }
-    .student-info .label { color: #64748b; font-size: 12px; margin-bottom: 4px; }
-    .student-info h2 { color: #134e4a; font-size: 22px; }
-    .student-info .meta { color: #64748b; font-size: 13px; margin-top: 2px; }
-    .form-group { margin-bottom: 16px; }
-    .form-group label { display: block; color: #1e293b; font-size: 14px; margin-bottom: 6px; font-weight: 600; }
-    .form-group label .required { color: #ef4444; margin-left: 2px; }
-    .form-group select, .form-group input[type=text], .form-group textarea { width: 100%; padding: 11px 14px; background: #f8fafc; border: 2px solid #e2e8f0; color: #1e293b; border-radius: 8px; font-family: inherit; font-size: 15px; }
+
+    .form-group { margin-bottom: 14px; }
+    .form-group:last-child { margin-bottom: 0; }
+    .form-group label { display: block; color: #1e293b; font-size: 13px; margin-bottom: 6px; font-weight: 600; }
+    .form-group select, .form-group input[type=text], .form-group textarea { width: 100%; padding: 10px 14px; background: #f8fafc; border: 2px solid #e2e8f0; color: #1e293b; border-radius: 8px; font-family: inherit; font-size: 15px; }
     .form-group select:focus, .form-group input:focus, .form-group textarea:focus { outline: none; border-color: #14b8a6; background: white; }
-    .form-group textarea { resize: vertical; min-height: 80px; }
+    .form-group textarea { resize: vertical; min-height: 60px; }
     .custom-input { margin-top: 6px; }
-    .level-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 4px; }
-    .level-grid label { background: #f8fafc; border: 2px solid #e2e8f0; padding: 12px 4px; border-radius: 8px; text-align: center; cursor: pointer; font-weight: 600; font-size: 18px; color: #475569; transition: all 0.15s; }
-    .level-grid label:hover { border-color: #14b8a6; }
-    .level-grid input[type=radio] { display: none; }
-    .level-grid input[type=radio]:checked + .level-text { color: white; }
-    .level-grid label.lv0 { color: #6b7280; }
-    .level-grid label.lv1 { color: #ef4444; }
-    .level-grid label.lv2 { color: #f59e0b; }
-    .level-grid label.lv3 { color: #eab308; }
-    .level-grid label.lv4 { color: #10b981; }
-    .level-grid label.lv5 { color: #059669; }
-    .level-grid label.selected { background: #14b8a6; color: white !important; border-color: #14b8a6; }
-    .scoring-guide { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px 14px; border-radius: 8px; margin-top: 8px; font-size: 13px; color: #78350f; white-space: pre-wrap; }
-    .btn-submit { width: 100%; background: linear-gradient(135deg, #14b8a6, #0d9488); color: white; border: none; padding: 14px; border-radius: 10px; cursor: pointer; font-family: inherit; font-size: 16px; font-weight: 700; margin-top: 8px; box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3); }
-    .btn-submit:hover { opacity: 0.95; }
-    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-ghost { background: white; color: #14b8a6; border: 2px solid #14b8a6; padding: 12px 24px; border-radius: 10px; cursor: pointer; font-family: inherit; font-size: 15px; font-weight: 600; }
-    .btn-ghost:hover { background: #f0fdfa; }
-    .err-msg { background: #fef2f2; color: #b91c1c; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 12px; border: 1px solid #fecaca; }
-    .info { color: #64748b; font-size: 12px; margin-top: 6px; }
+
+    .student-display { background: #f0fdfa; border: 2px solid #14b8a6; border-radius: 10px; padding: 14px 18px; }
+    .student-display .name { color: #134e4a; font-size: 22px; font-weight: 700; }
+    .student-display .meta { color: #64748b; font-size: 13px; margin-top: 2px; }
+
+    .dim-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+    .dim-btn { padding: 16px 8px; border: none; border-radius: 10px; cursor: pointer; font-family: inherit; font-size: 15px; font-weight: 700; color: white; transition: transform 0.1s, box-shadow 0.1s; }
+    .dim-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .dim-btn:active { transform: translateY(0); }
+    .dim-btn.T { background: #8b5cf6; }
+    .dim-btn.N { background: #3b82f6; }
+    .dim-btn.K { background: #f59e0b; }
+    .dim-btn.V { background: #06b6d4; }
+    .dim-btn.I { background: #be123c; }
+    @media (max-width: 580px) {
+      .dim-grid { grid-template-columns: repeat(2, 1fr); }
+      .dim-btn { padding: 14px 8px; font-size: 14px; }
+    }
+
+    .info-box { background: #fefce8; border-left: 4px solid #eab308; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; line-height: 1.7; color: #713f12; }
+    .info-box .pill { background: #fde047; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; display: inline-block; margin: 0 2px; }
+
+    .step-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 4px; }
+    .step-title { font-size: 18px; font-weight: 700; color: #1e293b; }
+    .btn-back { background: white; color: #64748b; border: 2px solid #e2e8f0; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; }
+    .btn-back:hover { background: #f8fafc; }
+
+    .step-accordion .step-group { border-bottom: 1px solid #e2e8f0; }
+    .step-accordion .step-group:last-child { border-bottom: none; }
+    .step-head { padding: 14px 18px; background: #f8fafc; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600; color: #1e293b; }
+    .step-head:hover { background: #f1f5f9; }
+    .step-head .caret { transition: transform 0.2s; }
+    .step-group.open .step-head .caret { transform: rotate(180deg); }
+    .step-body { display: none; padding: 12px 18px; background: white; }
+    .step-group.open .step-body { display: block; }
+
+    .ms-item { padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
+    .ms-item:last-child { border-bottom: none; }
+    .ms-header { display: flex; align-items: center; gap: 10px; }
+    .ms-toggle { width: 44px; height: 24px; background: #e2e8f0; border-radius: 12px; position: relative; cursor: pointer; flex-shrink: 0; transition: background 0.2s; }
+    .ms-toggle.on { background: #14b8a6; }
+    .ms-toggle::after { content: ''; position: absolute; left: 2px; top: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: left 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+    .ms-toggle.on::after { left: 22px; }
+    .ms-info { flex: 1; }
+    .ms-name { color: #1e293b; font-weight: 600; font-size: 15px; }
+    .ms-id { color: #94a3b8; font-size: 11px; font-family: monospace; }
+
+    .ms-detail { display: none; margin-top: 10px; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .ms-item.on .ms-detail { display: block; }
+    .ms-level-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-bottom: 10px; }
+    .ms-level-grid label { background: white; border: 2px solid #e2e8f0; padding: 10px 0; border-radius: 6px; text-align: center; cursor: pointer; font-weight: 700; font-size: 17px; transition: all 0.15s; }
+    .ms-level-grid label.lv0 { color: #6b7280; }
+    .ms-level-grid label.lv1 { color: #ef4444; }
+    .ms-level-grid label.lv2 { color: #dc2626; }
+    .ms-level-grid label.lv3 { color: #f59e0b; }
+    .ms-level-grid label.lv4 { color: #10b981; }
+    .ms-level-grid label.lv5 { color: #059669; }
+    .ms-level-grid label:hover { border-color: #14b8a6; }
+    .ms-level-grid label.selected { background: #14b8a6; color: white !important; border-color: #14b8a6; }
+    .ms-level-grid input[type=radio] { display: none; }
+    .ms-feedback { width: 100%; padding: 8px 12px; border: 2px solid #e2e8f0; border-radius: 6px; font-family: inherit; font-size: 14px; resize: vertical; min-height: 50px; background: white; }
+    .ms-feedback:focus { outline: none; border-color: #14b8a6; }
+    .scoring-guide { background: #fef3c7; padding: 8px 12px; border-radius: 6px; font-size: 12px; color: #78350f; white-space: pre-wrap; margin-bottom: 8px; }
+
+    /* 確認頁表格樣式（按 TP 設計） */
+    .review-meta { background: #f8fafc; padding: 12px 14px; border-radius: 8px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 8px; border: 1px solid #e2e8f0; }
+    .review-meta-row { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #334155; flex-wrap: wrap; }
+    .meta-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; color: white; }
+    .meta-tag.blue { background: #3b82f6; }
+    .meta-tag.green { background: #10b981; }
+    .meta-tag.orange { background: #f59e0b; }
+    .review-table { width: 100%; border-collapse: collapse; background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+    .review-table th { background: #f1f5f9; padding: 12px 14px; text-align: left; color: #475569; font-size: 13px; font-weight: 600; border-bottom: 1px solid #e2e8f0; }
+    .review-table td { padding: 14px 14px; border-bottom: 1px solid #f1f5f9; font-size: 14px; color: #1e293b; vertical-align: middle; }
+    .review-table tr:last-child td { border-bottom: none; }
+    .review-table .step-cell { color: #64748b; font-size: 13px; }
+    .review-table .name-cell { font-weight: 600; }
+    .level-badge { display: inline-block; min-width: 36px; height: 36px; border-radius: 8px; color: white; font-weight: 700; text-align: center; line-height: 36px; font-size: 17px; padding: 0 8px; }
+    .level-badge.lv0 { background: #6b7280; }
+    .level-badge.lv1 { background: #ef4444; }
+    .level-badge.lv2 { background: #dc2626; }
+    .level-badge.lv3 { background: #f59e0b; }
+    .level-badge.lv4 { background: #3b82f6; }
+    .level-badge.lv5 { background: #059669; }
+    .empty-fb { color: #94a3b8; font-style: italic; font-size: 13px; }
+
+    .btn-primary { background: linear-gradient(135deg, #14b8a6, #0d9488); color: white; border: none; padding: 14px 24px; border-radius: 10px; cursor: pointer; font-family: inherit; font-size: 16px; font-weight: 700; box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3); }
+    .btn-primary:hover { opacity: 0.95; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background: white; color: #64748b; border: 2px solid #e2e8f0; padding: 12px 24px; border-radius: 10px; cursor: pointer; font-family: inherit; font-size: 15px; font-weight: 600; }
+    .btn-secondary:hover { background: #f8fafc; }
+    .footer-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; padding: 14px 18px; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+    .footer-actions .btn-primary, .footer-actions .btn-secondary { flex: 1; min-width: 140px; }
+
+    .err-msg { background: #fef2f2; color: #b91c1c; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin: 12px 0; border: 1px solid #fecaca; }
+    .meta-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; font-size: 13px; color: #475569; }
+    .meta-pill { background: #e0f2fe; color: #0369a1; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+    .meta-pill.green { background: #dcfce7; color: #166534; }
+    .meta-pill.orange { background: #fed7aa; color: #9a3412; }
   </style>
 </head>
 <body>
 
   <div class="container">
     <header>
-      <h1>📝 EPA Milestone 評核</h1>
-      <div class="sub">高級救護員訓練 - 教官評核專用頁</div>
+      <h1>📝 Milestone 臨床實習評量</h1>
+      <div class="sub">高級救護員訓練 - 教官評量專用頁</div>
     </header>
 
+    <!-- 載入 / 錯誤 -->
     <div class="panel" id="loading">
-      <div class="loading">
-        <div class="icon">⏳</div>
-        <h2 style="color:#64748b">驗證連結中...</h2>
-      </div>
+      <div class="loading"><div class="icon">⏳</div><h2 style="color:#64748b">驗證連結中...</h2></div>
     </div>
-
     <div class="panel" id="error" style="display:none">
-      <div class="error">
-        <div class="icon">❌</div>
-        <h2>無法評核</h2>
-        <p id="error-msg">—</p>
-      </div>
+      <div class="error"><div class="icon">❌</div><h2>無法評量</h2><p id="error-msg">—</p></div>
     </div>
 
-    <div class="panel" id="form-panel" style="display:none">
-      <div class="student-info">
-        <div class="label">📌 你正在為以下學員評核：</div>
-        <h2 id="student-display">—</h2>
-        <div class="meta" id="student-meta">—</div>
-      </div>
-
-      <form id="eval-form">
-        <div class="form-group">
-          <label>1. 選擇 Milestone 項目<span class="required">*</span></label>
-          <select id="milestone-select" required>
-            <option value="">請選 Milestone...</option>
-          </select>
-          <div class="scoring-guide" id="scoring-guide" style="display:none"></div>
-        </div>
-
-        <div class="form-group">
-          <label>2. 你的身分<span class="required">*</span></label>
-          <select id="role-select" required>
-            <option value="">請選身分...</option>
-          </select>
-          <input type="text" class="custom-input" id="role-custom" placeholder="請輸入自訂身分" style="display:none">
-        </div>
-
-        <div class="form-group">
-          <label>3. 你的單位<span class="required">*</span></label>
-          <select id="unit-select" required>
-            <option value="">請選單位...</option>
-          </select>
-          <input type="text" class="custom-input" id="unit-custom" placeholder="請輸入自訂單位" style="display:none">
-        </div>
-
-        <div class="form-group">
-          <label>4. 你的姓名<span class="required">*</span></label>
-          <input type="text" id="evaluator-name" required placeholder="例：張教官">
-        </div>
-
-        <div class="form-group">
-          <label>5. Milestone Level（0-5）<span class="required">*</span></label>
-          <div class="level-grid" id="level-grid">
-            <label class="lv0" data-lv="0"><input type="radio" name="level" value="0">0</label>
-            <label class="lv1" data-lv="1"><input type="radio" name="level" value="1">1</label>
-            <label class="lv2" data-lv="2"><input type="radio" name="level" value="2">2</label>
-            <label class="lv3" data-lv="3"><input type="radio" name="level" value="3">3</label>
-            <label class="lv4" data-lv="4"><input type="radio" name="level" value="4">4</label>
-            <label class="lv5" data-lv="5"><input type="radio" name="level" value="5">5</label>
+    <!-- Step 1: 指導員資訊 + 評量對象 + 選擇維度 -->
+    <div id="step1" style="display:none">
+      <div class="panel">
+        <div class="section-title blue">1. 指導員資訊</div>
+        <div class="panel-body">
+          <div class="form-group">
+            <label>身分</label>
+            <select id="role-select"><option value="">請選擇身分...</option></select>
+            <input type="text" class="custom-input" id="role-custom" placeholder="請輸入自訂身分" style="display:none">
           </div>
-          <div class="info">💡 Level 4 = 獨立執行門檻、Level 5 = 可帶教</div>
+          <div class="form-group">
+            <label>單位</label>
+            <select id="unit-select"><option value="">請選擇單位...</option></select>
+            <input type="text" class="custom-input" id="unit-custom" placeholder="請輸入自訂單位" style="display:none">
+          </div>
+          <div class="form-group">
+            <label>姓名</label>
+            <input type="text" id="evaluator-name" placeholder="請輸入姓名">
+          </div>
         </div>
+      </div>
 
-        <div class="form-group">
-          <label>6. 質性回饋（選填、學員看得到）</label>
-          <textarea id="feedback" placeholder="可寫優點、缺點、改進方向、印象深刻的部分..."></textarea>
+      <div class="panel">
+        <div class="section-title green">2. 評量對象</div>
+        <div class="panel-body">
+          <div class="student-display">
+            <div class="name" id="student-display">—</div>
+            <div class="meta" id="student-meta">—</div>
+          </div>
         </div>
+      </div>
 
-        <button type="submit" class="btn-submit" id="btn-submit">📝 送出評核</button>
-        <div id="form-error"></div>
-      </form>
+      <div class="panel">
+        <div class="section-title orange">3. 選擇評量維度</div>
+        <div class="panel-body">
+          <div class="dim-grid">
+            <button class="dim-btn T" data-group="T">創傷</button>
+            <button class="dim-btn N" data-group="N">非創傷</button>
+            <button class="dim-btn K" data-group="K">兒科</button>
+            <button class="dim-btn V" data-group="V">口試</button>
+            <button class="dim-btn I" data-group="I">插管</button>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="panel" id="success-panel" style="display:none">
+    <!-- Step 2: 選定維度後 → milestone 列表 -->
+    <div id="step2" style="display:none">
+      <div class="panel">
+        <div class="section-title teal">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span id="step2-dim-title">維度 - 評量流程</span>
+            <button class="btn-back" id="btn-back-to-step1">⬅️ 返回重新選擇</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="info-box">
+            <div class="meta-row">📋 <strong>評核者</strong>：<span class="meta-pill" id="info-evaluator">—</span></div>
+            <div class="meta-row">👤 <strong>受評學員</strong>：<span class="meta-pill green" id="info-student">—</span></div>
+            <div class="meta-row">📌 <strong>維度</strong>：<span class="meta-pill orange" id="info-dim">—</span></div>
+          </div>
+          <div id="milestone-accordion" class="step-accordion"></div>
+        </div>
+        <div class="footer-actions">
+          <button class="btn-secondary" id="btn-back-to-step1-bottom">⬅️ 返回</button>
+          <button class="btn-primary" id="btn-review">📋 確認評量內容 <span id="review-count-badge"></span></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: 確認頁 -->
+    <div id="step3" style="display:none">
+      <div class="panel">
+        <div class="section-title orange">📋 請確認評量內容</div>
+        <div class="panel-body">
+          <div id="review-list"></div>
+        </div>
+        <div class="footer-actions">
+          <button class="btn-secondary" id="btn-back-to-step2">⬅️ 返回修改</button>
+          <button class="btn-primary" id="btn-submit">✅ 確認送出 <span id="submit-count-badge"></span></button>
+        </div>
+      </div>
+      <div id="submit-error"></div>
+    </div>
+
+    <!-- 完成 -->
+    <div class="panel" id="success" style="display:none">
       <div class="success">
         <div class="icon">✅</div>
-        <h2>評核完成！</h2>
-        <p style="color:#64748b;margin:12px 0 24px">已寫入學員的 Milestone 紀錄、雷達會自動更新。</p>
-        <button class="btn-ghost" id="btn-another">📝 為此學員再評另一個 Milestone</button>
+        <h2>評量完成！</h2>
+        <p style="color:#64748b;margin:12px 0 24px">已寫入 <strong id="success-count">—</strong> 筆評量、學員雷達會自動更新。</p>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+          <button class="btn-secondary" id="btn-eval-more">📝 為此學員再評其他維度</button>
+        </div>
         <div style="color:#94a3b8;font-size:12px;margin-top:16px">本連結 24 小時內可重複使用</div>
       </div>
     </div>
@@ -146,7 +252,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-    import { getFirestore, collection, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, arrayUnion, increment, query, where } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, arrayUnion, increment, query, where, writeBatch } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -162,260 +268,367 @@
 
     let tokenData = null;
     let studentData = null;
-    let milestones = [];
     let groups = [];
+    let milestones = [];
     let roles = [];
     let units = [];
+    let currentGroupId = null;
+    // 當前評核中的 milestone：milestoneId -> { enabled, level, feedback }
+    const evalDraft = {};
 
-    function showLoading() {
-      document.getElementById('loading').style.display = 'block';
-      document.getElementById('error').style.display = 'none';
-      document.getElementById('form-panel').style.display = 'none';
-      document.getElementById('success-panel').style.display = 'none';
+    function showStep(s) {
+      ['loading', 'error', 'step1', 'step2', 'step3', 'success'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = (id === s) ? 'block' : 'none';
+      });
     }
     function showError(msg) {
-      document.getElementById('loading').style.display = 'none';
-      document.getElementById('error').style.display = 'block';
-      document.getElementById('form-panel').style.display = 'none';
-      document.getElementById('success-panel').style.display = 'none';
       document.getElementById('error-msg').textContent = msg;
-    }
-    function showForm() {
-      document.getElementById('loading').style.display = 'none';
-      document.getElementById('error').style.display = 'none';
-      document.getElementById('form-panel').style.display = 'block';
-      document.getElementById('success-panel').style.display = 'none';
-    }
-    function showSuccess() {
-      document.getElementById('loading').style.display = 'none';
-      document.getElementById('error').style.display = 'none';
-      document.getElementById('form-panel').style.display = 'none';
-      document.getElementById('success-panel').style.display = 'block';
+      showStep('error');
     }
 
     async function init() {
       const params = new URLSearchParams(location.search);
       const tokenId = params.get('token');
       if (!tokenId) { showError('連結缺少 token、請學員重新分享。'); return; }
-
       try {
-        // 1. 驗證 token
         const tokenDoc = await getDoc(doc(db, 'evaluation_tokens', tokenId));
         if (!tokenDoc.exists()) { showError('連結無效或已被撤銷。'); return; }
         tokenData = { id: tokenDoc.id, ...tokenDoc.data() };
-        const now = Date.now();
         const expiresAt = tokenData.expiresAt?.seconds ? tokenData.expiresAt.seconds * 1000 : 0;
-        if (expiresAt && now > expiresAt) {
-          showError('連結已過期（24 小時時效）、請學員重新產生新連結。');
-          return;
-        }
+        if (expiresAt && Date.now() > expiresAt) { showError('連結已過期（24 小時時效）。'); return; }
 
-        // 2. 載入學員資料
         const studentDoc = await getDoc(doc(db, 'students', tokenData.studentId));
         if (!studentDoc.exists()) { showError('找不到學員資料。'); return; }
         studentData = { id: studentDoc.id, ...studentDoc.data() };
-
-        // 載入班級顯示
         let classDisplay = studentData.classId;
         try {
           const classDoc = await getDoc(doc(db, 'classes', studentData.classId));
           if (classDoc.exists()) classDisplay = classDoc.data().displayName || studentData.classId;
         } catch (e) {}
-
         document.getElementById('student-display').textContent = studentData.name;
         document.getElementById('student-meta').textContent = `${classDisplay} ・ 學號 ${studentData.studentNo}`;
 
-        // 3. 載入 milestones / groups / roles / units
-        await Promise.all([loadMilestones(), loadRoles(), loadUnits()]);
-
-        // 4. 顯示表單
-        showForm();
+        await Promise.all([loadAllData()]);
+        showStep('step1');
       } catch (e) {
         console.error(e);
-        showError(`系統錯誤：${e.message}`);
+        showError('系統錯誤：' + e.message);
       }
     }
 
-    async function loadMilestones() {
-      const groupsSnap = await getDocs(collection(db, 'milestone_groups'));
+    async function loadAllData() {
+      // groups
+      const gSnap = await getDocs(collection(db, 'milestone_groups'));
       groups = [];
-      groupsSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) groups.push({ id: d.id, ...data }); });
+      gSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) groups.push({ id: d.id, ...data }); });
       groups.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-
-      const msSnap = await getDocs(collection(db, 'milestones'));
+      // milestones
+      const mSnap = await getDocs(collection(db, 'milestones'));
       milestones = [];
-      msSnap.forEach(d => {
-        const data = d.data();
-        if (data.isActive !== false && data.isVisible !== false) milestones.push({ id: d.id, ...data });
-      });
+      mSnap.forEach(d => { const data = d.data(); if (data.isActive !== false && data.isVisible !== false) milestones.push({ id: d.id, ...data }); });
       milestones.sort((a, b) => {
         if (a.groupId !== b.groupId) return (a.groupId || '').localeCompare(b.groupId || '');
+        if (a.step !== b.step) return (a.step || '').localeCompare(b.step || '');
         return (a.displayOrder || 0) - (b.displayOrder || 0);
       });
-
-      const sel = document.getElementById('milestone-select');
-      let html = '<option value="">請選 Milestone...</option>';
-      groups.forEach(g => {
-        const inGroup = milestones.filter(m => m.groupId === g.id);
-        if (inGroup.length === 0) return;
-        html += `<optgroup label="${g.id} ${g.name}">`;
-        inGroup.forEach(m => { html += `<option value="${m.id}">${m.id} ${m.step ? '(' + m.step + ')' : ''} ${m.name}</option>`; });
-        html += '</optgroup>';
-      });
-      sel.innerHTML = html;
-    }
-
-    async function loadRoles() {
-      const snap = await getDocs(collection(db, 'evaluator_roles'));
+      // roles
+      const rSnap = await getDocs(collection(db, 'evaluator_roles'));
       roles = [];
-      snap.forEach(d => { const data = d.data(); if (data.isActive !== false) roles.push({ id: d.id, ...data }); });
+      rSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) roles.push({ id: d.id, ...data }); });
       roles.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-      const sel = document.getElementById('role-select');
-      let html = '<option value="">請選身分...</option>';
-      roles.forEach(r => { html += `<option value="${r.name}">${r.name}</option>`; });
-      html += '<option value="__custom__">📝 其他（自訂）</option>';
-      sel.innerHTML = html;
-    }
-
-    async function loadUnits() {
-      const snap = await getDocs(collection(db, 'units'));
+      // units
+      const uSnap = await getDocs(collection(db, 'units'));
       units = [];
-      snap.forEach(d => { const data = d.data(); if (data.isActive !== false) units.push({ id: d.id, ...data }); });
+      uSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) units.push({ id: d.id, ...data }); });
       units.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-      const sel = document.getElementById('unit-select');
-      let html = '<option value="">請選單位...</option>';
-      const prehospital = units.filter(u => u.type === 'prehospital');
-      const hospital = units.filter(u => u.type === 'hospital');
-      const other = units.filter(u => u.type !== 'prehospital' && u.type !== 'hospital');
-      if (prehospital.length > 0) {
-        html += '<optgroup label="🚑 院前">';
-        prehospital.forEach(u => { html += `<option value="${u.name}">${u.name}</option>`; });
-        html += '</optgroup>';
-      }
-      if (hospital.length > 0) {
-        html += '<optgroup label="🏥 醫院">';
-        hospital.forEach(u => { html += `<option value="${u.name}">${u.name}</option>`; });
-        html += '</optgroup>';
-      }
-      if (other.length > 0) {
-        html += '<optgroup label="📍 其他">';
-        other.forEach(u => { html += `<option value="${u.name}">${u.name}</option>`; });
-        html += '</optgroup>';
-      }
-      html += '<option value="__custom__">📝 其他（自訂）</option>';
-      sel.innerHTML = html;
+
+      // 填下拉
+      const roleSel = document.getElementById('role-select');
+      let rh = '<option value="">請選擇身分...</option>';
+      roles.forEach(r => { rh += `<option value="${r.name}">${r.name}</option>`; });
+      rh += '<option value="__custom__">📝 其他（自訂）</option>';
+      roleSel.innerHTML = rh;
+
+      const unitSel = document.getElementById('unit-select');
+      let uh = '<option value="">請選擇單位...</option>';
+      const pre = units.filter(u => u.type === 'prehospital');
+      const hos = units.filter(u => u.type === 'hospital');
+      const oth = units.filter(u => u.type !== 'prehospital' && u.type !== 'hospital');
+      if (pre.length) { uh += '<optgroup label="🚑 院前">'; pre.forEach(u => { uh += `<option value="${u.name}">${u.name}</option>`; }); uh += '</optgroup>'; }
+      if (hos.length) { uh += '<optgroup label="🏥 醫院">'; hos.forEach(u => { uh += `<option value="${u.name}">${u.name}</option>`; }); uh += '</optgroup>'; }
+      if (oth.length) { uh += '<optgroup label="📍 其他">'; oth.forEach(u => { uh += `<option value="${u.name}">${u.name}</option>`; }); uh += '</optgroup>'; }
+      uh += '<option value="__custom__">📝 其他（自訂）</option>';
+      unitSel.innerHTML = uh;
     }
 
-    // milestone 選擇 → 顯示評分指引
-    document.getElementById('milestone-select').addEventListener('change', () => {
-      const id = document.getElementById('milestone-select').value;
-      const guide = document.getElementById('scoring-guide');
-      if (!id) { guide.style.display = 'none'; return; }
-      const m = milestones.find(x => x.id === id);
-      if (m && m.scoringGuide) {
-        guide.textContent = '💡 評分指引：' + m.scoringGuide;
-        guide.style.display = 'block';
-      } else {
-        guide.style.display = 'none';
-      }
-    });
-
-    // 身分 / 單位「其他」切換
+    // 自訂切換
     document.getElementById('role-select').addEventListener('change', () => {
-      const v = document.getElementById('role-select').value;
-      document.getElementById('role-custom').style.display = v === '__custom__' ? 'block' : 'none';
+      document.getElementById('role-custom').style.display = document.getElementById('role-select').value === '__custom__' ? 'block' : 'none';
     });
     document.getElementById('unit-select').addEventListener('change', () => {
-      const v = document.getElementById('unit-select').value;
-      document.getElementById('unit-custom').style.display = v === '__custom__' ? 'block' : 'none';
+      document.getElementById('unit-custom').style.display = document.getElementById('unit-select').value === '__custom__' ? 'block' : 'none';
     });
 
-    // Level 視覺反饋
-    document.querySelectorAll('#level-grid input[type=radio]').forEach(r => {
-      r.addEventListener('change', () => {
-        document.querySelectorAll('#level-grid label').forEach(l => l.classList.remove('selected'));
-        if (r.checked) r.parentElement.classList.add('selected');
+    // 維度按鈕
+    document.querySelectorAll('.dim-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const role = document.getElementById('role-select').value;
+        const roleCustom = document.getElementById('role-custom').value.trim();
+        const unit = document.getElementById('unit-select').value;
+        const unitCustom = document.getElementById('unit-custom').value.trim();
+        const name = document.getElementById('evaluator-name').value.trim();
+        if (!role) { alert('❌ 請先選擇身分'); return; }
+        if (role === '__custom__' && !roleCustom) { alert('❌ 請填自訂身分'); return; }
+        if (!unit) { alert('❌ 請先選擇單位'); return; }
+        if (unit === '__custom__' && !unitCustom) { alert('❌ 請填自訂單位'); return; }
+        if (!name) { alert('❌ 請填姓名'); return; }
+        currentGroupId = btn.dataset.group;
+        Object.keys(evalDraft).forEach(k => delete evalDraft[k]); // 清空草稿
+        renderStep2();
       });
     });
 
-    // 表單提交
-    document.getElementById('eval-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const errEl = document.getElementById('form-error');
-      errEl.innerHTML = '';
-
-      const milestoneId = document.getElementById('milestone-select').value;
-      const roleVal = document.getElementById('role-select').value;
+    function getEvaluatorInfo() {
+      const role = document.getElementById('role-select').value;
       const roleCustom = document.getElementById('role-custom').value.trim();
-      const unitVal = document.getElementById('unit-select').value;
+      const unit = document.getElementById('unit-select').value;
       const unitCustom = document.getElementById('unit-custom').value.trim();
-      const evaluatorName = document.getElementById('evaluator-name').value.trim();
-      const levelRadio = document.querySelector('#level-grid input[type=radio]:checked');
-      const feedback = document.getElementById('feedback').value.trim();
+      const name = document.getElementById('evaluator-name').value.trim();
+      return {
+        name,
+        role: role === '__custom__' ? roleCustom : role,
+        roleCustom: role === '__custom__' ? roleCustom : null,
+        unit: unit === '__custom__' ? unitCustom : unit,
+        unitCustom: unit === '__custom__' ? unitCustom : null
+      };
+    }
 
-      if (!milestoneId) { errEl.innerHTML = '<div class="err-msg">❌ 請選 Milestone 項目</div>'; return; }
-      if (!roleVal) { errEl.innerHTML = '<div class="err-msg">❌ 請選身分</div>'; return; }
-      if (roleVal === '__custom__' && !roleCustom) { errEl.innerHTML = '<div class="err-msg">❌ 請填自訂身分</div>'; return; }
-      if (!unitVal) { errEl.innerHTML = '<div class="err-msg">❌ 請選單位</div>'; return; }
-      if (unitVal === '__custom__' && !unitCustom) { errEl.innerHTML = '<div class="err-msg">❌ 請填自訂單位</div>'; return; }
-      if (!evaluatorName) { errEl.innerHTML = '<div class="err-msg">❌ 請填姓名</div>'; return; }
-      if (!levelRadio) { errEl.innerHTML = '<div class="err-msg">❌ 請選 Level 0-5</div>'; return; }
+    function renderStep2() {
+      const g = groups.find(x => x.id === currentGroupId);
+      const ev = getEvaluatorInfo();
+      document.getElementById('step2-dim-title').textContent = `${g?.name || currentGroupId} - 評量流程`;
+      document.getElementById('info-evaluator').textContent = `${ev.name}（${ev.role} / ${ev.unit}）`;
+      document.getElementById('info-student').textContent = studentData.name;
+      document.getElementById('info-dim').textContent = g?.name || currentGroupId;
 
-      const m = milestones.find(x => x.id === milestoneId);
-      const btn = document.getElementById('btn-submit');
-      btn.disabled = true; btn.textContent = '⏳ 送出中...';
+      // 該維度的 milestones、按 step 分組
+      const groupMs = milestones.filter(m => m.groupId === currentGroupId);
+      const stepOrder = ['初步評估', '處置', '二度評估', '交班', '新生兒', '小兒', '核生化災難', '大量傷病患', '緊急救護系統', '氣管插管'];
+      const byStep = {};
+      groupMs.forEach(m => {
+        const s = m.step || '其他';
+        if (!byStep[s]) byStep[s] = [];
+        byStep[s].push(m);
+      });
+      const orderedSteps = [...new Set([...stepOrder, ...Object.keys(byStep)])].filter(s => byStep[s]);
 
-      try {
-        // 寫入 milestone_evaluations
-        const evalRef = doc(collection(db, 'milestone_evaluations'));
-        await setDoc(evalRef, {
-          studentId: studentData.id,
-          studentName: studentData.name,
-          classId: studentData.classId,
-          milestoneId,
-          milestoneName: m.name,
-          groupId: m.groupId,
-          step: m.step || null,
-          evaluatorName,
-          evaluatorRole: roleVal === '__custom__' ? roleCustom : roleVal,
-          evaluatorRoleCustom: roleVal === '__custom__' ? roleCustom : null,
-          evaluatorUnit: unitVal === '__custom__' ? unitCustom : unitVal,
-          evaluatorUnitCustom: unitVal === '__custom__' ? unitCustom : null,
-          level: parseInt(levelRadio.value),
-          qualitativeFeedback: feedback,
-          tokenId: tokenData.id,
-          evaluatedAt: serverTimestamp()
+      let html = '';
+      orderedSteps.forEach((step, idx) => {
+        const items = byStep[step];
+        html += `<div class="step-group${idx === 0 ? ' open' : ''}">
+          <div class="step-head" data-step-toggle="${idx}">
+            <span>${step} <span style="color:#94a3b8;font-size:13px">(${items.length})</span></span>
+            <span class="caret">▼</span>
+          </div>
+          <div class="step-body">`;
+        items.forEach(m => {
+          const draft = evalDraft[m.id] || {};
+          const isOn = !!draft.enabled;
+          html += `<div class="ms-item${isOn ? ' on' : ''}" data-msid="${m.id}">
+            <div class="ms-header">
+              <div class="ms-toggle${isOn ? ' on' : ''}" data-ms-toggle="${m.id}"></div>
+              <div class="ms-info">
+                <div class="ms-name">${m.name}</div>
+                <div class="ms-id">${m.id}</div>
+              </div>
+            </div>
+            <div class="ms-detail">
+              ${m.scoringGuide ? `<div class="scoring-guide">💡 ${m.scoringGuide}</div>` : ''}
+              <div class="ms-level-grid">
+                ${[0,1,2,3,4,5].map(lv => `<label class="lv${lv}${draft.level === lv ? ' selected' : ''}" data-ms-level="${m.id}" data-lv="${lv}"><input type="radio" name="ms-level-${m.id}" value="${lv}"${draft.level === lv ? ' checked' : ''}>${lv}</label>`).join('')}
+              </div>
+              <textarea class="ms-feedback" placeholder="質性回饋（選填）" data-ms-fb="${m.id}">${draft.feedback || ''}</textarea>
+            </div>
+          </div>`;
         });
+        html += '</div></div>';
+      });
 
+      document.getElementById('milestone-accordion').innerHTML = html;
+
+      // 事件綁定
+      document.querySelectorAll('[data-step-toggle]').forEach(el => {
+        el.addEventListener('click', () => el.closest('.step-group').classList.toggle('open'));
+      });
+      document.querySelectorAll('[data-ms-toggle]').forEach(el => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const msid = el.dataset.msToggle;
+          const item = el.closest('.ms-item');
+          const isOn = !el.classList.contains('on');
+          el.classList.toggle('on');
+          item.classList.toggle('on');
+          if (!evalDraft[msid]) evalDraft[msid] = {};
+          evalDraft[msid].enabled = isOn;
+          if (!isOn) { delete evalDraft[msid].level; }
+          updateReviewCount();
+        });
+      });
+      document.querySelectorAll('[data-ms-level]').forEach(el => {
+        el.addEventListener('click', (e) => {
+          e.preventDefault();
+          const msid = el.dataset.msLevel;
+          const lv = parseInt(el.dataset.lv);
+          if (!evalDraft[msid]) evalDraft[msid] = {};
+          evalDraft[msid].level = lv;
+          // 更新視覺
+          el.closest('.ms-level-grid').querySelectorAll('label').forEach(l => l.classList.remove('selected'));
+          el.classList.add('selected');
+          // 確保 toggle 是 on
+          const toggle = document.querySelector(`[data-ms-toggle="${msid}"]`);
+          if (!toggle.classList.contains('on')) {
+            toggle.classList.add('on');
+            toggle.closest('.ms-item').classList.add('on');
+            evalDraft[msid].enabled = true;
+          }
+          updateReviewCount();
+        });
+      });
+      document.querySelectorAll('[data-ms-fb]').forEach(el => {
+        el.addEventListener('input', () => {
+          const msid = el.dataset.msFb;
+          if (!evalDraft[msid]) evalDraft[msid] = {};
+          evalDraft[msid].feedback = el.value;
+        });
+      });
+
+      updateReviewCount();
+      showStep('step2');
+    }
+
+    function updateReviewCount() {
+      const count = Object.values(evalDraft).filter(d => d.enabled && d.level !== undefined).length;
+      const badge = document.getElementById('review-count-badge');
+      if (count > 0) {
+        badge.textContent = `（${count} 筆）`;
+        document.getElementById('btn-review').disabled = false;
+      } else {
+        badge.textContent = '';
+        document.getElementById('btn-review').disabled = true;
+      }
+    }
+
+    document.getElementById('btn-back-to-step1').addEventListener('click', () => showStep('step1'));
+    document.getElementById('btn-back-to-step1-bottom').addEventListener('click', () => showStep('step1'));
+
+    document.getElementById('btn-review').addEventListener('click', () => {
+      const toEval = Object.entries(evalDraft).filter(([id, d]) => d.enabled && d.level !== undefined);
+      if (toEval.length === 0) { alert('❌ 至少要評量一項 Milestone'); return; }
+      renderReview(toEval);
+      showStep('step3');
+    });
+
+    function renderReview(items) {
+      const ev = getEvaluatorInfo();
+      const g = groups.find(x => x.id === currentGroupId);
+
+      // 上方資訊區（TP 樣式 - 三個彩色 tag）
+      let html = `<div class="review-meta">
+        <div class="review-meta-row"><span class="meta-tag blue">📋 評核者</span><span>${ev.name}（${ev.role} / ${ev.unit}）</span></div>
+        <div class="review-meta-row"><span class="meta-tag green">👤 受評學員</span><span><strong>${studentData.name}</strong>（${studentData.classId} 學號 ${studentData.studentNo}）</span></div>
+        <div class="review-meta-row"><span class="meta-tag orange">📌 維度</span><span><strong>${g?.name || currentGroupId}</strong></span></div>
+      </div>`;
+
+      // 表格樣式（TP 設計）
+      html += `<table class="review-table">
+        <thead>
+          <tr>
+            <th style="width:80px">步驟</th>
+            <th>技能項目</th>
+            <th style="width:80px;text-align:center">等級</th>
+            <th>回饋</th>
+          </tr>
+        </thead>
+        <tbody>`;
+      items.forEach(([msid, d]) => {
+        const m = milestones.find(x => x.id === msid);
+        if (!m) return;
+        const fb = (d.feedback || '').trim();
+        html += `<tr>
+          <td class="step-cell">${m.step || '—'}</td>
+          <td class="name-cell">${m.name}</td>
+          <td style="text-align:center"><span class="level-badge lv${d.level}">${d.level}</span></td>
+          <td>${fb || '<span class="empty-fb">—</span>'}</td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+
+      document.getElementById('review-list').innerHTML = html;
+      document.getElementById('submit-count-badge').textContent = `（${items.length} 筆）`;
+    }
+
+    document.getElementById('btn-back-to-step2').addEventListener('click', () => showStep('step2'));
+
+    document.getElementById('btn-submit').addEventListener('click', async () => {
+      const items = Object.entries(evalDraft).filter(([id, d]) => d.enabled && d.level !== undefined);
+      if (items.length === 0) return;
+      const ev = getEvaluatorInfo();
+      const btn = document.getElementById('btn-submit');
+      btn.disabled = true; btn.textContent = '⏳ 寫入中...';
+      document.getElementById('submit-error').innerHTML = '';
+      try {
+        // 用 batch 寫入提高效率
+        const batch = writeBatch(db);
+        const evalIds = [];
+        for (const [msid, d] of items) {
+          const m = milestones.find(x => x.id === msid);
+          if (!m) continue;
+          const ref = doc(collection(db, 'milestone_evaluations'));
+          evalIds.push(ref.id);
+          batch.set(ref, {
+            studentId: studentData.id,
+            studentName: studentData.name,
+            classId: studentData.classId,
+            milestoneId: msid,
+            milestoneName: m.name,
+            groupId: m.groupId,
+            step: m.step || null,
+            evaluatorName: ev.name,
+            evaluatorRole: ev.role,
+            evaluatorRoleCustom: ev.roleCustom,
+            evaluatorUnit: ev.unit,
+            evaluatorUnitCustom: ev.unitCustom,
+            level: d.level,
+            qualitativeFeedback: (d.feedback || '').trim(),
+            tokenId: tokenData.id,
+            evaluatedAt: serverTimestamp()
+          });
+        }
+        await batch.commit();
         // 更新 token 統計
         try {
           await updateDoc(doc(db, 'evaluation_tokens', tokenData.id), {
-            usedCount: increment(1),
-            evaluationIds: arrayUnion(evalRef.id),
+            usedCount: increment(items.length),
+            evaluationIds: arrayUnion(...evalIds),
             lastUsedAt: serverTimestamp()
           });
-        } catch (e) { console.warn('token 更新失敗（不影響評核）:', e); }
+        } catch (e) { console.warn('token 更新失敗:', e); }
 
-        showSuccess();
+        document.getElementById('success-count').textContent = items.length;
+        showStep('success');
       } catch (e) {
         console.error(e);
-        errEl.innerHTML = `<div class="err-msg">❌ 送出失敗：${e.message}</div>`;
+        document.getElementById('submit-error').innerHTML = `<div class="err-msg">❌ 送出失敗：${e.message}</div>`;
         btn.disabled = false;
-        btn.textContent = '📝 送出評核';
+        btn.textContent = '✅ 確認送出';
       }
     });
 
-    // 再評一個
-    document.getElementById('btn-another').addEventListener('click', () => {
-      document.getElementById('eval-form').reset();
-      document.querySelectorAll('#level-grid label').forEach(l => l.classList.remove('selected'));
-      document.getElementById('role-custom').style.display = 'none';
-      document.getElementById('unit-custom').style.display = 'none';
-      document.getElementById('scoring-guide').style.display = 'none';
-      document.getElementById('form-error').innerHTML = '';
-      document.getElementById('btn-submit').disabled = false;
-      document.getElementById('btn-submit').textContent = '📝 送出評核';
-      showForm();
+    document.getElementById('btn-eval-more').addEventListener('click', () => {
+      Object.keys(evalDraft).forEach(k => delete evalDraft[k]);
+      currentGroupId = null;
+      showStep('step1');
     });
 
     init();
