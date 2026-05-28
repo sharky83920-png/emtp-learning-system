@@ -126,6 +126,9 @@
       <button class="tab-button" data-tab="milestones">🎯 Milestone 主檔</button>
       <button class="tab-button" data-tab="skills">🛠️ 核心技術簽核</button>
       <button class="tab-button" data-tab="books">📚 書籍 / 章節</button>
+      <button class="tab-button" data-tab="exams">📊 成績管理</button>
+      <button class="tab-button" data-tab="schedule">📅 出題排程</button>
+      <button class="tab-button" data-tab="questions">❓ 題庫管理</button>
       <button class="tab-button" data-tab="qr">📱 QR 簽核</button>
       <button class="tab-button" data-tab="settings">⚙️ 系統設定</button>
     </nav>
@@ -224,6 +227,45 @@
             <button class="sub-tab" data-subtab="bks-chapters">📖 章節</button>
           </div>
           <div id="books-content"><div class="loading">⏳ 載入中...</div></div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-exams">
+        <div class="card">
+          <h2><span>📊 成績管理</span>
+            <button class="btn btn-ghost" id="btn-refresh-exams">🔄 重新整理</button>
+          </h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
+            💡 兩種成績類型：<strong>河流（每場一個總分）</strong>用於成績趨勢圖、<strong>雷達（6 維度答對/總題）</strong>用於 6 角學科雷達。同一場考試可只上傳一種、也可兩種都上傳。
+          </p>
+          <div class="sub-tabs">
+            <button class="sub-tab active" data-subtab="ex-upload">📤 批次上傳</button>
+            <button class="sub-tab" data-subtab="ex-list">📋 考試管理</button>
+            <button class="sub-tab" data-subtab="ex-batches">📜 批次歷史</button>
+          </div>
+          <div id="exams-content"><div class="loading">⏳ 載入中...</div></div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-schedule">
+        <div class="card">
+          <h2><span>📅 出題排程</span></h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
+            💡 設定班級的應繳出題日、學員必須在指定日期才能出題。已過期未交會標記「缺交」。
+          </p>
+          <div id="schedule-content"><div class="loading">⏳ 載入中...</div></div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-questions">
+        <div class="card">
+          <h2><span>❓ 題庫管理</span>
+            <button class="btn btn-ghost" id="btn-refresh-questions">🔄 重新整理</button>
+          </h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
+            💡 查看所有學員出的題目、可隱藏（不可真刪除、保留編號）、可處理勘誤回報。
+          </p>
+          <div id="questions-content"><div class="loading">⏳ 載入中...</div></div>
         </div>
       </section>
 
@@ -690,6 +732,9 @@
         if (btn.dataset.tab === 'milestones') loadMilestonesPage();
         if (btn.dataset.tab === 'skills') loadSkillsPage();
         if (btn.dataset.tab === 'books') loadBooksPage();
+        if (btn.dataset.tab === 'exams') loadExamsPage();
+        if (btn.dataset.tab === 'schedule') loadSchedulePage();
+        if (btn.dataset.tab === 'questions') loadQuestionsPage();
         if (btn.dataset.tab === 'qr') loadQrPage();
         if (btn.dataset.tab === 'settings') loadSettings();
       });
@@ -2447,6 +2492,671 @@
         renderBooksContent();
       } catch (e) { alert('❌ ' + e.message); }
       finally { btn.disabled = false; btn.textContent = '🚀 一鍵匯入官方資料'; }
+    }
+
+    // ===== F12: 成績管理 =====
+    let exCurrentSubTab = 'ex-upload';
+    let exClassesCache = [];
+    let exStudentsCache = {}; // classId -> students[]
+    let exBatchPreview = null;
+
+    async function loadExamsPage() {
+      const el = document.getElementById('exams-content');
+      el.innerHTML = '<div class="loading">⏳ 載入中...</div>';
+      try {
+        const cSnap = await getDocs(collection(db, 'classes'));
+        exClassesCache = [];
+        cSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) exClassesCache.push({ id: d.id, ...data }); });
+        exClassesCache.sort((a, b) => (b.year || 0) - (a.year || 0));
+        renderExamsContent();
+      } catch (e) { el.innerHTML = `<div class="err-msg">${e.message}</div>`; }
+    }
+    document.getElementById('btn-refresh-exams').addEventListener('click', loadExamsPage);
+    document.querySelectorAll('#tab-exams .sub-tab').forEach(b => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('#tab-exams .sub-tab').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        exCurrentSubTab = b.dataset.subtab;
+        renderExamsContent();
+      });
+    });
+    function renderExamsContent() {
+      const el = document.getElementById('exams-content');
+      if (exCurrentSubTab === 'ex-upload') renderExamUpload(el);
+      else if (exCurrentSubTab === 'ex-list') renderExamList(el);
+      else if (exCurrentSubTab === 'ex-batches') renderBatchHistory(el);
+    }
+
+    async function loadStudentsForClass(classId) {
+      if (exStudentsCache[classId]) return exStudentsCache[classId];
+      const q = query(collection(db, 'students'), where('classId', '==', classId));
+      const snap = await getDocs(q);
+      const students = [];
+      snap.forEach(d => { const data = d.data(); if (data.isActive !== false) students.push({ id: d.id, ...data }); });
+      students.sort((a, b) => (a.studentNo || 0) - (b.studentNo || 0));
+      exStudentsCache[classId] = students;
+      return students;
+    }
+
+    // ----- 批次上傳 -----
+    function renderExamUpload(el) {
+      let html = `
+        <div style="margin-bottom:14px">
+          <label style="color:#94a3b8;font-size:13px;margin-bottom:6px;display:block">成績類型</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <label style="background:#0f172a;border:2px solid #1d4ed8;padding:14px;border-radius:8px;cursor:pointer;display:flex;gap:10px;align-items:center" id="ex-mode-total-label">
+              <input type="radio" name="ex-mode" value="total" checked style="width:18px;height:18px">
+              <div>
+                <div style="color:#e2e8f0;font-weight:600">🌊 河流（單欄總分）</div>
+                <div style="color:#94a3b8;font-size:12px;margin-top:2px">每場考試一個總分（學號+分數 2 欄）</div>
+              </div>
+            </label>
+            <label style="background:#0f172a;border:2px solid #334155;padding:14px;border-radius:8px;cursor:pointer;display:flex;gap:10px;align-items:center" id="ex-mode-radar-label">
+              <input type="radio" name="ex-mode" value="radar" style="width:18px;height:18px">
+              <div>
+                <div style="color:#e2e8f0;font-weight:600">📡 雷達（6 維度）</div>
+                <div style="color:#94a3b8;font-size:12px;margin-top:2px">每場 6 個維度的答對/總題</div>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+          <div class="form-group" style="margin-bottom:0">
+            <label>班級</label>
+            <select id="ex-class"><option value="">請選班級...</option></select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>考試名稱</label>
+            <input type="text" id="ex-name" placeholder="例：0526小考19">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>考試日期</label>
+            <input type="date" id="ex-date">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>考試類型</label>
+            <select id="ex-type">
+              <option value="quiz">小考</option>
+              <option value="midterm">期中考</option>
+              <option value="final">期末考</option>
+              <option value="mock">模擬考</option>
+            </select>
+          </div>
+        </div>
+        <div style="background:#0f172a;padding:12px;border-radius:8px;margin-bottom:12px;font-size:13px;color:#cbd5e1">
+          📝 <strong>推薦流程</strong>：下載空白範例 → Excel 填好 → 上傳檔案 → 預覽 → 寫入
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <button class="btn" id="btn-ex-download-tpl">📥 下載空白範例 CSV</button>
+          <label class="btn btn-green" style="cursor:pointer">📤 上傳填好的 CSV / Excel
+            <input type="file" id="ex-file-input" accept=".csv,.tsv,.txt" style="display:none">
+          </label>
+        </div>
+        <div class="form-group">
+          <label id="ex-data-label">成績資料（學號 [Tab] 分數、每行一筆。可填數字、「請假」、「缺考」、「免修」）</label>
+          <textarea id="ex-data" rows="10" placeholder="（範例）&#10;1	85&#10;2	92&#10;3	請假&#10;4	88"></textarea>
+        </div>
+        <div id="ex-preview"></div>
+        <div id="ex-error"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+          <button class="btn" id="btn-ex-preview">🔍 預覽</button>
+          <button class="btn btn-green" id="btn-ex-commit" disabled>💾 寫入</button>
+          <button class="btn btn-ghost" id="btn-ex-clear">🧹 清空</button>
+        </div>
+      `;
+      el.innerHTML = html;
+      // 填班級下拉
+      const cSel = document.getElementById('ex-class');
+      let ch = '<option value="">請選班級...</option>';
+      exClassesCache.forEach(c => { ch += `<option value="${c.id}">${c.displayName || c.id}</option>`; });
+      cSel.innerHTML = ch;
+      // 預設日期 = 今天
+      document.getElementById('ex-date').valueAsDate = new Date();
+
+      // 模式切換
+      document.querySelectorAll('input[name="ex-mode"]').forEach(r => {
+        r.addEventListener('change', () => {
+          const mode = r.value;
+          document.getElementById('ex-mode-total-label').style.borderColor = mode === 'total' ? '#1d4ed8' : '#334155';
+          document.getElementById('ex-mode-radar-label').style.borderColor = mode === 'radar' ? '#1d4ed8' : '#334155';
+          const lbl = document.getElementById('ex-data-label');
+          const ta = document.getElementById('ex-data');
+          if (mode === 'total') {
+            lbl.textContent = '成績資料（學號 [Tab] 分數、每行一筆。可填數字、「請假」、「缺考」、「免修」）';
+            ta.placeholder = '（範例）\n1\t85\n2\t92\n3\t請假\n4\t88';
+          } else {
+            lbl.textContent = '成績資料（學號 [Tab] D1對 [Tab] D1總 [Tab] D2對 [Tab] D2總 ... D6對 [Tab] D6總、共 13 欄）';
+            ta.placeholder = '（範例、13 欄）\n1\t8\t10\t15\t20\t12\t15\t18\t25\t7\t10\t5\t8';
+          }
+          document.getElementById('btn-ex-commit').disabled = true;
+        });
+      });
+
+      document.getElementById('btn-ex-download-tpl').addEventListener('click', downloadExamTemplate);
+      document.getElementById('btn-ex-preview').addEventListener('click', previewExamUpload);
+      document.getElementById('btn-ex-commit').addEventListener('click', commitExamUpload);
+      document.getElementById('btn-ex-clear').addEventListener('click', () => {
+        document.getElementById('ex-data').value = '';
+        document.getElementById('ex-preview').innerHTML = '';
+        document.getElementById('ex-error').innerHTML = '';
+        document.getElementById('btn-ex-commit').disabled = true;
+        exBatchPreview = null;
+      });
+      document.getElementById('ex-file-input').addEventListener('change', handleExamFileUpload);
+    }
+
+    function downloadExamTemplate() {
+      const mode = document.querySelector('input[name="ex-mode"]:checked').value;
+      let csv;
+      if (mode === 'total') {
+        csv = '學號,分數（數字或請假/缺考/免修）\n1,\n2,\n3,\n';
+      } else {
+        csv = '學號,D1對,D1總,D2對,D2總,D3對,D3總,D4對,D4總,D5對,D5總,D6對,D6總\n1,,,,,,,,,,,,\n2,,,,,,,,,,,,\n';
+      }
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `成績範例_${mode === 'total' ? '河流' : '雷達'}.csv`;
+      a.click();
+    }
+
+    function handleExamFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        let text = ev.target.result;
+        // 移除 BOM
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        // 移除表頭（如果第一行有「學號」字眼）
+        const lines = text.split(/\r?\n/);
+        if (lines[0] && /學號|分數|D\d/.test(lines[0])) lines.shift();
+        // CSV 轉 Tab 分隔
+        const data = lines.map(l => l.replace(/,/g, '\t')).join('\n');
+        document.getElementById('ex-data').value = data.trim();
+        e.target.value = '';
+      };
+      reader.readAsText(file, 'UTF-8');
+    }
+
+    async function previewExamUpload() {
+      const classId = document.getElementById('ex-class').value;
+      const examName = document.getElementById('ex-name').value.trim();
+      const examDate = document.getElementById('ex-date').value;
+      const examType = document.getElementById('ex-type').value;
+      const mode = document.querySelector('input[name="ex-mode"]:checked').value;
+      const raw = document.getElementById('ex-data').value;
+      const errEl = document.getElementById('ex-error');
+      const previewEl = document.getElementById('ex-preview');
+      errEl.innerHTML = ''; previewEl.innerHTML = '';
+      if (!classId) { errEl.innerHTML = '<div class="err-msg">❌ 請選班級</div>'; return; }
+      if (!examName) { errEl.innerHTML = '<div class="err-msg">❌ 請填考試名稱</div>'; return; }
+      if (!examDate) { errEl.innerHTML = '<div class="err-msg">❌ 請填考試日期</div>'; return; }
+
+      const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+      if (lines.length === 0) { errEl.innerHTML = '<div class="err-msg">❌ 無資料</div>'; return; }
+
+      // 載入該班學員（驗證學號）
+      const students = await loadStudentsForClass(classId);
+      const studentByNo = {};
+      students.forEach(s => { studentByNo[String(s.studentNo)] = s; });
+
+      const rows = [];
+      lines.forEach((line, idx) => {
+        const parts = line.split(/\t|,/).map(s => s.trim());
+        const no = parts[0];
+        if (!studentByNo[no]) { rows.push({ line: idx + 1, no, err: `找不到學號 ${no} 的學員` }); return; }
+        const student = studentByNo[no];
+        if (mode === 'total') {
+          const raw = parts[1] || '';
+          const absentKeywords = ['請假', '缺考', '免修'];
+          if (absentKeywords.includes(raw)) {
+            rows.push({ line: idx + 1, no, name: student.name, totalScore: null, status: 'absent_excused', absentReason: raw, ok: true });
+          } else {
+            const score = parseFloat(raw);
+            if (isNaN(score)) { rows.push({ line: idx + 1, no, name: student.name, err: `分數錯誤 "${raw}"` }); return; }
+            if (score < 0 || score > 100) { rows.push({ line: idx + 1, no, name: student.name, err: `分數超出 0-100` }); return; }
+            rows.push({ line: idx + 1, no, name: student.name, totalScore: score, status: 'scored', ok: true });
+          }
+        } else {
+          // 雷達模式：13 欄
+          if (parts.length < 13) { rows.push({ line: idx + 1, no, name: student.name, err: `欄位不足、應有 13 欄（學號 + D1對 + D1總 + ... + D6對 + D6總）` }); return; }
+          const dims = {};
+          let allValid = true;
+          for (let i = 1; i <= 6; i++) {
+            const correct = parseInt(parts[1 + (i-1)*2]);
+            const total = parseInt(parts[2 + (i-1)*2]);
+            if (isNaN(correct) || isNaN(total) || total === 0) { allValid = false; break; }
+            if (correct > total) { allValid = false; break; }
+            dims[`D${i}`] = { correct, total };
+          }
+          if (!allValid) { rows.push({ line: idx + 1, no, name: student.name, err: '6 維度數字格式錯誤（答對 > 總題、或 0 / 非數字）' }); return; }
+          rows.push({ line: idx + 1, no, name: student.name, dimensions: dims, ok: true });
+        }
+      });
+
+      let okCount = rows.filter(r => r.ok).length;
+      let errCount = rows.filter(r => r.err).length;
+
+      let html = `<h4 style="color:#fcd34d;margin:14px 0 8px">預覽結果（${mode === 'total' ? '河流' : '雷達'}）：</h4>`;
+      html += '<table class="table"><thead><tr><th>行</th><th>學號</th><th>姓名</th><th>內容</th><th>狀態</th></tr></thead><tbody>';
+      rows.forEach(r => {
+        let content = '—';
+        if (r.totalScore !== undefined && r.totalScore !== null) content = `<strong style="color:#60a5fa">${r.totalScore} 分</strong>`;
+        else if (r.absentReason) content = `<span class="tag-pill gray">${r.absentReason}</span>`;
+        else if (r.dimensions) {
+          content = Object.entries(r.dimensions).map(([d, v]) => `<span style="background:#1e293b;padding:2px 6px;border-radius:4px;font-size:11px;margin-right:2px">${d}: ${v.correct}/${v.total}</span>`).join('');
+        }
+        const status = r.err ? `<span class="tag-pill red">❌ ${r.err}</span>` : `<span class="tag-pill">✅ OK</span>`;
+        html += `<tr><td class="num">${r.line}</td><td class="num">${r.no}</td><td>${r.name || '—'}</td><td>${content}</td><td>${status}</td></tr>`;
+      });
+      html += '</tbody></table>';
+      html += `<div style="margin-top:12px;display:flex;gap:6px"><span class="tag-pill">有效 ${okCount}</span>${errCount > 0 ? `<span class="tag-pill red">錯誤 ${errCount}</span>` : ''}</div>`;
+      previewEl.innerHTML = html;
+
+      exBatchPreview = { classId, examName, examDate, examType, mode, rows: rows.filter(r => r.ok) };
+      document.getElementById('btn-ex-commit').disabled = okCount === 0;
+      document.getElementById('btn-ex-commit').textContent = `💾 寫入 ${okCount} 筆`;
+    }
+
+    async function commitExamUpload() {
+      if (!exBatchPreview) return;
+      const { classId, examName, examDate, examType, mode, rows } = exBatchPreview;
+      if (!confirm(`確定寫入 ${rows.length} 筆「${examName}」？\n類型：${mode === 'total' ? '河流（總分）' : '雷達（6 維度）'}`)) return;
+      const btn = document.getElementById('btn-ex-commit');
+      btn.disabled = true; btn.textContent = '⏳ 寫入中...';
+      try {
+        // 建立 batch 紀錄
+        const batchRef = doc(collection(db, 'upload_batches'));
+        await setDoc(batchRef, {
+          type: mode === 'total' ? 'exam_total' : 'exam_radar',
+          examName, examDate, examType, classId,
+          recordCount: rows.length,
+          uploadedBy: currentUser.email,
+          uploadedAt: serverTimestamp(),
+          isReverted: false
+        });
+        // 寫入成績（用 batch、每 400 筆一個 batch）
+        const collName = mode === 'total' ? 'exam_scores_total' : 'exam_scores_radar';
+        for (let i = 0; i < rows.length; i += 400) {
+          const slice = rows.slice(i, i + 400);
+          const wbatch = writeBatch(db);
+          slice.forEach(r => {
+            const ref = doc(collection(db, collName));
+            const data = {
+              studentId: `${classId.toLowerCase()}-${r.no}`,
+              studentNo: r.no,
+              classId, examName, examDate, examType,
+              uploadBatchId: batchRef.id,
+              uploadedBy: currentUser.email,
+              uploadedAt: serverTimestamp()
+            };
+            if (mode === 'total') {
+              data.totalScore = r.totalScore;
+              data.status = r.status;
+              if (r.absentReason) data.absentReason = r.absentReason;
+            } else {
+              data.dimensions = r.dimensions;
+            }
+            wbatch.set(ref, data);
+          });
+          await wbatch.commit();
+        }
+        alert(`✅ 寫入成功！\n\n考試：${examName}\n類型：${mode === 'total' ? '河流' : '雷達'}\n筆數：${rows.length}`);
+        document.getElementById('ex-data').value = '';
+        document.getElementById('ex-preview').innerHTML = '';
+        document.getElementById('btn-ex-commit').disabled = true;
+        exBatchPreview = null;
+      } catch (e) {
+        alert('❌ 寫入失敗：' + e.message);
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 寫入';
+      }
+    }
+
+    // ----- 考試管理 -----
+    async function renderExamList(el) {
+      el.innerHTML = '<div class="loading">⏳ 載入考試清單...</div>';
+      try {
+        const [totalSnap, radarSnap] = await Promise.all([
+          getDocs(collection(db, 'exam_scores_total')),
+          getDocs(collection(db, 'exam_scores_radar'))
+        ]);
+        const examMap = {};
+        function addToMap(snap, source) {
+          snap.forEach(d => {
+            const data = d.data();
+            const key = `${data.classId}|${data.examName}`;
+            if (!examMap[key]) examMap[key] = { classId: data.classId, examName: data.examName, examDate: data.examDate, examType: data.examType, totalCount: 0, radarCount: 0, batches: new Set() };
+            if (source === 'total') examMap[key].totalCount++;
+            else examMap[key].radarCount++;
+            if (data.uploadBatchId) examMap[key].batches.add(data.uploadBatchId);
+          });
+        }
+        addToMap(totalSnap, 'total');
+        addToMap(radarSnap, 'radar');
+        const exams = Object.values(examMap).sort((a, b) => (b.examDate || '').localeCompare(a.examDate || ''));
+        if (exams.length === 0) {
+          el.innerHTML = '<div class="placeholder"><div class="icon">📊</div><h3>還沒有考試</h3><p>切到「📤 批次上傳」上傳第一筆</p></div>';
+          return;
+        }
+        const typeLabels = { quiz: '小考', midterm: '期中', final: '期末', mock: '模擬' };
+        let html = '<table class="table"><thead><tr><th>班級</th><th>考試</th><th>日期</th><th>類型</th><th>河流</th><th>雷達</th><th>動作</th></tr></thead><tbody>';
+        exams.forEach(e => {
+          html += `<tr>
+            <td><code>${e.classId}</code></td>
+            <td><strong>${e.examName}</strong></td>
+            <td>${e.examDate || '—'}</td>
+            <td><span class="tag-pill gray">${typeLabels[e.examType] || e.examType || '—'}</span></td>
+            <td style="text-align:center">${e.totalCount > 0 ? `<span class="tag-pill">${e.totalCount} 筆</span>` : '—'}</td>
+            <td style="text-align:center">${e.radarCount > 0 ? `<span class="tag-pill">${e.radarCount} 筆</span>` : '—'}</td>
+            <td>
+              <button class="btn btn-red" data-ex-del-class="${e.classId}" data-ex-del-name="${e.examName}">🗑️ 刪除</button>
+            </td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+        el.innerHTML = html;
+        el.querySelectorAll('button[data-ex-del-class]').forEach(b => b.addEventListener('click', () => deleteExam(b.dataset.exDelClass, b.dataset.exDelName)));
+      } catch (e) { el.innerHTML = `<div class="err-msg">${e.message}</div>`; }
+    }
+
+    async function deleteExam(classId, examName) {
+      if (!confirm(`⚠️ 確定刪除「${examName}」此考試所有成績？\n班級：${classId}\n（包含河流 + 雷達兩種、不可復原）`)) return;
+      try {
+        const qTotal = query(collection(db, 'exam_scores_total'), where('classId', '==', classId), where('examName', '==', examName));
+        const qRadar = query(collection(db, 'exam_scores_radar'), where('classId', '==', classId), where('examName', '==', examName));
+        const [tSnap, rSnap] = await Promise.all([getDocs(qTotal), getDocs(qRadar)]);
+        const wb = writeBatch(db);
+        tSnap.forEach(d => wb.delete(d.ref));
+        rSnap.forEach(d => wb.delete(d.ref));
+        await wb.commit();
+        alert(`✅ 已刪除 ${tSnap.size + rSnap.size} 筆成績`);
+        renderExamList(document.getElementById('exams-content'));
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+
+    // ----- 批次歷史 -----
+    async function renderBatchHistory(el) {
+      el.innerHTML = '<div class="loading">⏳ 載入批次歷史...</div>';
+      try {
+        const snap = await getDocs(collection(db, 'upload_batches'));
+        const batches = [];
+        snap.forEach(d => batches.push({ id: d.id, ...d.data() }));
+        batches.sort((a, b) => {
+          const at = a.uploadedAt?.seconds || 0;
+          const bt = b.uploadedAt?.seconds || 0;
+          return bt - at;
+        });
+        if (batches.length === 0) {
+          el.innerHTML = '<div class="placeholder"><div class="icon">📜</div><h3>還沒有批次紀錄</h3></div>';
+          return;
+        }
+        const typeLabels = { exam_total: '🌊 河流', exam_radar: '📡 雷達' };
+        let html = '<table class="table"><thead><tr><th>時間</th><th>類型</th><th>班級</th><th>考試</th><th>筆數</th><th>狀態</th><th>動作</th></tr></thead><tbody>';
+        batches.forEach(b => {
+          const date = b.uploadedAt?.seconds ? new Date(b.uploadedAt.seconds * 1000).toLocaleString('zh-TW') : '—';
+          const state = b.isReverted ? '<span class="tag-pill gray">↩️ 已撤銷</span>' : '<span class="tag-pill">✅ 有效</span>';
+          html += `<tr>
+            <td style="font-size:12px;color:#94a3b8">${date}</td>
+            <td><span class="tag-pill gray">${typeLabels[b.type] || b.type}</span></td>
+            <td><code>${b.classId || '—'}</code></td>
+            <td>${b.examName || '—'}</td>
+            <td class="num">${b.recordCount || 0}</td>
+            <td>${state}</td>
+            <td>${!b.isReverted ? `<button class="btn btn-orange" data-batch-revert="${b.id}">↩️ Rollback</button>` : '—'}</td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+        el.innerHTML = html;
+        el.querySelectorAll('button[data-batch-revert]').forEach(btn => btn.addEventListener('click', () => rollbackBatch(btn.dataset.batchRevert)));
+      } catch (e) { el.innerHTML = `<div class="err-msg">${e.message}</div>`; }
+    }
+
+    async function rollbackBatch(batchId) {
+      if (!confirm(`⚠️ 確定 rollback 此批次？\n\n會刪除該批次寫入的所有成績、可重新上傳。`)) return;
+      try {
+        const batchDoc = await getDoc(doc(db, 'upload_batches', batchId));
+        if (!batchDoc.exists()) { alert('找不到批次紀錄'); return; }
+        const b = batchDoc.data();
+        const collName = b.type === 'exam_total' ? 'exam_scores_total' : 'exam_scores_radar';
+        const q = query(collection(db, collName), where('uploadBatchId', '==', batchId));
+        const snap = await getDocs(q);
+        const wb = writeBatch(db);
+        snap.forEach(d => wb.delete(d.ref));
+        wb.update(doc(db, 'upload_batches', batchId), { isReverted: true, revertedAt: serverTimestamp(), revertedBy: currentUser.email });
+        await wb.commit();
+        alert(`✅ Rollback 成功、已刪除 ${snap.size} 筆成績`);
+        renderBatchHistory(document.getElementById('exams-content'));
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+
+    // ===== F13-B: 出題排程 =====
+    let schClassesCache = [];
+    let schSelectedClassId = '';
+    let schCache = [];
+
+    async function loadSchedulePage() {
+      const el = document.getElementById('schedule-content');
+      el.innerHTML = '<div class="loading">⏳ 載入中...</div>';
+      try {
+        if (schClassesCache.length === 0) {
+          const cSnap = await getDocs(collection(db, 'classes'));
+          schClassesCache = [];
+          cSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) schClassesCache.push({ id: d.id, ...data }); });
+          schClassesCache.sort((a, b) => (b.year || 0) - (a.year || 0));
+        }
+        renderSchedulePage();
+      } catch (e) { el.innerHTML = `<div class="err-msg">${e.message}</div>`; }
+    }
+
+    function renderSchedulePage() {
+      const el = document.getElementById('schedule-content');
+      let html = `
+        <div class="form-group" style="max-width:340px">
+          <label>選班級</label>
+          <select id="sch-class"><option value="">請選班級...</option></select>
+        </div>
+        <div id="sch-detail"></div>
+      `;
+      el.innerHTML = html;
+      const cSel = document.getElementById('sch-class');
+      let ch = '<option value="">請選班級...</option>';
+      schClassesCache.forEach(c => { ch += `<option value="${c.id}"${c.id === schSelectedClassId ? ' selected' : ''}>${c.displayName || c.id}</option>`; });
+      cSel.innerHTML = ch;
+      cSel.addEventListener('change', () => {
+        schSelectedClassId = cSel.value;
+        loadScheduleForClass();
+      });
+      if (schSelectedClassId) loadScheduleForClass();
+    }
+
+    async function loadScheduleForClass() {
+      const detail = document.getElementById('sch-detail');
+      if (!schSelectedClassId) { detail.innerHTML = ''; return; }
+      detail.innerHTML = '<div class="loading">⏳ 載入排程...</div>';
+      try {
+        const q = query(collection(db, 'question_schedule'), where('classId', '==', schSelectedClassId));
+        const snap = await getDocs(q);
+        schCache = [];
+        snap.forEach(d => { const data = d.data(); if (data.isActive !== false) schCache.push({ id: d.id, ...data }); });
+        schCache.sort((a, b) => (a.scheduledDate || '').localeCompare(b.scheduledDate || ''));
+        renderScheduleDetail();
+      } catch (e) { detail.innerHTML = `<div class="err-msg">${e.message}</div>`; }
+    }
+
+    function renderScheduleDetail() {
+      const detail = document.getElementById('sch-detail');
+      let html = `
+        <div style="background:#0f172a;padding:14px;border-radius:8px;margin-bottom:14px">
+          <h3 style="color:#e2e8f0;font-size:15px;margin-bottom:10px">+ 新增應繳出題日</h3>
+          <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+            <div class="form-group" style="margin-bottom:0">
+              <label>日期</label>
+              <input type="date" id="sch-new-date">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>每位學員當日繳題數</label>
+              <input type="number" id="sch-new-per" value="1" min="1" max="10" style="width:100px">
+            </div>
+            <button class="btn btn-green" id="btn-add-sch">+ 新增排程</button>
+          </div>
+        </div>
+      `;
+      if (schCache.length === 0) {
+        html += '<div class="placeholder"><div class="icon">📅</div><h3>還沒有排程</h3><p>用上方表單新增應繳出題日</p></div>';
+      } else {
+        html += `<h3 style="color:#e2e8f0;font-size:15px;margin-bottom:8px">已設定的應繳日（${schCache.length} 個）</h3>`;
+        html += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
+        schCache.forEach(s => {
+          const d = new Date(s.scheduledDate);
+          const today = new Date(); today.setHours(0,0,0,0);
+          const isPast = d < today;
+          const cls = isPast ? 'gray' : '';
+          html += `<div style="background:${isPast ? '#374151' : '#1d4ed8'};color:white;padding:6px 12px;border-radius:18px;font-size:13px;display:flex;align-items:center;gap:8px">
+            <span>${s.scheduledDate}${s.questionsPerStudent > 1 ? ` (${s.questionsPerStudent} 題)` : ''}</span>
+            <button data-sch-del="${s.id}" style="background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:11px;line-height:1">×</button>
+          </div>`;
+        });
+        html += '</div>';
+      }
+      detail.innerHTML = html;
+      document.getElementById('btn-add-sch').addEventListener('click', addScheduleDate);
+      detail.querySelectorAll('button[data-sch-del]').forEach(b => b.addEventListener('click', () => removeSchedule(b.dataset.schDel)));
+    }
+
+    async function addScheduleDate() {
+      const date = document.getElementById('sch-new-date').value;
+      const per = parseInt(document.getElementById('sch-new-per').value) || 1;
+      if (!date) { alert('❌ 請選日期'); return; }
+      // 檢查重複
+      if (schCache.some(s => s.scheduledDate === date)) { alert('❌ 此日期已存在'); return; }
+      try {
+        await setDoc(doc(collection(db, 'question_schedule')), {
+          classId: schSelectedClassId,
+          scheduledDate: date,
+          questionsPerStudent: per,
+          isActive: true,
+          createdBy: currentUser.email,
+          createdAt: serverTimestamp()
+        });
+        document.getElementById('sch-new-date').value = '';
+        await loadScheduleForClass();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+
+    async function removeSchedule(id) {
+      if (!confirm('確定移除此排程？')) return;
+      try {
+        await updateDoc(doc(db, 'question_schedule', id), { isActive: false, archivedAt: serverTimestamp() });
+        await loadScheduleForClass();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+
+    // ===== F13-A: 題庫管理（查詢 / 隱藏 / 顯示） =====
+    let qmCache = [];
+    let qmBooksCache = [];
+    let qmFilters = { bookId: '', dimension: '', visibility: 'visible' };
+
+    async function loadQuestionsPage() {
+      const el = document.getElementById('questions-content');
+      el.innerHTML = '<div class="loading">⏳ 載入中...</div>';
+      try {
+        const [qSnap, bSnap] = await Promise.all([
+          getDocs(collection(db, 'questions')),
+          getDocs(collection(db, 'books'))
+        ]);
+        qmCache = [];
+        qSnap.forEach(d => qmCache.push({ id: d.id, ...d.data() }));
+        qmCache.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        qmBooksCache = [];
+        bSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) qmBooksCache.push({ id: d.id, ...data }); });
+        renderQuestionsPage();
+      } catch (e) { el.innerHTML = `<div class="err-msg">${e.message}</div>`; }
+    }
+    document.getElementById('btn-refresh-questions').addEventListener('click', loadQuestionsPage);
+
+    function renderQuestionsPage() {
+      const el = document.getElementById('questions-content');
+      // 過濾
+      const filtered = qmCache.filter(q => {
+        if (qmFilters.bookId && q.source?.bookId !== qmFilters.bookId) return false;
+        if (qmFilters.dimension && q.derivedDimension !== qmFilters.dimension) return false;
+        if (qmFilters.visibility === 'visible' && q.isVisible === false) return false;
+        if (qmFilters.visibility === 'hidden' && q.isVisible !== false) return false;
+        return true;
+      });
+
+      let html = `
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:end">
+          <div class="form-group" style="margin-bottom:0">
+            <label>書籍</label>
+            <select id="qm-f-book">
+              <option value="">全部</option>
+              ${qmBooksCache.map(b => `<option value="${b.id}"${qmFilters.bookId === b.id ? ' selected' : ''}>${b.id}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>維度</label>
+            <select id="qm-f-dim">
+              <option value="">全部</option>
+              ${['D1','D2','D3','D4','D5','D6'].map(d => `<option value="${d}"${qmFilters.dimension === d ? ' selected' : ''}>${d}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>顯示狀態</label>
+            <select id="qm-f-vis">
+              <option value="visible"${qmFilters.visibility === 'visible' ? ' selected' : ''}>啟用中</option>
+              <option value="hidden"${qmFilters.visibility === 'hidden' ? ' selected' : ''}>已隱藏</option>
+              <option value="all"${qmFilters.visibility === 'all' ? ' selected' : ''}>全部</option>
+            </select>
+          </div>
+          <div style="color:#94a3b8;font-size:13px;margin-left:auto">符合 ${filtered.length} / 共 ${qmCache.length} 題</div>
+        </div>
+      `;
+      if (filtered.length === 0) {
+        html += '<div class="placeholder"><div class="icon">❓</div><h3>沒有符合的題目</h3><p>學員出題後會在這裡顯示</p></div>';
+      } else {
+        html += '<table class="table"><thead><tr><th>題號</th><th>出題者</th><th>書籍/章</th><th>維度</th><th>難易度</th><th>題目摘要</th><th>狀態</th><th>動作</th></tr></thead><tbody>';
+        filtered.slice(0, 200).forEach(q => {
+          const state = q.isVisible === false ? '<span class="tag-pill gray">🚫 隱藏</span>' : '<span class="tag-pill">✅ 啟用</span>';
+          const dim = q.derivedDimension || '—';
+          const diff = q.difficulty === 'easy' ? '易' : q.difficulty === 'hard' ? '難' : '中';
+          const src = q.source ? `${q.source.bookId || '—'} / Ch${q.source.chapterNumber || '?'}` : '—';
+          const text = (q.questionText || '').substring(0, 40);
+          html += `<tr>
+            <td><code style="background:#0f172a;padding:2px 6px;border-radius:4px;font-size:12px">${q.id}</code></td>
+            <td style="font-size:12px;color:#94a3b8">${q.createdByName || '—'}<br><span style="color:#475569">${q.createdByClassId || '—'}</span></td>
+            <td style="font-size:12px">${src}</td>
+            <td><span class="tag-pill gray">${dim}</span></td>
+            <td>${diff}</td>
+            <td style="font-size:13px">${text}${text.length === 40 ? '...' : ''}</td>
+            <td>${state}</td>
+            <td>
+              ${q.isVisible === false
+                ? `<button class="btn btn-ghost" data-qm-show="${q.id}">👁️ 顯示</button>`
+                : `<button class="btn btn-orange" data-qm-hide="${q.id}">🚫 隱藏</button>`}
+            </td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+        if (filtered.length > 200) html += `<div style="color:#94a3b8;margin-top:10px;font-size:13px;text-align:center">⚠️ 僅顯示前 200 筆、使用過濾器縮小範圍</div>`;
+      }
+      el.innerHTML = html;
+      document.getElementById('qm-f-book').addEventListener('change', (e) => { qmFilters.bookId = e.target.value; renderQuestionsPage(); });
+      document.getElementById('qm-f-dim').addEventListener('change', (e) => { qmFilters.dimension = e.target.value; renderQuestionsPage(); });
+      document.getElementById('qm-f-vis').addEventListener('change', (e) => { qmFilters.visibility = e.target.value; renderQuestionsPage(); });
+      el.querySelectorAll('button[data-qm-hide]').forEach(b => b.addEventListener('click', () => toggleQuestionVis(b.dataset.qmHide, false)));
+      el.querySelectorAll('button[data-qm-show]').forEach(b => b.addEventListener('click', () => toggleQuestionVis(b.dataset.qmShow, true)));
+    }
+
+    async function toggleQuestionVis(id, isVisible) {
+      try {
+        await updateDoc(doc(db, 'questions', id), { isVisible, updatedAt: serverTimestamp(), updatedBy: currentUser.email });
+        const q = qmCache.find(x => x.id === id);
+        if (q) q.isVisible = isVisible;
+        renderQuestionsPage();
+      } catch (e) { alert('❌ ' + e.message); }
     }
 
     // ===== F11-E: QR Code 5 分鐘簽核 =====

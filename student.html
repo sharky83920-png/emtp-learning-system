@@ -112,7 +112,16 @@
         <div class="radar-container">
           <canvas id="academic-radar"></canvas>
         </div>
-        <div class="empty-hint" id="academic-radar-empty-hint">⏳ 尚無考試成績、上傳考試後雷達會自動更新（F12 開發中）</div>
+        <div class="empty-hint" id="academic-radar-empty-hint">⏳ 尚無考試成績、上傳考試後雷達會自動更新</div>
+      </div>
+
+      <!-- F12-B: 歷次考試成績落點趨勢河流圖 -->
+      <div class="milestone-section">
+        <h3>🌊 歷次考試成績落點趨勢</h3>
+        <div style="position:relative;height:280px">
+          <canvas id="score-river-chart"></canvas>
+        </div>
+        <div class="empty-hint" id="score-river-empty-hint">⏳ 尚無考試成績、上傳考試後河流圖會自動更新</div>
       </div>
 
       <!-- F11-A: Milestone 群能力 5 角雷達 -->
@@ -176,6 +185,117 @@
         <div id="core-skills-list"><div class="loading">⏳ 載入中...</div></div>
       </div>
 
+      <!-- F13-C: 新增自創題庫 Modal -->
+      <div id="new-q-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1100;justify-content:center;align-items:flex-start;padding:20px;overflow-y:auto">
+        <div style="background:white;border-radius:14px;max-width:680px;width:100%;margin:auto;overflow:hidden;display:flex;flex-direction:column">
+          <div style="background:linear-gradient(135deg,#10b981,#059669);color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:17px;font-weight:700">➕ 新增自創題庫</div>
+            <button id="btn-new-q-close" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer;line-height:1">×</button>
+          </div>
+          <div style="padding:22px;overflow-y:auto;max-height:80vh">
+            <div class="form-group">
+              <label style="color:#ef4444;font-weight:700">出題日期 <span style="font-size:11px;color:#64748b">(請依規畫進度出題、不開放預繳題目)</span></label>
+              <select id="nq-date"><option value="">⏳ 載入中...</option></select>
+            </div>
+            <div class="form-group">
+              <label>難易度</label>
+              <select id="nq-difficulty">
+                <option value="easy">易</option>
+                <option value="medium" selected>中</option>
+                <option value="hard">難</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>題目內容</label>
+              <textarea id="nq-text" rows="3" placeholder="請輸入題幹..."></textarea>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div class="form-group"><label style="color:#3b82f6">選項 A</label><textarea id="nq-opt-A" rows="2"></textarea></div>
+              <div class="form-group"><label style="color:#3b82f6">選項 B</label><textarea id="nq-opt-B" rows="2"></textarea></div>
+              <div class="form-group"><label style="color:#3b82f6">選項 C</label><textarea id="nq-opt-C" rows="2"></textarea></div>
+              <div class="form-group"><label style="color:#3b82f6">選項 D</label><textarea id="nq-opt-D" rows="2"></textarea></div>
+            </div>
+            <div class="form-group">
+              <label style="color:#10b981;font-weight:700">正確答案</label>
+              <select id="nq-answer">
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+              </select>
+            </div>
+            <div style="background:#f8fafc;border-radius:8px;padding:14px;margin-bottom:14px;border:1px solid #e2e8f0">
+              <div style="color:#1e293b;font-weight:600;margin-bottom:8px">📚 出處（選填、有助於分類）</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+                <div class="form-group" style="margin-bottom:0">
+                  <label style="font-size:12px">書籍</label>
+                  <select id="nq-book"><option value="">—</option></select>
+                </div>
+                <div class="form-group" style="margin-bottom:0">
+                  <label style="font-size:12px">章節</label>
+                  <select id="nq-chapter"><option value="">先選書籍</option></select>
+                </div>
+                <div class="form-group" style="margin-bottom:0">
+                  <label style="font-size:12px">頁碼</label>
+                  <input type="text" id="nq-page" placeholder="例：403">
+                </div>
+              </div>
+              <div id="nq-dim-hint" style="color:#64748b;font-size:12px;margin-top:8px"></div>
+            </div>
+            <div id="nq-error"></div>
+            <button id="btn-submit-question" style="width:100%;background:linear-gradient(135deg,#10b981,#059669);color:white;border:none;padding:14px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:16px;font-weight:700;margin-top:10px">📤 送出題庫</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- F13-D: 我的出題進度 Modal -->
+      <div id="my-progress-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1100;justify-content:center;align-items:center;padding:20px">
+        <div style="background:white;border-radius:14px;max-width:560px;width:100%;padding:24px;max-height:90vh;overflow-y:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+            <h3 style="color:#1e293b;font-size:18px">📈 我的出題進度</h3>
+            <button id="btn-my-progress-close" style="background:#f1f5f9;border:none;font-size:20px;cursor:pointer;color:#64748b;width:32px;height:32px;border-radius:50%">×</button>
+          </div>
+          <div style="display:flex;gap:14px;margin-bottom:14px;font-size:13px">
+            <span><span style="color:#10b981;font-weight:700">●</span> 已交</span>
+            <span><span style="color:#ef4444;font-weight:700">●</span> 缺交</span>
+            <span><span style="color:#cbd5e1;font-weight:700">●</span> 未來</span>
+          </div>
+          <div id="my-progress-grid"></div>
+        </div>
+      </div>
+
+      <!-- F13-E: 答題系統 Modal -->
+      <div id="quiz-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1100;justify-content:center;align-items:flex-start;padding:14px;overflow-y:auto">
+        <div style="background:white;border-radius:14px;max-width:680px;width:100%;margin:auto;overflow:hidden;display:flex;flex-direction:column">
+          <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:14px;opacity:0.9">🎲 隨機綜合測驗</div>
+              <div style="font-size:18px;font-weight:700" id="quiz-progress">第 — / — 題</div>
+            </div>
+            <button id="btn-quiz-close" style="background:rgba(255,255,255,0.2);border:none;color:white;width:34px;height:34px;border-radius:50%;font-size:20px;cursor:pointer;line-height:1">×</button>
+          </div>
+          <div style="background:#f1f5f9;height:6px"><div id="quiz-bar" style="background:linear-gradient(90deg,#6366f1,#8b5cf6);height:100%;width:0%;transition:width 0.3s"></div></div>
+          <div style="padding:24px;overflow-y:auto;max-height:75vh" id="quiz-body">
+            <div class="loading">⏳ 載入中...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- F13-E: 答題結果 Modal -->
+      <div id="quiz-result-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1100;justify-content:center;align-items:flex-start;padding:14px;overflow-y:auto">
+        <div style="background:white;border-radius:14px;max-width:720px;width:100%;margin:auto;overflow:hidden;display:flex;flex-direction:column">
+          <div style="background:linear-gradient(135deg,#14b8a6,#0d9488);color:white;padding:24px;text-align:center">
+            <div style="font-size:14px;opacity:0.9">🎉 測驗完成</div>
+            <div id="quiz-result-score" style="font-size:48px;font-weight:700;margin:8px 0">— 分</div>
+            <div id="quiz-result-meta" style="font-size:14px;opacity:0.9">—</div>
+          </div>
+          <div style="padding:20px;overflow-y:auto;max-height:75vh" id="quiz-result-body"></div>
+          <div style="padding:14px;background:#f8fafc;border-top:1px solid #e2e8f0;display:flex;gap:8px;justify-content:flex-end">
+            <button id="btn-quiz-result-close" style="background:#14b8a6;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600">關閉</button>
+          </div>
+        </div>
+      </div>
+
       <!-- F11-C: 單一 Milestone 河流圖 Modal -->
       <div id="ms-river-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1000;justify-content:center;align-items:flex-start;padding:20px;overflow-y:auto">
         <div style="background:white;border-radius:16px;padding:24px;max-width:680px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);margin:auto">
@@ -200,6 +320,17 @@
         </div>
       </div>
 
+      <!-- F13-C + F13-D + F13-E: 題庫 + 出題進度 + 答題系統 -->
+      <div class="milestone-section">
+        <h3>📝 題庫與答題</h3>
+        <div style="color:#64748b;font-size:13px;margin-bottom:12px">💡 依照排定的出題日累積題庫、隨機抽題練習。</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">
+          <button id="btn-start-quiz" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border:none;padding:14px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:15px;font-weight:700;box-shadow:0 4px 12px rgba(99,102,241,0.3)">🎲 隨機綜合測驗</button>
+          <button id="btn-new-question" style="background:#10b981;color:white;border:none;padding:12px 16px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600">➕ 新增自創題庫</button>
+          <button id="btn-my-progress" style="background:white;color:#3b82f6;border:2px solid #3b82f6;padding:10px 16px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600">📈 我的出題進度</button>
+        </div>
+      </div>
+
       <div class="feature-grid" id="features"><div class="loading">⏳ 載入中...</div></div>
     </main>
   </div>
@@ -207,7 +338,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, Timestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, Timestamp, arrayUnion, runTransaction, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -391,8 +522,8 @@
         // ⚠️ 戰力排行只給指導員看、學員看不到（移除）
         document.getElementById('features').innerHTML = html;
 
-        // F11-A + F11-B + F11-F: 載入 Milestone 雷達 + 核心技術簽核 + 6 角學科雷達
-        await Promise.all([loadAcademicRadar(), loadMilestoneRadar(), loadCoreSkills()]);
+        // F11-A + F11-B + F11-F + F12-B: 載入 Milestone 雷達 + 核心技術簽核 + 6 角學科雷達 + 成績河流圖
+        await Promise.all([loadAcademicRadar(), loadMilestoneRadar(), loadCoreSkills(), loadScoreRiverChart()]);
 
         // F11-E: 偵測 URL ?qr= 自動處理掃 QR 簽核
         const urlParams = new URLSearchParams(location.search);
@@ -480,6 +611,123 @@
       banner.innerHTML = `<div style="font-size:28px">${c.icon}</div><div style="flex:1"><div style="font-weight:700;margin-bottom:4px">${title}</div><div style="font-size:13px;white-space:pre-wrap">${msg}</div></div><button style="background:transparent;border:none;color:${c.text};font-size:22px;cursor:pointer;padding:4px 12px" onclick="this.parentElement.remove()">×</button>`;
       main.insertBefore(banner, main.firstChild);
       if (type === 'success') setTimeout(() => banner.remove(), 8000);
+    }
+
+    // ===== F12-B: 成績河流圖（歷次考試趨勢） =====
+    let scoreRiverChart = null;
+    async function loadScoreRiverChart() {
+      try {
+        const ctx = document.getElementById('score-river-chart');
+        if (!ctx || !window.Chart) return;
+
+        // 1. 讀此學員所有總分（按日期升序）
+        const myQuery = query(collection(db, 'exam_scores_total'), where('studentId', '==', currentStudent.id));
+        const mySnap = await getDocs(myQuery);
+        const myScores = [];
+        mySnap.forEach(d => myScores.push(d.data()));
+        myScores.sort((a, b) => (a.examDate || '').localeCompare(b.examDate || ''));
+
+        // 2. 讀同班所有總分（算各場考試的班級平均）
+        const classQuery = query(collection(db, 'exam_scores_total'), where('classId', '==', currentStudent.classId));
+        const classSnap = await getDocs(classQuery);
+        const classScores = [];
+        classSnap.forEach(d => classScores.push(d.data()));
+
+        const hint = document.getElementById('score-river-empty-hint');
+        if (myScores.length === 0) {
+          hint.style.display = 'block';
+          ctx.style.display = 'none';
+          return;
+        }
+        hint.style.display = 'none';
+        ctx.style.display = 'block';
+
+        // 3. 班級平均 by examName（同場考試所有有效分數平均）
+        const classByExam = {};
+        classScores.forEach(s => {
+          if (s.status !== 'scored' || s.totalScore == null) return;
+          const k = s.examName;
+          if (!classByExam[k]) classByExam[k] = { sum: 0, n: 0, date: s.examDate };
+          classByExam[k].sum += s.totalScore;
+          classByExam[k].n++;
+        });
+
+        // 4. labels + datasets
+        const labels = myScores.map(s => {
+          if (s.examDate) {
+            const d = new Date(s.examDate);
+            return `${d.getMonth() + 1}/${d.getDate()}`;
+          }
+          return s.examName;
+        });
+        const myData = myScores.map(s => s.status === 'scored' && s.totalScore != null ? s.totalScore : null);
+        const classAvgData = myScores.map(s => {
+          const c = classByExam[s.examName];
+          return c && c.n > 0 ? c.sum / c.n : null;
+        });
+        const passLine = myScores.map(() => 75);
+
+        if (scoreRiverChart) scoreRiverChart.destroy();
+        scoreRiverChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: '你的綜合得分',
+                data: myData,
+                borderColor: 'rgba(59, 130, 246, 1)',
+                backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+                pointBorderColor: '#fff',
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                borderWidth: 3,
+                fill: false,
+                tension: 0.3,
+                spanGaps: true
+              },
+              {
+                label: '班級平均',
+                data: classAvgData,
+                borderColor: 'rgba(148, 163, 184, 0.8)',
+                backgroundColor: 'rgba(148, 163, 184, 0.1)',
+                pointBackgroundColor: 'rgba(148, 163, 184, 0.8)',
+                pointRadius: 3,
+                borderWidth: 2,
+                borderDash: [4, 4],
+                fill: false,
+                tension: 0.3,
+                spanGaps: true
+              },
+              {
+                label: '及格門檻 (75 分)',
+                data: passLine,
+                borderColor: 'rgba(239, 68, 68, 0.7)',
+                backgroundColor: 'transparent',
+                pointRadius: 0,
+                borderWidth: 1.5,
+                borderDash: [6, 4],
+                fill: false
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              y: { min: 30, max: 100, ticks: { stepSize: 10, color: '#64748b' }, grid: { color: 'rgba(148, 163, 184, 0.2)' } },
+              x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(148, 163, 184, 0.1)' } }
+            },
+            plugins: { legend: { position: 'bottom', labels: { padding: 12, font: { size: 12 } } } }
+          }
+        });
+      } catch (e) {
+        console.error('[F12-B] loadScoreRiverChart error:', e);
+        const hint = document.getElementById('score-river-empty-hint');
+        if (hint) hint.innerHTML = `❌ 載入失敗：${e.message}`;
+      }
     }
 
     // ===== F11-F: 6 角學科雷達（D1-D6） =====
@@ -1062,6 +1310,439 @@
     document.getElementById('eval-link-modal').addEventListener('click', (e) => {
       if (e.target === e.currentTarget) document.getElementById('eval-link-modal').style.display = 'none';
     });
+
+    // ===== F13-C: 新增自創題庫 =====
+    let nqSchedule = [];
+    let nqBooks = [];
+    let nqChapters = [];
+
+    document.getElementById('btn-new-question').addEventListener('click', openNewQuestionModal);
+    document.getElementById('btn-new-q-close').addEventListener('click', () => document.getElementById('new-q-modal').style.display = 'none');
+    document.getElementById('new-q-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('new-q-modal').style.display = 'none'; });
+
+    async function openNewQuestionModal() {
+      try {
+        // 1. 讀此班級的出題排程（依日期降序、過濾未過期太久）
+        const schQ = query(collection(db, 'question_schedule'), where('classId', '==', currentStudent.classId));
+        const schSnap = await getDocs(schQ);
+        nqSchedule = [];
+        schSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) nqSchedule.push({ id: d.id, ...data }); });
+        const today = new Date(); today.setHours(0,0,0,0);
+        // 依日期降序
+        nqSchedule.sort((a, b) => (b.scheduledDate || '').localeCompare(a.scheduledDate || ''));
+        // 過濾：不能選未來日期、可選最近 / 過往
+        const valid = nqSchedule.filter(s => new Date(s.scheduledDate) <= today);
+        const recent = valid.slice(0, 3);
+        const past = valid.slice(3);
+
+        const dateSel = document.getElementById('nq-date');
+        let dh = '<option value="">-- 請選擇排定的出題日 --</option>';
+        if (recent.length > 0) {
+          dh += '<optgroup label="🔥 最近可繳交 (近期 3 筆)">';
+          recent.forEach(s => { dh += `<option value="${s.scheduledDate}">${s.scheduledDate}</option>`; });
+          dh += '</optgroup>';
+        }
+        if (past.length > 0) {
+          dh += '<optgroup label="📁 歷史排程 (過往日期)">';
+          past.forEach(s => { dh += `<option value="${s.scheduledDate}">${s.scheduledDate}</option>`; });
+          dh += '</optgroup>';
+        }
+        if (valid.length === 0) dh += '<option value="">⚠️ 還沒有可選的出題日（請聯絡指導員設定排程）</option>';
+        dateSel.innerHTML = dh;
+
+        // 2. 讀書籍
+        if (nqBooks.length === 0) {
+          const bSnap = await getDocs(collection(db, 'books'));
+          nqBooks = [];
+          bSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) nqBooks.push({ id: d.id, ...data }); });
+          nqBooks.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+        }
+        const bookSel = document.getElementById('nq-book');
+        let bh = '<option value="">—</option>';
+        nqBooks.forEach(b => { bh += `<option value="${b.id}">${b.id}</option>`; });
+        bookSel.innerHTML = bh;
+
+        // 3. 讀章節（全部、之後依書籍過濾）
+        if (nqChapters.length === 0) {
+          const cSnap = await getDocs(collection(db, 'chapters'));
+          nqChapters = [];
+          cSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) nqChapters.push({ id: d.id, ...data }); });
+        }
+
+        // 重置表單
+        document.getElementById('nq-difficulty').value = 'medium';
+        document.getElementById('nq-text').value = '';
+        ['A','B','C','D'].forEach(x => { document.getElementById('nq-opt-' + x).value = ''; });
+        document.getElementById('nq-answer').value = 'A';
+        document.getElementById('nq-book').value = '';
+        document.getElementById('nq-chapter').innerHTML = '<option value="">先選書籍</option>';
+        document.getElementById('nq-page').value = '';
+        document.getElementById('nq-dim-hint').textContent = '';
+        document.getElementById('nq-error').innerHTML = '';
+
+        document.getElementById('new-q-modal').style.display = 'flex';
+      } catch (e) {
+        alert('❌ 載入失敗：' + e.message);
+      }
+    }
+
+    // 選書籍 → 過濾章節下拉
+    document.getElementById('nq-book').addEventListener('change', () => {
+      const bookId = document.getElementById('nq-book').value;
+      const chSel = document.getElementById('nq-chapter');
+      if (!bookId) { chSel.innerHTML = '<option value="">先選書籍</option>'; document.getElementById('nq-dim-hint').textContent = ''; return; }
+      const chs = nqChapters.filter(c => c.bookId === bookId).sort((a, b) => (parseInt(a.chapterNumber) || 0) - (parseInt(b.chapterNumber) || 0));
+      let ch = '<option value="">請選章節</option>';
+      chs.forEach(c => { ch += `<option value="${c.id}" data-dim="${c.dimension || ''}" data-num="${c.chapterNumber}">Ch ${c.chapterNumber} ${c.chapterName || ''}</option>`; });
+      chSel.innerHTML = ch;
+      document.getElementById('nq-dim-hint').textContent = '';
+    });
+
+    // 選章節 → 顯示對應維度
+    document.getElementById('nq-chapter').addEventListener('change', () => {
+      const sel = document.getElementById('nq-chapter');
+      const dim = sel.selectedOptions[0]?.dataset.dim;
+      const hint = document.getElementById('nq-dim-hint');
+      if (dim) {
+        const dimNames = { D1: '緊急救護系統', D2: '基礎醫學含評估', D3: '創傷', D4: '非創傷', D5: '特殊族群', D6: '災難及特殊情境' };
+        hint.innerHTML = `✅ 此題會自動歸類到 <strong style="color:#10b981">${dim} ${dimNames[dim] || ''}</strong>（6 角雷達 A2 計算用）`;
+      } else {
+        hint.textContent = '⚠️ 此章節未設定維度、不會計入 6 角雷達';
+      }
+    });
+
+    // 送出題庫
+    document.getElementById('btn-submit-question').addEventListener('click', async () => {
+      const errEl = document.getElementById('nq-error');
+      errEl.innerHTML = '';
+      const scheduledDate = document.getElementById('nq-date').value;
+      const difficulty = document.getElementById('nq-difficulty').value;
+      const questionText = document.getElementById('nq-text').value.trim();
+      const optA = document.getElementById('nq-opt-A').value.trim();
+      const optB = document.getElementById('nq-opt-B').value.trim();
+      const optC = document.getElementById('nq-opt-C').value.trim();
+      const optD = document.getElementById('nq-opt-D').value.trim();
+      const correctAnswer = document.getElementById('nq-answer').value;
+      const bookId = document.getElementById('nq-book').value;
+      const chapterSel = document.getElementById('nq-chapter');
+      const chapterId = chapterSel.value;
+      const chapterNumber = chapterSel.selectedOptions[0]?.dataset.num || '';
+      const dimension = chapterSel.selectedOptions[0]?.dataset.dim || '';
+      const page = document.getElementById('nq-page').value.trim();
+
+      if (!scheduledDate) { errEl.innerHTML = '<div class="err-msg">❌ 請選出題日期</div>'; return; }
+      if (!questionText) { errEl.innerHTML = '<div class="err-msg">❌ 請填題目內容</div>'; return; }
+      if (!optA || !optB || !optC || !optD) { errEl.innerHTML = '<div class="err-msg">❌ 4 個選項都要填</div>'; return; }
+
+      const btn = document.getElementById('btn-submit-question');
+      btn.disabled = true; btn.textContent = '⏳ 送出中...';
+
+      try {
+        // 流水號（民國年月日）
+        const today = new Date();
+        const rocY = today.getFullYear() - 1911;
+        const dateStr = `${rocY}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+
+        // Transaction 確保流水號唯一
+        const counterRef = doc(db, 'counters', dateStr);
+        const questionId = await runTransaction(db, async (tx) => {
+          const counterDoc = await tx.get(counterRef);
+          let nextNum = 1;
+          if (counterDoc.exists()) nextNum = (counterDoc.data().lastNumber || 0) + 1;
+          const qid = `${dateStr}-${nextNum}`;
+          const qRef = doc(db, 'questions', qid);
+          tx.set(qRef, {
+            serialDate: dateStr,
+            serialNumber: nextNum,
+            createdBy: currentStudent.id,
+            createdByName: currentStudent.name,
+            createdByRole: 'student',
+            createdByClassId: currentStudent.classId,
+            scheduledDate,
+            questionText,
+            questionImageUrl: null,
+            difficulty,
+            options: {
+              A: { text: optA, imageUrl: null },
+              B: { text: optB, imageUrl: null },
+              C: { text: optC, imageUrl: null },
+              D: { text: optD, imageUrl: null }
+            },
+            correctAnswer,
+            source: {
+              bookId: bookId || null,
+              chapterId: chapterId || null,
+              chapterNumber: chapterNumber || null,
+              page: page || null
+            },
+            derivedDimension: dimension || null,
+            attemptCount: 0,
+            correctRate: 0,
+            reportCount: 0,
+            isVisible: true,
+            isActive: true,
+            createdAt: serverTimestamp()
+          });
+          tx.set(counterRef, { date: dateStr, lastNumber: nextNum, updatedAt: serverTimestamp() }, { merge: true });
+          return qid;
+        });
+
+        // 寫繳交紀錄
+        await setDoc(doc(collection(db, 'question_submissions')), {
+          studentId: currentStudent.id,
+          studentName: currentStudent.name,
+          classId: currentStudent.classId,
+          scheduledDate,
+          questionId,
+          status: 'submitted',
+          submittedAt: serverTimestamp()
+        });
+
+        alert(`✅ 題目已送出！\n\n題號：${questionId}\n出題日：${scheduledDate}`);
+        document.getElementById('new-q-modal').style.display = 'none';
+      } catch (e) {
+        console.error(e);
+        errEl.innerHTML = `<div class="err-msg">❌ 送出失敗：${e.message}</div>`;
+        btn.disabled = false; btn.textContent = '📤 送出題庫';
+      } finally {
+        btn.disabled = false; btn.textContent = '📤 送出題庫';
+      }
+    });
+
+    // ===== F13-D: 我的出題進度 =====
+    document.getElementById('btn-my-progress').addEventListener('click', openMyProgressModal);
+    document.getElementById('btn-my-progress-close').addEventListener('click', () => document.getElementById('my-progress-modal').style.display = 'none');
+    document.getElementById('my-progress-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('my-progress-modal').style.display = 'none'; });
+
+    async function openMyProgressModal() {
+      const grid = document.getElementById('my-progress-grid');
+      grid.innerHTML = '<div class="loading">⏳ 載入中...</div>';
+      document.getElementById('my-progress-modal').style.display = 'flex';
+      try {
+        // 班級排程
+        const schQ = query(collection(db, 'question_schedule'), where('classId', '==', currentStudent.classId));
+        const schSnap = await getDocs(schQ);
+        const sch = [];
+        schSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) sch.push(data); });
+        sch.sort((a, b) => (a.scheduledDate || '').localeCompare(b.scheduledDate || ''));
+
+        // 我的繳交紀錄
+        const subQ = query(collection(db, 'question_submissions'), where('studentId', '==', currentStudent.id));
+        const subSnap = await getDocs(subQ);
+        const submittedDates = new Set();
+        subSnap.forEach(d => submittedDates.add(d.data().scheduledDate));
+
+        const today = new Date(); today.setHours(0,0,0,0);
+
+        if (sch.length === 0) {
+          grid.innerHTML = '<div class="empty-hint">尚無出題排程、請聯絡指導員設定</div>';
+          return;
+        }
+
+        let html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">';
+        sch.forEach(s => {
+          const d = new Date(s.scheduledDate);
+          const isPast = d < today;
+          const isFuture = d > today;
+          const isSubmitted = submittedDates.has(s.scheduledDate);
+          let bg, color, icon;
+          if (isSubmitted) { bg = '#10b981'; color = 'white'; icon = '✓'; }
+          else if (isPast) { bg = '#ef4444'; color = 'white'; icon = '✗'; }
+          else { bg = '#f1f5f9'; color = '#94a3b8'; icon = '○'; }
+          html += `<div style="background:${bg};color:${color};padding:12px 6px;border-radius:8px;text-align:center;border:1px solid #e2e8f0">
+            <div style="font-size:13px;font-weight:600">${s.scheduledDate.substring(5)}</div>
+            <div style="font-size:18px;margin-top:4px">${icon}</div>
+          </div>`;
+        });
+        html += '</div>';
+
+        // 統計
+        const done = sch.filter(s => submittedDates.has(s.scheduledDate)).length;
+        const overdue = sch.filter(s => !submittedDates.has(s.scheduledDate) && new Date(s.scheduledDate) < today).length;
+        const future = sch.filter(s => new Date(s.scheduledDate) > today).length;
+        html += `<div style="margin-top:14px;background:#f8fafc;padding:12px;border-radius:8px;display:flex;justify-content:space-around;font-size:13px">
+          <div><strong style="color:#10b981">已交 ${done}</strong></div>
+          <div><strong style="color:#ef4444">缺交 ${overdue}</strong></div>
+          <div><strong style="color:#94a3b8">未來 ${future}</strong></div>
+        </div>`;
+        grid.innerHTML = html;
+      } catch (e) {
+        grid.innerHTML = `<div class="err-msg">${e.message}</div>`;
+      }
+    }
+
+    // ===== F13-E: 答題系統 =====
+    let quizState = null; // { questions, currentIdx, answers, startedAt }
+    const QUIZ_SIZE = 10;
+
+    document.getElementById('btn-start-quiz').addEventListener('click', startQuiz);
+    document.getElementById('btn-quiz-close').addEventListener('click', () => {
+      if (quizState && quizState.currentIdx < quizState.questions.length) {
+        if (!confirm('確定離開測驗？\n\n未完成的紀錄不會儲存。')) return;
+      }
+      document.getElementById('quiz-modal').style.display = 'none';
+      quizState = null;
+    });
+    document.getElementById('btn-quiz-result-close').addEventListener('click', async () => {
+      document.getElementById('quiz-result-modal').style.display = 'none';
+      // 重新整理 6 角雷達 + 核心技術（A2 雷達會更新）
+      try { await loadAcademicRadar(); } catch (e) {}
+    });
+
+    async function startQuiz() {
+      const btn = document.getElementById('btn-start-quiz');
+      btn.disabled = true; btn.textContent = '⏳ 抽題中...';
+      try {
+        // 抽題：取所有 visible & active
+        const snap = await getDocs(collection(db, 'questions'));
+        const all = [];
+        snap.forEach(d => {
+          const data = d.data();
+          if (data.isVisible !== false && data.isActive !== false) all.push({ id: d.id, ...data });
+        });
+        if (all.length === 0) {
+          alert('⚠️ 題庫目前沒有題目、請先讓學員出題！');
+          return;
+        }
+        // 洗牌
+        for (let i = all.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [all[i], all[j]] = [all[j], all[i]];
+        }
+        const picked = all.slice(0, Math.min(QUIZ_SIZE, all.length));
+        quizState = { questions: picked, currentIdx: 0, answers: [], startedAt: Date.now(), sessionId: 'sess_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) };
+        document.getElementById('quiz-modal').style.display = 'flex';
+        renderQuizQuestion();
+      } catch (e) {
+        alert('❌ 抽題失敗：' + e.message);
+      } finally {
+        btn.disabled = false; btn.textContent = '🎲 隨機綜合測驗';
+      }
+    }
+
+    function renderQuizQuestion() {
+      if (!quizState) return;
+      const q = quizState.questions[quizState.currentIdx];
+      const total = quizState.questions.length;
+      const idx = quizState.currentIdx;
+      document.getElementById('quiz-progress').textContent = `第 ${idx + 1} / ${total} 題`;
+      document.getElementById('quiz-bar').style.width = `${(idx / total) * 100}%`;
+
+      const diffLabel = { easy: '🟢 易', medium: '🟡 中', hard: '🔴 難' };
+      const opts = q.options || {};
+      let html = `
+        <div style="display:flex;gap:8px;margin-bottom:14px;font-size:12px">
+          <span style="background:#f1f5f9;color:#475569;padding:3px 10px;border-radius:10px;font-family:monospace">${q.id}</span>
+          <span style="background:#f1f5f9;color:#475569;padding:3px 10px;border-radius:10px">${diffLabel[q.difficulty] || ''}</span>
+          ${q.derivedDimension ? `<span style="background:#dbeafe;color:#1e40af;padding:3px 10px;border-radius:10px">${q.derivedDimension}</span>` : ''}
+        </div>
+        <div style="font-size:16px;line-height:1.7;color:#1e293b;margin-bottom:18px;white-space:pre-wrap">${q.questionText || ''}</div>
+        <div id="quiz-opts" style="display:flex;flex-direction:column;gap:10px">
+          ${['A','B','C','D'].map(k => `
+            <button class="quiz-opt-btn" data-opt="${k}" style="background:white;border:2px solid #e2e8f0;padding:14px 18px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:15px;text-align:left;color:#1e293b;transition:all 0.15s;display:flex;gap:12px;align-items:flex-start">
+              <span style="background:#f1f5f9;color:#3b82f6;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">${k}</span>
+              <span style="flex:1;white-space:pre-wrap">${opts[k]?.text || ''}</span>
+            </button>
+          `).join('')}
+        </div>
+        <div id="quiz-feedback" style="display:none;margin-top:18px"></div>
+      `;
+      document.getElementById('quiz-body').innerHTML = html;
+      document.querySelectorAll('.quiz-opt-btn').forEach(btn => {
+        btn.addEventListener('click', () => answerQuiz(btn.dataset.opt));
+      });
+    }
+
+    function answerQuiz(opt) {
+      const q = quizState.questions[quizState.currentIdx];
+      const correct = q.correctAnswer;
+      const isCorrect = opt === correct;
+      // 鎖按鈕
+      document.querySelectorAll('.quiz-opt-btn').forEach(btn => {
+        btn.disabled = true;
+        btn.style.cursor = 'default';
+        const optKey = btn.dataset.opt;
+        if (optKey === correct) {
+          btn.style.background = '#dcfce7';
+          btn.style.borderColor = '#10b981';
+        } else if (optKey === opt && !isCorrect) {
+          btn.style.background = '#fef2f2';
+          btn.style.borderColor = '#ef4444';
+        }
+      });
+      // 紀錄
+      quizState.answers.push({ questionId: q.id, selectedAnswer: opt, correctAnswer: correct, isCorrect, dimension: q.derivedDimension || null });
+      // 顯示回饋
+      const fb = document.getElementById('quiz-feedback');
+      let fbHtml = `<div style="background:${isCorrect ? '#dcfce7' : '#fef2f2'};border-left:4px solid ${isCorrect ? '#10b981' : '#ef4444'};color:${isCorrect ? '#065f46' : '#991b1b'};padding:12px 16px;border-radius:8px;margin-bottom:12px;font-weight:600">${isCorrect ? '✅ 答對了！' : `❌ 答錯了、正確答案是 ${correct}`}</div>`;
+      if (q.explanation) fbHtml += `<div style="background:#f8fafc;padding:12px 16px;border-radius:8px;margin-bottom:12px;font-size:14px;color:#334155">💡 ${q.explanation}</div>`;
+      if (q.source?.bookId) fbHtml += `<div style="color:#94a3b8;font-size:12px;margin-bottom:12px">📚 出處：${q.source.bookId}${q.source.chapterNumber ? ' Ch' + q.source.chapterNumber : ''}${q.source.page ? ' p.' + q.source.page : ''}</div>`;
+      const isLast = quizState.currentIdx === quizState.questions.length - 1;
+      fbHtml += `<button id="btn-quiz-next" style="width:100%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border:none;padding:14px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:15px;font-weight:700">${isLast ? '📊 看測驗結果' : '➡️ 下一題'}</button>`;
+      fb.innerHTML = fbHtml;
+      fb.style.display = 'block';
+      document.getElementById('btn-quiz-next').addEventListener('click', nextQuizQuestion);
+    }
+
+    async function nextQuizQuestion() {
+      quizState.currentIdx++;
+      if (quizState.currentIdx >= quizState.questions.length) {
+        await finishQuiz();
+      } else {
+        renderQuizQuestion();
+      }
+    }
+
+    async function finishQuiz() {
+      // 計算總分
+      const correct = quizState.answers.filter(a => a.isCorrect).length;
+      const total = quizState.answers.length;
+      const score = Math.round((correct / total) * 100);
+      // 寫入 question_attempts（用 batch）
+      try {
+        // 先查每題是否首刷（簡化：直接寫、isFirstAttempt 統一 true、之後 server 校正）
+        const wb = [];
+        for (const a of quizState.answers) {
+          const ref = doc(collection(db, 'question_attempts'));
+          wb.push(setDoc(ref, {
+            studentId: currentStudent.id,
+            classId: currentStudent.classId,
+            questionId: a.questionId,
+            dimension: a.dimension,
+            selectedAnswer: a.selectedAnswer,
+            correctAnswer: a.correctAnswer,
+            isCorrect: a.isCorrect,
+            isFirstAttempt: true,
+            examMode: 'scoring',
+            examSessionId: quizState.sessionId,
+            attemptedAt: serverTimestamp()
+          }));
+        }
+        await Promise.all(wb);
+      } catch (e) { console.warn('寫入 attempts:', e); }
+
+      // 顯示結果
+      document.getElementById('quiz-modal').style.display = 'none';
+      document.getElementById('quiz-result-score').textContent = `${score} 分`;
+      document.getElementById('quiz-result-meta').textContent = `答對 ${correct} / ${total} 題`;
+      let html = '<h4 style="color:#1e293b;font-size:15px;margin-bottom:12px">📋 測驗檢討</h4>';
+      quizState.answers.forEach((a, idx) => {
+        const q = quizState.questions[idx];
+        const bg = a.isCorrect ? '#f0fdf4' : '#fef2f2';
+        const color = a.isCorrect ? '#10b981' : '#ef4444';
+        const icon = a.isCorrect ? '✅' : '❌';
+        html += `<div style="background:${bg};border-left:4px solid ${color};padding:10px 14px;margin-bottom:8px;border-radius:0 8px 8px 0">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+            <div style="color:#64748b;font-size:12px;font-family:monospace">${idx + 1}. ${q.id}</div>
+            <div style="color:${color};font-weight:700;font-size:13px">${icon} 你選 ${a.selectedAnswer}${a.isCorrect ? '' : '・正解 ' + a.correctAnswer}</div>
+          </div>
+          <div style="color:#1e293b;font-size:13px;line-height:1.5">${(q.questionText || '').substring(0, 80)}${q.questionText && q.questionText.length > 80 ? '...' : ''}</div>
+        </div>`;
+      });
+      document.getElementById('quiz-result-body').innerHTML = html;
+      document.getElementById('quiz-result-modal').style.display = 'flex';
+      quizState = null;
+    }
 
     document.getElementById('btn-logout').addEventListener('click', () => { if (confirm('確定要登出嗎？')) signOut(auth); });
   </script>
