@@ -14,7 +14,8 @@
     .form-group { margin-bottom: 16px; }
     .form-group label { display: block; color: #94a3b8; font-size: 12px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
     .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 14px; background: #0f172a; border: 1px solid #334155; color: #e2e8f0; border-radius: 6px; font-family: inherit; font-size: 15px; }
-    .form-group input:focus, .form-group select:focus { outline: none; border-color: #60a5fa; }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #60a5fa; }
+    .form-group textarea { resize: vertical; font-family: monospace; line-height: 1.5; }
     .btn { background: #3b82f6; color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
     .btn:hover { background: #2563eb; }
     .btn:disabled { background: #475569; cursor: not-allowed; }
@@ -28,6 +29,7 @@
     .btn-orange { background: #f59e0b; color: #1e293b; }
     .err-msg { background: #7f1d1d; color: #fecaca; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-top: 12px; }
     .ok-msg { background: #064e3b; color: #6ee7b7; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-top: 12px; }
+    .warn-msg { background: #78350f; color: #fef3c7; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-top: 12px; }
     .dashboard { display: none; }
     .header { background: #1e293b; padding: 16px 24px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
     .header h1 { font-size: 20px; color: #f1f5f9; }
@@ -41,7 +43,7 @@
     .tab-content { display: none; }
     .tab-content.active { display: block; }
     .card { background: #1e293b; border-radius: 10px; padding: 24px; margin-bottom: 20px; border: 1px solid #334155; }
-    .card h2 { color: #f1f5f9; font-size: 18px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
+    .card h2 { color: #f1f5f9; font-size: 18px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .placeholder { text-align: center; padding: 60px 20px; color: #94a3b8; }
     .placeholder .icon { font-size: 72px; margin-bottom: 16px; }
     .placeholder h3 { color: #e2e8f0; margin-bottom: 8px; font-size: 22px; }
@@ -54,17 +56,21 @@
     .table th, .table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #2d3a52; font-size: 14px; }
     .table th { color: #94a3b8; font-weight: 500; font-size: 12px; text-transform: uppercase; background: #172033; }
     .table tr:hover td { background: #243248; }
+    .table td.num { text-align: right; font-family: monospace; }
     .tag-pill { display: inline-block; background: #064e3b; color: #6ee7b7; padding: 2px 10px; border-radius: 12px; font-size: 12px; }
     .tag-pill.gray { background: #334155; color: #cbd5e1; }
     .tag-pill.yellow { background: #78350f; color: #fcd34d; }
+    .tag-pill.red { background: #7f1d1d; color: #fca5a5; }
+    .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .toolbar select { width: auto; min-width: 200px; }
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); z-index: 1000; justify-content: center; align-items: flex-start; padding: 40px 20px; overflow-y: auto; }
     .modal-overlay.active { display: flex; }
-    .modal { background: #1e293b; border-radius: 12px; max-width: 600px; width: 100%; border: 1px solid #334155; }
+    .modal { background: #1e293b; border-radius: 12px; max-width: 700px; width: 100%; border: 1px solid #334155; }
     .modal-header { padding: 16px 24px; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
     .modal-header h3 { color: #f1f5f9; font-size: 16px; }
     .modal-close { background: none; border: none; color: #94a3b8; font-size: 28px; cursor: pointer; line-height: 1; }
-    .modal-body { padding: 20px 24px; }
-    .modal-footer { padding: 16px 24px; border-top: 1px solid #334155; display: flex; justify-content: flex-end; gap: 8px; }
+    .modal-body { padding: 20px 24px; max-height: 70vh; overflow-y: auto; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid #334155; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
     .loading { color: #94a3b8; text-align: center; padding: 30px; }
   </style>
 </head>
@@ -74,8 +80,8 @@
     <div class="login-card">
       <h1>🛠 EMTP 管理後台</h1>
       <p class="subtitle">請使用管理員 Email + 密碼登入</p>
-      <div class="form-group"><label>Email</label><input type="email" id="login-email" placeholder="admin@example.com"></div>
-      <div class="form-group"><label>密碼</label><input type="password" id="login-password" placeholder="••••••••"></div>
+      <div class="form-group"><label>Email</label><input type="email" id="login-email"></div>
+      <div class="form-group"><label>密碼</label><input type="password" id="login-password"></div>
       <button class="btn btn-primary" id="btn-login">登入</button>
       <div id="login-error"></div>
     </div>
@@ -124,7 +130,17 @@
       </section>
 
       <section class="tab-content" id="tab-students">
-        <div class="card"><div class="placeholder"><div class="icon">👥</div><h3>學員管理</h3><p>列出學員、批次匯入、編輯、archive</p><span class="step-tag">F6 預定建置</span></div></div>
+        <div class="card">
+          <h2><span>👥 學員管理</span></h2>
+          <div class="toolbar">
+            <select id="student-class-filter"><option value="">先選班級...</option></select>
+            <button class="btn btn-ghost" id="btn-toggle-archived-students">顯示封存學員</button>
+            <span style="flex:1"></span>
+            <button class="btn" id="btn-add-student">➕ 單筆新增</button>
+            <button class="btn btn-green" id="btn-batch-import">📤 批次匯入</button>
+          </div>
+          <div id="students-list"><div class="loading">請先選班級...</div></div>
+        </div>
       </section>
 
       <section class="tab-content" id="tab-instructors">
@@ -140,10 +156,7 @@
   <!-- 新增/編輯班級 Modal -->
   <div class="modal-overlay" id="class-modal">
     <div class="modal" onclick="event.stopPropagation()">
-      <div class="modal-header">
-        <h3 id="class-modal-title">➕ 新增班級</h3>
-        <button class="modal-close" id="class-modal-close">×</button>
-      </div>
+      <div class="modal-header"><h3 id="class-modal-title">➕ 新增班級</h3><button class="modal-close" id="class-modal-close">×</button></div>
       <div class="modal-body">
         <div class="form-group"><label>班級代碼（英數、不含空格、例：TP18）</label><input type="text" id="class-id" placeholder="TP18"></div>
         <div class="form-group"><label>顯示名稱</label><input type="text" id="class-name" placeholder="新北 TP18"></div>
@@ -155,7 +168,7 @@
           </select>
         </div>
         <div class="form-group"><label>年度</label><input type="number" id="class-year" value="2026"></div>
-        <div class="form-group"><label>備註（可選）</label><input type="text" id="class-description" placeholder="例：新北市消防局合辦"></div>
+        <div class="form-group"><label>備註（可選）</label><input type="text" id="class-description"></div>
         <div id="class-modal-error"></div>
       </div>
       <div class="modal-footer">
@@ -165,10 +178,56 @@
     </div>
   </div>
 
+  <!-- 單筆新增學員 Modal -->
+  <div class="modal-overlay" id="student-modal">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3>➕ 新增學員</h3><button class="modal-close" id="student-modal-close">×</button></div>
+      <div class="modal-body">
+        <div class="form-group"><label>班級（自動帶入）</label><input type="text" id="student-class-display" readonly style="background:#0a0f1f;color:#94a3b8"></div>
+        <div class="form-group"><label>學號（數字）</label><input type="number" id="student-no" placeholder="1"></div>
+        <div class="form-group"><label>姓名</label><input type="text" id="student-name" placeholder="尤偉檁"></div>
+        <div class="form-group"><label>Email（可選）</label><input type="email" id="student-email" placeholder="will50113@yahoo.com.tw"></div>
+        <div id="student-modal-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="student-modal-cancel">取消</button>
+        <button class="btn btn-green" id="student-modal-save">💾 儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 批次匯入學員 Modal -->
+  <div class="modal-overlay" id="batch-modal">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3>📤 批次匯入學員</h3><button class="modal-close" id="batch-modal-close">×</button></div>
+      <div class="modal-body">
+        <div class="form-group"><label>班級</label><input type="text" id="batch-class-display" readonly style="background:#0a0f1f;color:#94a3b8"></div>
+        <div class="form-group">
+          <label>學員資料（每行一筆、Tab 或逗號分隔）</label>
+          <textarea id="batch-data" rows="12" placeholder="格式：學號 [Tab/逗號] 姓名 [Tab/逗號] email
+範例：
+1	尤偉檁	will50113@yahoo.com.tw
+2	黃朕為	willy11134444@gmail.com
+3	劉仕偉	passatjay@gmail.com
+...
+
+💡 Email 可以空白、之後再補"></textarea>
+        </div>
+        <div id="batch-preview"></div>
+        <div id="batch-modal-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="batch-modal-cancel">取消</button>
+        <button class="btn" id="btn-batch-preview">🔍 預覽</button>
+        <button class="btn btn-green" id="btn-batch-commit" disabled>💾 寫入</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, serverTimestamp, query, where, writeBatch } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -186,7 +245,9 @@
     const MASTER_EMAILS = ['sharky83920@gmail.com'];
 
     let currentUser = null;
-    let showArchived = false;
+    let showArchivedClasses = false;
+    let showArchivedStudents = false;
+    let currentBatchPreview = null;
 
     onAuthStateChanged(auth, (user) => {
       if (user && MASTER_EMAILS.includes(user.email)) {
@@ -221,14 +282,8 @@
         btn.disabled = false; btn.textContent = '登入';
       }
     });
-
-    document.getElementById('login-password').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') document.getElementById('btn-login').click();
-    });
-
-    document.getElementById('btn-logout').addEventListener('click', () => {
-      if (confirm('確定要登出嗎？')) signOut(auth);
-    });
+    document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('btn-login').click(); });
+    document.getElementById('btn-logout').addEventListener('click', () => { if (confirm('確定要登出嗎？')) signOut(auth); });
 
     document.querySelectorAll('.tab-button').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -237,6 +292,7 @@
         btn.classList.add('active');
         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
         if (btn.dataset.tab === 'classes') loadClasses();
+        if (btn.dataset.tab === 'students') loadClassDropdown();
       });
     });
 
@@ -248,7 +304,6 @@
         catch (e) { document.getElementById(map[col]).textContent = '0'; }
       }
     }
-
     document.getElementById('btn-refresh-stats').addEventListener('click', loadOverviewStats);
 
     // === 班級管理 ===
@@ -259,68 +314,42 @@
         const snapshot = await getDocs(collection(db, 'classes'));
         const classes = [];
         snapshot.forEach(d => classes.push({ id: d.id, ...d.data() }));
-
-        // 過濾 archived
-        const filtered = showArchived ? classes : classes.filter(c => c.isActive !== false);
+        const filtered = showArchivedClasses ? classes : classes.filter(c => c.isActive !== false);
         filtered.sort((a, b) => (b.year || 0) - (a.year || 0));
-
         if (filtered.length === 0) {
-          listEl.innerHTML = '<div class="placeholder"><div class="icon">📭</div><h3>還沒有班級</h3><p>點右上「➕ 新增班級」開始</p></div>';
+          listEl.innerHTML = '<div class="placeholder"><div class="icon">📭</div><h3>還沒有班級</h3><p>點右上「➕ 新增班級」</p></div>';
           return;
         }
-
         let html = '<table class="table"><thead><tr><th>代碼</th><th>顯示名稱</th><th>課程</th><th>年度</th><th>狀態</th><th>建立時間</th><th>動作</th></tr></thead><tbody>';
         filtered.forEach(c => {
           const isArchived = c.isActive === false;
           const stateTag = isArchived ? '<span class="tag-pill gray">📦 已封存</span>' : '<span class="tag-pill">✅ 啟用中</span>';
           const created = c.createdAt && c.createdAt.toDate ? c.createdAt.toDate().toLocaleDateString('zh-TW') : '—';
-          html += `<tr>
-            <td><code>${c.id}</code></td>
-            <td>${c.displayName || '—'}</td>
-            <td>${c.courseType || '—'}</td>
-            <td>${c.year || '—'}</td>
-            <td>${stateTag}</td>
-            <td style="color:#94a3b8;font-size:12px">${created}</td>
-            <td>${isArchived
-              ? `<button class="btn btn-ghost" data-unarchive="${c.id}">📂 恢復</button>`
-              : `<button class="btn btn-orange" data-archive="${c.id}">📦 封存</button>`}</td>
-          </tr>`;
+          html += `<tr><td><code>${c.id}</code></td><td>${c.displayName || '—'}</td><td>${c.courseType || '—'}</td><td>${c.year || '—'}</td><td>${stateTag}</td><td style="color:#94a3b8;font-size:12px">${created}</td><td>${isArchived ? `<button class="btn btn-ghost" data-unarchive="${c.id}">📂 恢復</button>` : `<button class="btn btn-orange" data-archive="${c.id}">📦 封存</button>`}</td></tr>`;
         });
         html += '</tbody></table>';
         listEl.innerHTML = html;
-
         listEl.querySelectorAll('button[data-archive]').forEach(b => b.addEventListener('click', () => archiveClass(b.dataset.archive)));
         listEl.querySelectorAll('button[data-unarchive]').forEach(b => b.addEventListener('click', () => unarchiveClass(b.dataset.unarchive)));
-      } catch (e) {
-        listEl.innerHTML = `<div class="err-msg">載入失敗: ${e.message}</div>`;
-      }
+      } catch (e) { listEl.innerHTML = `<div class="err-msg">載入失敗: ${e.message}</div>`; }
     }
 
     async function archiveClass(classId) {
-      if (!confirm(`確定要封存班級「${classId}」嗎？\n\n封存後學員端會看不到、但資料保留。\n可以從「顯示封存班級」按鈕恢復。`)) return;
-      try {
-        await updateDoc(doc(db, 'classes', classId), { isActive: false, archivedAt: serverTimestamp() });
-        loadClasses();
-        loadOverviewStats();
-      } catch (e) { alert('❌ ' + e.message); }
+      if (!confirm(`確定要封存班級「${classId}」嗎？`)) return;
+      try { await updateDoc(doc(db, 'classes', classId), { isActive: false, archivedAt: serverTimestamp() }); loadClasses(); loadOverviewStats(); }
+      catch (e) { alert('❌ ' + e.message); }
     }
-
     async function unarchiveClass(classId) {
-      if (!confirm(`恢復班級「${classId}」？`)) return;
-      try {
-        await updateDoc(doc(db, 'classes', classId), { isActive: true, archivedAt: null });
-        loadClasses();
-        loadOverviewStats();
-      } catch (e) { alert('❌ ' + e.message); }
+      try { await updateDoc(doc(db, 'classes', classId), { isActive: true, archivedAt: null }); loadClasses(); loadOverviewStats(); }
+      catch (e) { alert('❌ ' + e.message); }
     }
 
     document.getElementById('btn-toggle-archived').addEventListener('click', (e) => {
-      showArchived = !showArchived;
-      e.target.textContent = showArchived ? '隱藏封存班級' : '顯示封存班級';
+      showArchivedClasses = !showArchivedClasses;
+      e.target.textContent = showArchivedClasses ? '隱藏封存班級' : '顯示封存班級';
       loadClasses();
     });
 
-    // 新增班級 Modal
     document.getElementById('btn-add-class').addEventListener('click', () => {
       document.getElementById('class-id').value = '';
       document.getElementById('class-name').value = '';
@@ -330,7 +359,6 @@
       document.getElementById('class-modal-error').innerHTML = '';
       document.getElementById('class-modal').classList.add('active');
     });
-
     document.getElementById('class-modal-close').addEventListener('click', () => document.getElementById('class-modal').classList.remove('active'));
     document.getElementById('class-modal-cancel').addEventListener('click', () => document.getElementById('class-modal').classList.remove('active'));
     document.getElementById('class-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('class-modal').classList.remove('active'); });
@@ -338,42 +366,214 @@
     document.getElementById('class-modal-save').addEventListener('click', async () => {
       const classId = document.getElementById('class-id').value.trim();
       const name = document.getElementById('class-name').value.trim();
-      const courseType = document.getElementById('class-course-type').value;
-      const year = parseInt(document.getElementById('class-year').value);
-      const description = document.getElementById('class-description').value.trim();
       const errEl = document.getElementById('class-modal-error');
       errEl.innerHTML = '';
-
       if (!classId || !name) { errEl.innerHTML = '<div class="err-msg">❌ 班級代碼跟顯示名稱必填</div>'; return; }
       if (!/^[A-Za-z0-9_-]+$/.test(classId)) { errEl.innerHTML = '<div class="err-msg">❌ 班級代碼只能含英數字、-、_</div>'; return; }
-
       const btn = document.getElementById('class-modal-save');
       btn.disabled = true; btn.textContent = '⏳ 儲存中...';
       try {
-        // 檢查 ID 是否已存在
         const existing = await getDoc(doc(db, 'classes', classId));
         if (existing.exists()) { errEl.innerHTML = `<div class="err-msg">❌ 班級代碼「${classId}」已存在</div>`; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
-
         await setDoc(doc(db, 'classes', classId), {
-          name: classId,
-          displayName: name,
-          courseType: courseType,
-          year: year,
-          description: description,
-          isActive: true,
-          archivedAt: null,
-          createdAt: serverTimestamp(),
-          createdBy: currentUser.email
+          name: classId, displayName: name,
+          courseType: document.getElementById('class-course-type').value,
+          year: parseInt(document.getElementById('class-year').value),
+          description: document.getElementById('class-description').value.trim(),
+          isActive: true, archivedAt: null,
+          createdAt: serverTimestamp(), createdBy: currentUser.email
         });
-
         document.getElementById('class-modal').classList.remove('active');
-        loadClasses();
-        loadOverviewStats();
-      } catch (e) {
-        errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`;
-      } finally {
-        btn.disabled = false; btn.textContent = '💾 儲存';
-      }
+        loadClasses(); loadOverviewStats();
+      } catch (e) { errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
+    });
+
+    // === 學員管理 ===
+    async function loadClassDropdown() {
+      const selectEl = document.getElementById('student-class-filter');
+      try {
+        const snapshot = await getDocs(collection(db, 'classes'));
+        const classes = [];
+        snapshot.forEach(d => { const data = d.data(); if (data.isActive !== false) classes.push({ id: d.id, ...data }); });
+        classes.sort((a, b) => (b.year || 0) - (a.year || 0));
+        let html = '<option value="">請選班級...</option>';
+        classes.forEach(c => { html += `<option value="${c.id}">${c.displayName || c.id} (${c.id})</option>`; });
+        selectEl.innerHTML = html;
+      } catch (e) { selectEl.innerHTML = '<option>載入失敗</option>'; }
+    }
+    document.getElementById('student-class-filter').addEventListener('change', loadStudents);
+
+    async function loadStudents() {
+      const classId = document.getElementById('student-class-filter').value;
+      const listEl = document.getElementById('students-list');
+      if (!classId) { listEl.innerHTML = '<div class="placeholder"><div class="icon">👈</div><h3>請先選班級</h3></div>'; return; }
+      listEl.innerHTML = '<div class="loading">⏳ 載入學員...</div>';
+      try {
+        const q = query(collection(db, 'students'), where('classId', '==', classId));
+        const snapshot = await getDocs(q);
+        const students = [];
+        snapshot.forEach(d => students.push({ id: d.id, ...d.data() }));
+        const filtered = showArchivedStudents ? students : students.filter(s => s.isActive !== false);
+        filtered.sort((a, b) => (a.studentNo || 0) - (b.studentNo || 0));
+        if (filtered.length === 0) {
+          listEl.innerHTML = `<div class="placeholder"><div class="icon">📭</div><h3>${classId} 還沒有學員</h3><p>點「➕ 單筆新增」或「📤 批次匯入」</p></div>`;
+          return;
+        }
+        let html = `<p style="color:#94a3b8;margin-bottom:8px">共 ${filtered.length} 位學員</p>`;
+        html += '<table class="table"><thead><tr><th>學號</th><th>姓名</th><th>Email</th><th>狀態</th><th>動作</th></tr></thead><tbody>';
+        filtered.forEach(s => {
+          const isArchived = s.isActive === false;
+          const stateTag = isArchived ? '<span class="tag-pill gray">📦 封存</span>' : '<span class="tag-pill">✅</span>';
+          html += `<tr><td class="num">${s.studentNo}</td><td>${s.name || '—'}</td><td style="color:#94a3b8;font-size:13px">${s.email || '—'}</td><td>${stateTag}</td><td>${isArchived ? `<button class="btn btn-ghost" data-unarchive-s="${s.id}">📂 恢復</button>` : `<button class="btn btn-orange" data-archive-s="${s.id}">📦 封存</button>`}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        listEl.innerHTML = html;
+        listEl.querySelectorAll('button[data-archive-s]').forEach(b => b.addEventListener('click', () => archiveStudent(b.dataset.archiveS)));
+        listEl.querySelectorAll('button[data-unarchive-s]').forEach(b => b.addEventListener('click', () => unarchiveStudent(b.dataset.unarchiveS)));
+      } catch (e) { listEl.innerHTML = `<div class="err-msg">${e.message}</div>`; }
+    }
+
+    document.getElementById('btn-toggle-archived-students').addEventListener('click', (e) => {
+      showArchivedStudents = !showArchivedStudents;
+      e.target.textContent = showArchivedStudents ? '隱藏封存學員' : '顯示封存學員';
+      loadStudents();
+    });
+
+    async function archiveStudent(studentId) {
+      if (!confirm('封存此學員？')) return;
+      try { await updateDoc(doc(db, 'students', studentId), { isActive: false, archivedAt: serverTimestamp() }); loadStudents(); loadOverviewStats(); }
+      catch (e) { alert('❌ ' + e.message); }
+    }
+    async function unarchiveStudent(studentId) {
+      try { await updateDoc(doc(db, 'students', studentId), { isActive: true, archivedAt: null }); loadStudents(); loadOverviewStats(); }
+      catch (e) { alert('❌ ' + e.message); }
+    }
+
+    // 單筆新增學員
+    document.getElementById('btn-add-student').addEventListener('click', () => {
+      const classId = document.getElementById('student-class-filter').value;
+      if (!classId) { alert('請先選班級'); return; }
+      document.getElementById('student-class-display').value = classId;
+      document.getElementById('student-no').value = '';
+      document.getElementById('student-name').value = '';
+      document.getElementById('student-email').value = '';
+      document.getElementById('student-modal-error').innerHTML = '';
+      document.getElementById('student-modal').classList.add('active');
+    });
+    document.getElementById('student-modal-close').addEventListener('click', () => document.getElementById('student-modal').classList.remove('active'));
+    document.getElementById('student-modal-cancel').addEventListener('click', () => document.getElementById('student-modal').classList.remove('active'));
+    document.getElementById('student-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('student-modal').classList.remove('active'); });
+
+    document.getElementById('student-modal-save').addEventListener('click', async () => {
+      const classId = document.getElementById('student-class-display').value;
+      const studentNo = parseInt(document.getElementById('student-no').value);
+      const name = document.getElementById('student-name').value.trim();
+      const email = document.getElementById('student-email').value.trim();
+      const errEl = document.getElementById('student-modal-error');
+      errEl.innerHTML = '';
+      if (isNaN(studentNo) || studentNo < 1) { errEl.innerHTML = '<div class="err-msg">❌ 學號必須是 1 以上數字</div>'; return; }
+      if (!name) { errEl.innerHTML = '<div class="err-msg">❌ 姓名必填</div>'; return; }
+      const studentId = `${classId.toLowerCase()}-${studentNo}`;
+      const btn = document.getElementById('student-modal-save');
+      btn.disabled = true; btn.textContent = '⏳';
+      try {
+        const existing = await getDoc(doc(db, 'students', studentId));
+        if (existing.exists()) { errEl.innerHTML = `<div class="err-msg">❌ ${classId} 已有學號 ${studentNo}</div>`; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+        await setDoc(doc(db, 'students', studentId), {
+          classId: classId, studentNo: studentNo, name: name, email: email,
+          isActive: true, archivedAt: null,
+          createdAt: serverTimestamp(), createdBy: currentUser.email
+        });
+        document.getElementById('student-modal').classList.remove('active');
+        loadStudents(); loadOverviewStats();
+      } catch (e) { errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
+    });
+
+    // 批次匯入
+    document.getElementById('btn-batch-import').addEventListener('click', () => {
+      const classId = document.getElementById('student-class-filter').value;
+      if (!classId) { alert('請先選班級'); return; }
+      document.getElementById('batch-class-display').value = classId;
+      document.getElementById('batch-data').value = '';
+      document.getElementById('batch-preview').innerHTML = '';
+      document.getElementById('batch-modal-error').innerHTML = '';
+      document.getElementById('btn-batch-commit').disabled = true;
+      currentBatchPreview = null;
+      document.getElementById('batch-modal').classList.add('active');
+    });
+    document.getElementById('batch-modal-close').addEventListener('click', () => document.getElementById('batch-modal').classList.remove('active'));
+    document.getElementById('batch-modal-cancel').addEventListener('click', () => document.getElementById('batch-modal').classList.remove('active'));
+    document.getElementById('batch-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('batch-modal').classList.remove('active'); });
+
+    document.getElementById('btn-batch-preview').addEventListener('click', async () => {
+      const classId = document.getElementById('batch-class-display').value;
+      const raw = document.getElementById('batch-data').value;
+      const previewEl = document.getElementById('batch-preview');
+      const errEl = document.getElementById('batch-modal-error');
+      errEl.innerHTML = '';
+      const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+      if (lines.length === 0) { errEl.innerHTML = '<div class="err-msg">❌ 沒有資料</div>'; return; }
+      const rows = [];
+      const seen = {};
+      lines.forEach((line, idx) => {
+        const parts = line.split(/\t|,/).map(s => s.trim());
+        const no = parseInt(parts[0]);
+        const name = parts[1] || '';
+        const email = parts[2] || '';
+        if (isNaN(no)) { rows.push({ line: idx + 1, err: '學號不是數字' }); return; }
+        if (!name) { rows.push({ line: idx + 1, no, err: '姓名空白' }); return; }
+        if (seen[no]) { rows.push({ line: idx + 1, no, name, err: `此學號在這批裡重複（也在第 ${seen[no]} 行）` }); return; }
+        seen[no] = idx + 1;
+        rows.push({ line: idx + 1, no, name, email, ok: true });
+      });
+      // 檢查 Firestore 是否已存在
+      const checkPromises = rows.filter(r => r.ok).map(async r => {
+        const docSnap = await getDoc(doc(db, 'students', `${classId.toLowerCase()}-${r.no}`));
+        if (docSnap.exists()) r.warn = '此學號已存在、會被覆蓋';
+      });
+      await Promise.all(checkPromises);
+
+      let html = '<h4 style="color:#fcd34d;margin:12px 0 8px">預覽結果：</h4>';
+      html += '<table class="table"><thead><tr><th>行</th><th>學號</th><th>姓名</th><th>Email</th><th>狀態</th></tr></thead><tbody>';
+      let okCount = 0, errCount = 0, warnCount = 0;
+      rows.forEach(r => {
+        let status = '';
+        if (r.err) { status = `<span class="tag-pill red">❌ ${r.err}</span>`; errCount++; }
+        else if (r.warn) { status = `<span class="tag-pill yellow">⚠️ ${r.warn}</span>`; okCount++; warnCount++; }
+        else { status = `<span class="tag-pill">✅ OK</span>`; okCount++; }
+        html += `<tr><td class="num">${r.line}</td><td class="num">${r.no || '—'}</td><td>${r.name || '—'}</td><td style="color:#94a3b8;font-size:13px">${r.email || '—'}</td><td>${status}</td></tr>`;
+      });
+      html += '</tbody></table>';
+      html += `<div style="margin-top:12px"><span class="tag-pill">有效 ${okCount}</span> ${errCount > 0 ? `<span class="tag-pill red">錯誤 ${errCount}</span>` : ''} ${warnCount > 0 ? `<span class="tag-pill yellow">覆蓋 ${warnCount}</span>` : ''}</div>`;
+      previewEl.innerHTML = html;
+      currentBatchPreview = { classId, rows: rows.filter(r => r.ok) };
+      document.getElementById('btn-batch-commit').disabled = okCount === 0;
+      document.getElementById('btn-batch-commit').textContent = `💾 寫入 ${okCount} 筆`;
+    });
+
+    document.getElementById('btn-batch-commit').addEventListener('click', async () => {
+      if (!currentBatchPreview) return;
+      const { classId, rows } = currentBatchPreview;
+      if (!confirm(`確定寫入 ${rows.length} 筆學員到 ${classId}？`)) return;
+      const btn = document.getElementById('btn-batch-commit');
+      btn.disabled = true; btn.textContent = '⏳ 寫入中...';
+      try {
+        const batch = writeBatch(db);
+        rows.forEach(r => {
+          const sid = `${classId.toLowerCase()}-${r.no}`;
+          batch.set(doc(db, 'students', sid), {
+            classId: classId, studentNo: r.no, name: r.name, email: r.email,
+            isActive: true, archivedAt: null,
+            createdAt: serverTimestamp(), createdBy: currentUser.email
+          });
+        });
+        await batch.commit();
+        alert(`✅ 寫入 ${rows.length} 筆成功！`);
+        document.getElementById('batch-modal').classList.remove('active');
+        loadStudents(); loadOverviewStats();
+      } catch (e) { alert('❌ ' + e.message); btn.disabled = false; btn.textContent = `💾 寫入 ${rows.length} 筆`; }
     });
   </script>
 </body>
