@@ -144,7 +144,15 @@
       </section>
 
       <section class="tab-content" id="tab-instructors">
-        <div class="card"><div class="placeholder"><div class="icon">👨‍🏫</div><h3>指導員管理</h3><p>列出指導員、設定他能管哪些班級 + 權限</p><span class="step-tag">F7 預定建置</span></div></div>
+        <div class="card">
+          <h2><span>👨‍🏫 指導員管理</span>
+            <span>
+              <button class="btn btn-ghost" id="btn-toggle-archived-instructors">顯示封存指導員</button>
+              <button class="btn btn-green" id="btn-add-instructor">➕ 新增指導員</button>
+            </span>
+          </h2>
+          <div id="instructors-list"><div class="loading">載入中...</div></div>
+        </div>
       </section>
 
       <section class="tab-content" id="tab-settings">
