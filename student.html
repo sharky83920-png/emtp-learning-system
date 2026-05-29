@@ -136,6 +136,20 @@
         <div class="empty-hint" id="score-river-empty-hint">⏳ 尚無考試成績、上傳考試後河流圖會自動更新</div>
       </div>
 
+      <!-- F13-J: 能量條（獨立 section、放河流圖後、題庫與答題前） -->
+      <div class="milestone-section" data-tab="academic" id="energy-bar-section" style="display:none">
+        <h3>⚡ 能量條</h3>
+        <div id="energy-bar-content"><div class="loading">⏳ 載入中...</div></div>
+      </div>
+
+      <!-- F13-J: 錯題本（獨立 tab、學科和技術簽核之間） -->
+      <div class="milestone-section" data-tab="mistakes">
+        <h3>📓 我的錯題本</h3>
+        <div id="mistake-book-content">
+          <div class="empty-hint">⏳ F14 開發中、目前還沒有錯題資料<br><br>未來會自動收集你答錯的題目、提供分維度複習。</div>
+        </div>
+      </div>
+
       <!-- F11-A: Milestone 群能力 5 角雷達 -->
       <div class="milestone-section" data-tab="skills">
         <h3>🎯 Milestone 群能力</h3>
@@ -382,8 +396,6 @@
         </div>
       </div>
 
-      <div class="feature-grid" id="features" data-tab="academic"><div class="loading">⏳ 載入中...</div></div>
-
       <!-- F13-F: 實習 tab（外部連結） -->
       <div class="milestone-section" data-tab="internship">
         <h3>🏥 訓練簽到系統</h3>
@@ -394,11 +406,15 @@
         <div style="color:#94a3b8;font-size:12px;margin-top:12px;text-align:center">⚙️ 連結網址由 Master 在系統設定中維護</div>
       </div>
 
-      <!-- F13-F: 底部 3 tab 切換 -->
+      <!-- F13-F + F13-J: 底部 4 tab 切換（學科 / 錯題本 / 技術 / 實習） -->
       <nav class="bottom-tabs">
         <button data-bottom-tab="academic" class="active">
           <span class="bt-icon">📚</span>
           <span>學科</span>
+        </button>
+        <button data-bottom-tab="mistakes">
+          <span class="bt-icon">📓</span>
+          <span>錯題本</span>
         </button>
         <button data-bottom-tab="skills">
           <span class="bt-icon">🎯</span>
@@ -618,20 +634,31 @@
         document.getElementById('student-class').textContent = classData.displayName || currentStudent.classId;
         const s = classData.settings || {};
         const eb = s.energyBar || { enabled: false };
-        const mb = s.mistakeBook || { enabled: false };
-        const lb = s.leaderboard || { enabled: true };
 
-        let html = '';
+        // F13-J: 能量條獨立 section（不再用 feature-grid）
+        const ebSec = document.getElementById('energy-bar-section');
+        const ebContent = document.getElementById('energy-bar-content');
         if (eb.enabled) {
+          ebSec.style.display = '';
           const periodName = eb.period === 'monthly' ? '本月' : '本週';
-          html += `<div class="feature-card"><div class="icon">⚡</div><h3>能量條 <span class="tag tag-enabled">啟用中</span></h3><div class="desc">${periodName}目標：${eb.target} 趟</div><div><span class="value">0</span><span class="unit">/ ${eb.target} 趟</span></div></div>`;
+          // 第一版：直接顯示框架（之後接活動資料）
+          ebContent.innerHTML = `
+            <div style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:white;padding:18px 22px;border-radius:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+              <div>
+                <div style="font-size:12px;opacity:0.85">${periodName}目標</div>
+                <div style="font-size:28px;font-weight:800"><span id="eb-current">0</span> <span style="font-size:18px;opacity:0.85">/ ${eb.target} 趟</span></div>
+              </div>
+              <div style="font-size:36px">⚡</div>
+            </div>
+            <div style="height:10px;background:#f1f5f9;border-radius:6px;margin-top:12px;overflow:hidden">
+              <div id="eb-bar" style="height:100%;background:linear-gradient(90deg,#fbbf24,#f59e0b);width:0%;transition:width 0.5s"></div>
+            </div>
+            <div style="color:#94a3b8;font-size:12px;margin-top:8px;text-align:center">💡 出題 / 答題 / EPA 評核都會累積能量</div>
+          `;
         } else {
-          html += `<div class="feature-card disabled"><div class="icon">⚡</div><h3>能量條 <span class="tag tag-disabled">未啟用</span></h3><div class="desc">指導員尚未開啟</div></div>`;
+          ebSec.style.display = '';
+          ebContent.innerHTML = '<div class="empty-hint">⏳ 指導員尚未開啟能量條</div>';
         }
-        html += `<div class="feature-card ${mb.enabled ? '' : 'disabled'}"><div class="icon">📓</div><h3>錯題本 <span class="tag ${mb.enabled ? 'tag-enabled' : 'tag-disabled'}">${mb.enabled ? '啟用中' : '未啟用'}</span></h3><div class="desc">⏳ F14 開發中</div></div>`;
-        html += `<div class="feature-card"><div class="icon">📝</div><h3>答題系統 <span class="tag tag-disabled">F13-F14 建置中</span></h3><div class="desc">隨機綜合測驗、章節練習等</div></div>`;
-        // ⚠️ 戰力排行只給指導員看、學員看不到（移除）
-        document.getElementById('features').innerHTML = html;
 
         // F11-A + F11-B + F11-F + F12-B: 載入 Milestone 雷達 + 核心技術簽核 + 6 角學科雷達 + 成績河流圖
         await Promise.all([loadAcademicRadar(), loadMilestoneRadar(), loadCoreSkills(), loadScoreRiverChart()]);
@@ -1294,33 +1321,55 @@
           signoffsBySkill[data.skillId]++;
         });
 
-        // 3. 渲染每個項目（綠方塊進度）
-        let html = '';
-        skills.forEach(skill => {
+        // F13-J: 改下拉、避免頁面過長
+        const totalDone = skills.filter(s => (signoffsBySkill[s.id] || 0) >= (s.targetCount || 1)).length;
+
+        function renderOneSkill(skill) {
           const target = skill.targetCount || 1;
           const done = signoffsBySkill[skill.id] || 0;
           const displayDone = Math.min(done, target);
           const isDone = done >= target;
           const overflow = done > target ? done - target : 0;
-
           let blocks = '';
-          for (let i = 0; i < target; i++) {
-            blocks += `<div class="skill-block${i < displayDone ? ' filled' : ''}"></div>`;
-          }
-
+          for (let i = 0; i < target; i++) blocks += `<div class="skill-block${i < displayDone ? ' filled' : ''}"></div>`;
           const overflowText = overflow > 0 ? `<span class="skill-overflow">+${overflow}</span>` : '';
           const doneIcon = isDone ? '✅' : '';
-
-          html += `<div class="skill-item${isDone ? ' done' : ''}">
+          return `<div class="skill-item${isDone ? ' done' : ''}">
             <div class="skill-info">
               <div class="skill-name">${skill.name} ${doneIcon}</div>
               <div class="skill-progress">目標 ${target} 次 ・ 完成 ${done} 次</div>
             </div>
             <div class="skill-blocks">${blocks}${overflowText}</div>
           </div>`;
-        });
+        }
+
+        const html = `
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+            <div style="background:#eff6ff;padding:8px 14px;border-radius:8px;font-size:13px;color:#1e40af;font-weight:600;white-space:nowrap">📊 達標 ${totalDone} / ${skills.length}</div>
+            <select id="cs-filter" style="flex:1;min-width:180px;padding:10px 12px;border:2px solid #e2e8f0;border-radius:8px;font-family:inherit;font-size:14px;background:white">
+              <option value="__all__">📋 顯示全部</option>
+              ${skills.map(s => {
+                const done2 = signoffsBySkill[s.id] || 0;
+                const target2 = s.targetCount || 1;
+                const tick = done2 >= target2 ? '✅ ' : '';
+                return `<option value="${s.id}">${tick}${s.name}（${done2}/${target2}）</option>`;
+              }).join('')}
+            </select>
+          </div>
+          <div id="cs-skill-display">${skills.map(renderOneSkill).join('')}</div>
+        `;
 
         listEl.innerHTML = html;
+        document.getElementById('cs-filter').addEventListener('change', (e) => {
+          const v = e.target.value;
+          const disp = document.getElementById('cs-skill-display');
+          if (v === '__all__') {
+            disp.innerHTML = skills.map(renderOneSkill).join('');
+          } else {
+            const s = skills.find(x => x.id === v);
+            disp.innerHTML = s ? renderOneSkill(s) : '';
+          }
+        });
       } catch (e) {
         console.error('[F11-B] loadCoreSkills error:', e);
         document.getElementById('core-skills-list').innerHTML = `<div class="empty-hint">❌ 載入失敗：${e.message}</div>`;
@@ -1574,8 +1623,16 @@
       const page = document.getElementById('nq-page').value.trim();
 
       if (!scheduledDate) { errEl.innerHTML = '<div class="err-msg">❌ 請選出題日期</div>'; return; }
-      if (!questionText) { errEl.innerHTML = '<div class="err-msg">❌ 請填題目內容</div>'; return; }
-      if (!optA || !optB || !optC || !optD) { errEl.innerHTML = '<div class="err-msg">❌ 4 個選項都要填</div>'; return; }
+      // F13-J: 題目可只有文字、只有圖、或兩者都有
+      if (!questionText && !nqImageFiles.text) { errEl.innerHTML = '<div class="err-msg">❌ 題目至少要有文字或圖片</div>'; return; }
+      const aOk = optA.length > 0 || !!nqImageFiles.A;
+      const bOk = optB.length > 0 || !!nqImageFiles.B;
+      const cOk = optC.length > 0 || !!nqImageFiles.C;
+      const dOk = optD.length > 0 || !!nqImageFiles.D;
+      if (!aOk || !bOk || !cOk || !dOk) {
+        const miss = [!aOk && 'A', !bOk && 'B', !cOk && 'C', !dOk && 'D'].filter(Boolean).join('、');
+        errEl.innerHTML = `<div class="err-msg">❌ 選項 ${miss} 至少要有文字或圖片</div>`; return;
+      }
 
       const btn = document.getElementById('btn-submit-question');
       btn.disabled = true; btn.textContent = '⏳ 上傳圖片中...';
