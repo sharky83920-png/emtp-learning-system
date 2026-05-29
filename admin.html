@@ -130,6 +130,7 @@
       <button class="tab-button" data-tab="schedule">📅 出題排程</button>
       <button class="tab-button" data-tab="questions">❓ 題庫管理</button>
       <button class="tab-button" data-tab="qr">📱 QR 簽核</button>
+      <button class="tab-button" data-tab="announcements">📢 公告管理</button>
       <button class="tab-button" data-tab="settings">⚙️ 系統設定</button>
     </nav>
 
@@ -311,6 +312,50 @@
               <button class="btn btn-red" id="btn-end-qr" style="margin-top:14px;width:100%;padding:12px">⏹ 結束 Session（提早結束）</button>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-announcements">
+        <div class="card">
+          <h2><span>📢 發布公告</span></h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
+            💡 選擇要發給哪些班級、填寫公告內容、設定自動下架天數。學員登入時會跳出未讀公告。到期後系統自動移除。
+          </p>
+          <div class="form-group">
+            <label>發給哪些班級（可多選）</label>
+            <div id="ann-class-checks" style="display:flex;flex-wrap:wrap;gap:8px;background:#0f172a;padding:12px;border-radius:8px;border:1px solid #334155">
+              <div class="loading" style="padding:8px">載入班級中...</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="form-group" style="flex:1;min-width:180px">
+              <label>分類</label>
+              <select id="ann-category">
+                <option value="課程通知">📘 課程通知</option>
+                <option value="重大活動">🎯 重大活動</option>
+                <option value="重要提醒">⚠️ 重要提醒</option>
+                <option value="其他">📌 其他</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:1;min-width:180px">
+              <label>幾天後自動下架</label>
+              <select id="ann-expire-days">
+                <option value="3">3 天</option>
+                <option value="7" selected>7 天</option>
+                <option value="14">14 天</option>
+                <option value="30">30 天</option>
+                <option value="90">90 天</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group"><label>標題</label><input type="text" id="ann-title" placeholder="例：06月參訪通知"></div>
+          <div class="form-group"><label>內容（可換行）</label><textarea id="ann-content" rows="5" placeholder="06/01 下午新北指揮中心參訪&#10;06/08 上午北投818參訪"></textarea></div>
+          <button class="btn btn-green" id="btn-publish-ann" style="width:100%;padding:13px;font-size:15px">📢 發布公告</button>
+          <div id="ann-publish-msg"></div>
+        </div>
+        <div class="card">
+          <h2><span>📋 現有公告</span><button class="btn btn-ghost" id="btn-refresh-ann">🔄 重新整理</button></h2>
+          <div id="announcements-list"><div class="loading">⏳ 載入中...</div></div>
         </div>
       </section>
 
@@ -767,6 +812,7 @@
         if (btn.dataset.tab === 'schedule') loadSchedulePage();
         if (btn.dataset.tab === 'questions') loadQuestionsPage();
         if (btn.dataset.tab === 'qr') loadQrPage();
+        if (btn.dataset.tab === 'announcements') loadAnnouncementsPage();
         if (btn.dataset.tab === 'settings') loadSettings();
       });
     });
@@ -3427,6 +3473,135 @@
     let qrCountdownTimer = null;
     let qrSnapshotUnsub = null;
     let currentQrSession = null;
+
+    // ===== F14-A: 公告管理 =====
+    let annClassesCache = [];
+    let annBound = false;
+
+    async function loadAnnouncementsPage() {
+      // 載入班級多選
+      const checksEl = document.getElementById('ann-class-checks');
+      try {
+        const cSnap = await getDocs(collection(db, 'classes'));
+        annClassesCache = [];
+        cSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) annClassesCache.push({ id: d.id, ...data }); });
+        annClassesCache.sort((a, b) => (b.year || 0) - (a.year || 0));
+        if (annClassesCache.length === 0) {
+          checksEl.innerHTML = '<div style="color:#94a3b8;padding:8px">尚無班級、請先到「班級管理」新增</div>';
+        } else {
+          checksEl.innerHTML = annClassesCache.map(c =>
+            `<label style="display:inline-flex;align-items:center;gap:6px;background:#1e293b;padding:6px 12px;border-radius:8px;border:1px solid #334155;cursor:pointer;font-size:14px">
+              <input type="checkbox" class="ann-class-cb" value="${c.id}" style="width:auto;margin:0"> ${c.displayName || c.id}
+            </label>`).join('');
+        }
+      } catch (e) { checksEl.innerHTML = `<div class="err-msg">${e.message}</div>`; }
+      // 綁定一次性事件
+      if (!annBound) {
+        document.getElementById('btn-publish-ann').addEventListener('click', publishAnnouncement);
+        document.getElementById('btn-refresh-ann').addEventListener('click', loadAnnouncementsList);
+        annBound = true;
+      }
+      loadAnnouncementsList();
+    }
+
+    async function publishAnnouncement() {
+      const btn = document.getElementById('btn-publish-ann');
+      const msgEl = document.getElementById('ann-publish-msg');
+      msgEl.innerHTML = '';
+      const classIds = Array.from(document.querySelectorAll('.ann-class-cb:checked')).map(cb => cb.value);
+      const category = document.getElementById('ann-category').value;
+      const title = document.getElementById('ann-title').value.trim();
+      const content = document.getElementById('ann-content').value.trim();
+      const expireDays = parseInt(document.getElementById('ann-expire-days').value) || 7;
+      if (classIds.length === 0) { msgEl.innerHTML = '<div class="err-msg">❌ 請至少選一個班級</div>'; return; }
+      if (!title) { msgEl.innerHTML = '<div class="err-msg">❌ 請填標題</div>'; return; }
+      if (!content) { msgEl.innerHTML = '<div class="err-msg">❌ 請填內容</div>'; return; }
+      btn.disabled = true; btn.textContent = '⏳ 發布中...';
+      try {
+        const expiresAt = new Date(); expiresAt.setDate(expiresAt.getDate() + expireDays);
+        await setDoc(doc(collection(db, 'announcements')), {
+          classIds, category, title, content,
+          publishedBy: currentUser.email,
+          publishedByName: currentUser.email,
+          publishedAt: serverTimestamp(),
+          expiresAt: Timestamp.fromDate(expiresAt),
+          isPublished: true,
+          readBy: []
+        });
+        msgEl.innerHTML = '<div class="ok-msg">✅ 公告已發布</div>';
+        document.getElementById('ann-title').value = '';
+        document.getElementById('ann-content').value = '';
+        document.querySelectorAll('.ann-class-cb:checked').forEach(cb => cb.checked = false);
+        loadAnnouncementsList();
+        setTimeout(() => { msgEl.innerHTML = ''; }, 4000);
+      } catch (e) {
+        msgEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = '📢 發布公告';
+      }
+    }
+
+    async function loadAnnouncementsList() {
+      const el = document.getElementById('announcements-list');
+      el.innerHTML = '<div class="loading">⏳ 載入中...</div>';
+      try {
+        const snap = await getDocs(collection(db, 'announcements'));
+        const now = Date.now();
+        const items = [];
+        const expiredIds = [];
+        snap.forEach(d => {
+          const data = d.data();
+          const exp = data.expiresAt?.seconds ? data.expiresAt.seconds * 1000 : 0;
+          if (exp && exp < now) { expiredIds.push(d.id); }
+          else { items.push({ id: d.id, ...data, _exp: exp }); }
+        });
+        // 自動清除過期公告（規格：到期刪除）
+        for (const id of expiredIds) {
+          try { await deleteDoc(doc(db, 'announcements', id)); } catch (e) { console.error('purge expired ann', e); }
+        }
+        items.sort((a, b) => (b.publishedAt?.seconds || 0) - (a.publishedAt?.seconds || 0));
+        if (items.length === 0) {
+          el.innerHTML = '<div class="placeholder"><div class="icon">📢</div><h3>目前沒有公告</h3><p>用上方表單發布第一則公告</p></div>';
+          return;
+        }
+        const catEmoji = { '課程通知': '📘', '重大活動': '🎯', '重要提醒': '⚠️', '其他': '📌' };
+        let html = '';
+        items.forEach(a => {
+          const classNames = (a.classIds || []).map(cid => {
+            const c = annClassesCache.find(x => x.id === cid);
+            return c ? (c.displayName || c.id) : cid;
+          }).join('、');
+          const expDate = a._exp ? new Date(a._exp).toLocaleDateString('zh-TW') : '—';
+          const readCount = (a.readBy || []).length;
+          html += `
+            <div style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px;margin-bottom:12px">
+              <div style="display:flex;justify-content:space-between;align-items:start;gap:10px;flex-wrap:wrap">
+                <div style="flex:1;min-width:200px">
+                  <div style="margin-bottom:6px"><span class="tag-pill gray">${catEmoji[a.category] || '📌'} ${a.category || '其他'}</span></div>
+                  <div style="color:#f1f5f9;font-size:16px;font-weight:600;margin-bottom:4px">${a.title}</div>
+                  <div style="color:#cbd5e1;font-size:13px;white-space:pre-wrap;line-height:1.6">${a.content}</div>
+                </div>
+                <button class="btn btn-red" data-del-ann="${a.id}">🗑 下架</button>
+              </div>
+              <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1e293b;color:#64748b;font-size:12px;display:flex;gap:14px;flex-wrap:wrap">
+                <span>🏫 ${classNames}</span>
+                <span>👁 已讀 ${readCount} 人</span>
+                <span>⏰ ${expDate} 自動下架</span>
+              </div>
+            </div>`;
+        });
+        el.innerHTML = html;
+        el.querySelectorAll('button[data-del-ann]').forEach(b => b.addEventListener('click', () => deleteAnnouncement(b.dataset.delAnn)));
+      } catch (e) {
+        el.innerHTML = `<div class="err-msg">${e.message}</div>`;
+      }
+    }
+
+    async function deleteAnnouncement(id) {
+      if (!confirm('確定要下架這則公告嗎？（會直接刪除）')) return;
+      try { await deleteDoc(doc(db, 'announcements', id)); loadAnnouncementsList(); }
+      catch (e) { alert('❌ ' + e.message); }
+    }
 
     async function loadQrPage() {
       // 載入班級下拉
