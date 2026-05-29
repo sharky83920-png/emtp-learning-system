@@ -130,6 +130,26 @@
       </div>
     </div>
 
+    <!-- F14-C: 題目勘誤回報 modal -->
+    <div id="errreport-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:1300;justify-content:center;align-items:center;padding:20px">
+      <div style="background:white;border-radius:16px;max-width:440px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden">
+        <div style="background:#f59e0b;color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center">
+          <h3 style="margin:0;font-size:17px">⚠️ 題目勘誤回報</h3>
+          <button id="errreport-close" style="background:rgba(255,255,255,0.25);border:none;color:white;font-size:22px;width:30px;height:30px;border-radius:50%;cursor:pointer;line-height:1">×</button>
+        </div>
+        <div style="padding:18px 20px">
+          <div style="font-size:13px;color:#64748b;margin-bottom:12px">題號：<span id="errreport-qid" style="font-family:monospace;color:#1e293b;font-weight:600">—</span></div>
+          <label style="display:block;font-size:13px;color:#475569;margin-bottom:6px;font-weight:600">問題描述（例：標答應該是 B、選項 C 有錯字…）</label>
+          <textarea id="errreport-reason" rows="4" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px;resize:vertical" placeholder="請描述這題哪裡有問題"></textarea>
+          <div id="errreport-msg" style="margin-top:8px"></div>
+        </div>
+        <div style="padding:14px 20px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px">
+          <button id="errreport-cancel" style="background:#e2e8f0;color:#475569;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:14px">取消</button>
+          <button id="errreport-submit" style="background:#f59e0b;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600">送出回報</button>
+        </div>
+      </div>
+    </div>
+
     <main>
       <div class="welcome-card">
         <h2>👋 歡迎、<span id="student-name">同學</span></h2>
@@ -449,7 +469,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, Timestamp, arrayUnion, runTransaction, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, arrayUnion, runTransaction, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
 
     const firebaseConfig = {
@@ -652,6 +672,10 @@
         document.getElementById('student-class').textContent = classData.displayName || currentStudent.classId;
         const s = classData.settings || {};
         const eb = s.energyBar || { enabled: false };
+
+        // F14-C: 錯題本班級開關 → 控制底部「錯題本」tab 顯示
+        mistakeBookEnabled = !!(s.mistakeBook && s.mistakeBook.enabled);
+        applyMistakeBookVisibility();
 
         // F13-J: 能量條獨立 section（不再用 feature-grid）
         const ebSec = document.getElementById('energy-bar-section');
@@ -1962,13 +1986,32 @@
         if (el.dataset.tab === tab) el.classList.add('tab-active');
         else el.classList.remove('tab-active');
       });
+      if (tab === 'mistakes') loadMistakeBook();
       window.scrollTo(0, 0);
+    }
+
+    // F14-C: 依班級開關顯示/隱藏底部「錯題本」tab
+    function applyMistakeBookVisibility() {
+      const btn = document.querySelector('.bottom-tabs button[data-bottom-tab="mistakes"]');
+      if (btn) btn.style.display = mistakeBookEnabled ? '' : 'none';
+      if (!mistakeBookEnabled) {
+        const sec = document.querySelector('[data-tab="mistakes"]');
+        if (sec && sec.classList.contains('tab-active')) switchStudentTab('academic');
+      } else {
+        loadMistakeSet().catch(() => {});
+      }
     }
     document.querySelectorAll('.bottom-tabs button').forEach(b => {
       b.addEventListener('click', () => switchStudentTab(b.dataset.bottomTab));
     });
     // 預設「學科」
     switchStudentTab('academic');
+
+    // ===== F14-C: 錯題本狀態 =====
+    let mistakeBookEnabled = false;      // 班級是否開放錯題本
+    let mistakeSet = new Set();          // 已收藏的 questionId
+    let quizReview = [];                 // 最近一次測驗檢討資料（finishQuiz 後仍可用）
+    let errReportQid = null;             // 目前正在回報勘誤的題號
 
     // ===== F13-E: 答題系統 =====
     let quizState = null; // { questions, currentIdx, answers, startedAt }
@@ -2120,28 +2163,226 @@
         await Promise.all(wb);
       } catch (e) { console.warn('寫入 attempts:', e); }
 
+      // 先載入此學員已收藏的錯題（決定星星狀態）
+      if (mistakeBookEnabled) { try { await loadMistakeSet(); } catch (e) {} }
+
+      // 保存檢討快照（quizState 等下會清空、星星/勘誤 handler 仍要用）
+      quizReview = quizState.answers.map((a, idx) => ({ a, q: quizState.questions[idx] }));
+
       // 顯示結果
       document.getElementById('quiz-modal').style.display = 'none';
       document.getElementById('quiz-result-score').textContent = `${score} 分`;
       document.getElementById('quiz-result-meta').textContent = `答對 ${correct} / ${total} 題`;
-      let html = '<h4 style="color:#1e293b;font-size:15px;margin-bottom:12px">📋 測驗檢討</h4>';
-      quizState.answers.forEach((a, idx) => {
-        const q = quizState.questions[idx];
-        const bg = a.isCorrect ? '#f0fdf4' : '#fef2f2';
-        const color = a.isCorrect ? '#10b981' : '#ef4444';
-        const icon = a.isCorrect ? '✅' : '❌';
-        html += `<div style="background:${bg};border-left:4px solid ${color};padding:10px 14px;margin-bottom:8px;border-radius:0 8px 8px 0">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
-            <div style="color:#64748b;font-size:12px;font-family:monospace">${idx + 1}. ${q.id}</div>
-            <div style="color:${color};font-weight:700;font-size:13px">${icon} 你選 ${a.selectedAnswer}${a.isCorrect ? '' : '・正解 ' + a.correctAnswer}</div>
-          </div>
-          <div style="color:#1e293b;font-size:13px;line-height:1.5">${(q.questionText || '').substring(0, 80)}${q.questionText && q.questionText.length > 80 ? '...' : ''}</div>
-        </div>`;
-      });
-      document.getElementById('quiz-result-body').innerHTML = html;
+      renderQuizReview();
       document.getElementById('quiz-result-modal').style.display = 'flex';
       quizState = null;
     }
+
+    // F14-C: 渲染逐題檢討（標答/作答全文 + 出處 + 星星 + 勘誤鈕）
+    function renderQuizReview() {
+      const dimName = { D1: '緊急救護系統', D2: '基礎醫學含評估', D3: '創傷', D4: '非創傷', D5: '特殊族群', D6: '災難及特殊情境' };
+      let html = '<h4 style="color:#1e293b;font-size:15px;margin-bottom:12px">📋 測驗檢討與解析</h4>';
+      quizReview.forEach(({ a, q }, idx) => {
+        const opts = q.options || {};
+        const color = a.isCorrect ? '#10b981' : '#ef4444';
+        const icon = a.isCorrect ? '✅ 答對' : '❌ 答錯';
+        const correctText = opts[a.correctAnswer]?.text || '';
+        const selectedText = opts[a.selectedAnswer]?.text || '';
+        // 出處
+        const src = q.source || {};
+        let srcHtml = '';
+        if (src.bookId || src.chapterNumber || src.page) {
+          srcHtml = `<span style="display:inline-flex;gap:10px;flex-wrap:wrap;color:#64748b;font-size:12px">
+            ${src.bookId ? `<span>📖 ${src.bookId}</span>` : ''}
+            ${src.chapterNumber ? `<span>🏷 ${src.chapterNumber}</span>` : ''}
+            ${src.page ? `<span>📄 P.${src.page}</span>` : ''}
+          </span>`;
+        } else {
+          srcHtml = '<span style="color:#cbd5e1;font-size:12px">（無出處）</span>';
+        }
+        // 星星（僅班級開放錯題本）
+        const saved = mistakeSet.has(q.id);
+        const starHtml = mistakeBookEnabled
+          ? `<button class="mb-star-btn" data-qid="${q.id}" title="${saved ? '已收藏、點擊取消' : '加入錯題本'}" style="background:none;border:none;cursor:pointer;font-size:22px;line-height:1;padding:0 6px">${saved ? '⭐' : '☆'}</button>`
+          : '';
+        html += `
+          <div style="background:${a.isCorrect ? '#f0fdf4' : '#fef2f2'};border-left:4px solid ${color};padding:14px 16px;margin-bottom:12px;border-radius:0 10px 10px 0">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <span style="font-weight:700;color:#1e293b;font-size:14px">第 ${idx + 1} 題 ${q.derivedDimension ? `<span style="font-size:11px;background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:8px;margin-left:4px">${q.derivedDimension} ${dimName[q.derivedDimension] || ''}</span>` : ''}</span>
+              <span style="color:${color};font-weight:700;font-size:13px">${icon}</span>
+            </div>
+            <div style="color:#1e293b;font-size:14px;line-height:1.6;margin-bottom:10px;white-space:pre-wrap">${q.questionText || ''}</div>
+            <div style="font-size:13px;color:#065f46;margin-bottom:3px"><strong>標答：${a.correctAnswer}.</strong> ${correctText}</div>
+            ${a.isCorrect ? '' : `<div style="font-size:13px;color:#991b1b;margin-bottom:8px"><strong>作答：${a.selectedAnswer}.</strong> ${selectedText}</div>`}
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,0,0,0.06)">
+              ${srcHtml}
+              <div style="display:flex;align-items:center;gap:6px">
+                ${starHtml}
+                <button class="errreport-open-btn" data-qid="${q.id}" style="background:white;border:1px solid #f59e0b;color:#b45309;padding:5px 10px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px">⚠️ 題目勘誤</button>
+              </div>
+            </div>
+          </div>`;
+      });
+      const body = document.getElementById('quiz-result-body');
+      body.innerHTML = html;
+      // 綁定星星
+      body.querySelectorAll('.mb-star-btn').forEach(b => b.addEventListener('click', () => toggleMistake(b.dataset.qid)));
+      // 綁定勘誤
+      body.querySelectorAll('.errreport-open-btn').forEach(b => b.addEventListener('click', () => openErrReport(b.dataset.qid)));
+    }
+
+    // ===== F14-C: 錯題本（手動收藏、各學員獨立）=====
+    function mistakeDocId(qid) { return `${currentStudent.id}__${qid}`; }
+
+    async function loadMistakeSet() {
+      mistakeSet = new Set();
+      if (!currentStudent) return;
+      const snap = await getDocs(query(collection(db, 'mistake_book'), where('studentId', '==', currentStudent.id)));
+      snap.forEach(d => { const data = d.data(); if (data.questionId) mistakeSet.add(data.questionId); });
+    }
+
+    async function toggleMistake(qid) {
+      if (!currentStudent || !mistakeBookEnabled) return;
+      const ref = doc(db, 'mistake_book', mistakeDocId(qid));
+      try {
+        if (mistakeSet.has(qid)) {
+          await deleteDoc(ref);
+          mistakeSet.delete(qid);
+        } else {
+          // 從本次檢討快照找題目內容
+          const found = quizReview.find(r => r.q.id === qid);
+          const q = found ? found.q : null;
+          await setDoc(ref, {
+            studentId: currentStudent.id,
+            classId: currentStudent.classId,
+            questionId: qid,
+            dimension: q?.derivedDimension || null,
+            questionText: q?.questionText || '',
+            options: q?.options || {},
+            correctAnswer: q?.correctAnswer || '',
+            source: q?.source || {},
+            addedAt: serverTimestamp()
+          });
+          mistakeSet.add(qid);
+        }
+        // 更新所有同題號星星 UI
+        document.querySelectorAll(`.mb-star-btn[data-qid="${qid}"]`).forEach(b => {
+          const on = mistakeSet.has(qid);
+          b.textContent = on ? '⭐' : '☆';
+          b.title = on ? '已收藏、點擊取消' : '加入錯題本';
+        });
+        // 若錯題本 tab 開著、同步刷新
+        const mbTab = document.querySelector('[data-tab="mistakes"]');
+        if (mbTab && mbTab.classList.contains('tab-active')) loadMistakeBook();
+      } catch (e) {
+        alert('❌ 收藏失敗：' + e.message);
+      }
+    }
+
+    async function loadMistakeBook() {
+      const el = document.getElementById('mistake-book-content');
+      if (!el) return;
+      if (!mistakeBookEnabled) {
+        el.innerHTML = '<div class="empty-hint">此班級未開放錯題本</div>';
+        return;
+      }
+      el.innerHTML = '<div class="loading">⏳ 載入中...</div>';
+      try {
+        const snap = await getDocs(query(collection(db, 'mistake_book'), where('studentId', '==', currentStudent.id)));
+        const items = [];
+        snap.forEach(d => items.push({ id: d.id, ...d.data() }));
+        mistakeSet = new Set(items.map(i => i.questionId));
+        if (items.length === 0) {
+          el.innerHTML = '<div class="empty-hint">📭 錯題本還是空的<br><br>做完綜合測驗後、在檢討畫面點 ☆ 星星把想複習的題目收藏進來。</div>';
+          return;
+        }
+        // 分維度
+        const dimName = { D1: '緊急救護系統', D2: '基礎醫學含評估', D3: '創傷', D4: '非創傷', D5: '特殊族群', D6: '災難及特殊情境' };
+        const groups = {};
+        items.forEach(it => { const d = it.dimension || '其他'; (groups[d] = groups[d] || []).push(it); });
+        items.sort((a, b) => (b.addedAt?.seconds || 0) - (a.addedAt?.seconds || 0));
+        let html = `<div style="color:#64748b;font-size:13px;margin-bottom:12px">共收藏 <strong style="color:#3b82f6">${items.length}</strong> 題、依維度分類。點 ⭐ 可移除。</div>`;
+        Object.keys(groups).sort().forEach(dim => {
+          const list = groups[dim].sort((a, b) => (b.addedAt?.seconds || 0) - (a.addedAt?.seconds || 0));
+          html += `<div style="font-size:13px;font-weight:700;color:#1e40af;background:#dbeafe;padding:6px 12px;border-radius:8px;margin:14px 0 8px">${dim}${dimName[dim] ? ' ' + dimName[dim] : ''}（${list.length}）</div>`;
+          list.forEach(it => {
+            const opts = it.options || {};
+            const correctText = opts[it.correctAnswer]?.text || '';
+            const src = it.source || {};
+            const srcLine = (src.bookId || src.chapterNumber || src.page)
+              ? `<div style="color:#94a3b8;font-size:11px;margin-top:6px">${src.bookId ? '📖 ' + src.bookId + ' ' : ''}${src.chapterNumber ? '🏷 ' + src.chapterNumber + ' ' : ''}${src.page ? '📄 P.' + src.page : ''}</div>`
+              : '';
+            html += `
+              <div style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:10px">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+                  <div style="flex:1;color:#1e293b;font-size:14px;line-height:1.6;white-space:pre-wrap">${it.questionText || '(題目內容已不可用)'}</div>
+                  <button class="mb-remove-btn" data-qid="${it.questionId}" title="從錯題本移除" style="background:none;border:none;cursor:pointer;font-size:20px;line-height:1">⭐</button>
+                </div>
+                <div style="font-size:13px;color:#065f46;margin-top:8px"><strong>標答：${it.correctAnswer}.</strong> ${correctText}</div>
+                ${srcLine}
+              </div>`;
+          });
+        });
+        el.innerHTML = html;
+        el.querySelectorAll('.mb-remove-btn').forEach(b => b.addEventListener('click', () => removeMistake(b.dataset.qid)));
+      } catch (e) {
+        el.innerHTML = `<div class="err-msg">${e.message}</div>`;
+      }
+    }
+
+    async function removeMistake(qid) {
+      try {
+        await deleteDoc(doc(db, 'mistake_book', mistakeDocId(qid)));
+        mistakeSet.delete(qid);
+        loadMistakeBook();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+
+    // ===== F14-C: 題目勘誤回報 =====
+    function openErrReport(qid) {
+      errReportQid = qid;
+      document.getElementById('errreport-qid').textContent = qid;
+      document.getElementById('errreport-reason').value = '';
+      document.getElementById('errreport-msg').innerHTML = '';
+      document.getElementById('errreport-submit').disabled = false;
+      document.getElementById('errreport-submit').textContent = '送出回報';
+      document.getElementById('errreport-modal').style.display = 'flex';
+    }
+    function closeErrReport() { document.getElementById('errreport-modal').style.display = 'none'; errReportQid = null; }
+
+    async function submitErrReport() {
+      const reason = document.getElementById('errreport-reason').value.trim();
+      const msgEl = document.getElementById('errreport-msg');
+      if (!reason) { msgEl.innerHTML = '<div style="color:#ef4444;font-size:13px">請描述問題</div>'; return; }
+      if (!errReportQid || !currentStudent) return;
+      const btn = document.getElementById('errreport-submit');
+      btn.disabled = true; btn.textContent = '⏳ 送出中...';
+      try {
+        await setDoc(doc(collection(db, 'question_error_reports')), {
+          questionId: errReportQid,
+          reportedBy: currentStudent.id,
+          reportedByName: currentStudent.name || '',
+          reportedByClassId: currentStudent.classId,
+          reason,
+          status: 'pending',
+          reviewedBy: null,
+          reviewedByName: null,
+          reviewedAt: null,
+          reviewerNote: '',
+          createdAt: serverTimestamp()
+        });
+        msgEl.innerHTML = '<div style="color:#10b981;font-size:13px">✅ 已送出、感謝回報！指導員處理後會通知你。</div>';
+        setTimeout(closeErrReport, 1200);
+      } catch (e) {
+        msgEl.innerHTML = `<div style="color:#ef4444;font-size:13px">❌ ${e.message}</div>`;
+        btn.disabled = false; btn.textContent = '送出回報';
+      }
+    }
+
+    document.getElementById('errreport-close').addEventListener('click', closeErrReport);
+    document.getElementById('errreport-cancel').addEventListener('click', closeErrReport);
+    document.getElementById('errreport-submit').addEventListener('click', submitErrReport);
+    document.getElementById('errreport-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeErrReport(); });
 
     document.getElementById('btn-logout').addEventListener('click', () => { if (confirm('確定要登出嗎？')) signOut(auth); });
   </script>

@@ -338,14 +338,8 @@
               </select>
             </div>
             <div class="form-group" style="flex:1;min-width:180px">
-              <label>幾天後自動下架</label>
-              <select id="ann-expire-days">
-                <option value="3">3 天</option>
-                <option value="7" selected>7 天</option>
-                <option value="14">14 天</option>
-                <option value="30">30 天</option>
-                <option value="90">90 天</option>
-              </select>
+              <label>自動下架日期（當天結束前都會顯示）</label>
+              <input type="date" id="ann-expire-date">
             </div>
           </div>
           <div class="form-group"><label>標題</label><input type="text" id="ann-title" placeholder="例：06月參訪通知"></div>
@@ -3495,6 +3489,12 @@
             </label>`).join('');
         }
       } catch (e) { checksEl.innerHTML = `<div class="err-msg">${e.message}</div>`; }
+      // 預設下架日 = 7 天後
+      const dateEl = document.getElementById('ann-expire-date');
+      if (dateEl && !dateEl.value) {
+        const d = new Date(); d.setDate(d.getDate() + 7);
+        dateEl.value = d.toISOString().slice(0, 10);
+      }
       // 綁定一次性事件
       if (!annBound) {
         document.getElementById('btn-publish-ann').addEventListener('click', publishAnnouncement);
@@ -3512,13 +3512,16 @@
       const category = document.getElementById('ann-category').value;
       const title = document.getElementById('ann-title').value.trim();
       const content = document.getElementById('ann-content').value.trim();
-      const expireDays = parseInt(document.getElementById('ann-expire-days').value) || 7;
+      const expireDateStr = document.getElementById('ann-expire-date').value;
       if (classIds.length === 0) { msgEl.innerHTML = '<div class="err-msg">❌ 請至少選一個班級</div>'; return; }
       if (!title) { msgEl.innerHTML = '<div class="err-msg">❌ 請填標題</div>'; return; }
       if (!content) { msgEl.innerHTML = '<div class="err-msg">❌ 請填內容</div>'; return; }
+      if (!expireDateStr) { msgEl.innerHTML = '<div class="err-msg">❌ 請選下架日期</div>'; return; }
+      // 下架日當天 23:59:59 前都顯示
+      const expiresAt = new Date(expireDateStr + 'T23:59:59');
+      if (expiresAt.getTime() < Date.now()) { msgEl.innerHTML = '<div class="err-msg">❌ 下架日期不能早於今天</div>'; return; }
       btn.disabled = true; btn.textContent = '⏳ 發布中...';
       try {
-        const expiresAt = new Date(); expiresAt.setDate(expiresAt.getDate() + expireDays);
         await setDoc(doc(collection(db, 'announcements')), {
           classIds, category, title, content,
           publishedBy: currentUser.email,
