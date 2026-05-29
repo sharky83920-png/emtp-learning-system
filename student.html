@@ -71,6 +71,7 @@
     .bottom-tabs button.active { color: #3b82f6; background: #eff6ff; font-weight: 600; }
     [data-tab] { display: none; }
     [data-tab].tab-active { display: block; }
+    [data-tab].empty-hide { display: none !important; }
     .upload-btn { display: inline-flex; align-items: center; gap: 4px; background: #f1f5f9; color: #475569; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; border: 1px solid #cbd5e1; }
     .upload-btn:hover { background: #e2e8f0; }
     .uploaded-thumb { display: inline-block; max-width: 100px; max-height: 80px; margin-top: 6px; border: 1px solid #e2e8f0; border-radius: 6px; vertical-align: middle; }
@@ -137,7 +138,7 @@
       </div>
 
       <!-- F13-J: 能量條（獨立 section、放河流圖後、題庫與答題前） -->
-      <div class="milestone-section" data-tab="academic" id="energy-bar-section" style="display:none">
+      <div class="milestone-section empty-hide" data-tab="academic" id="energy-bar-section">
         <h3>⚡ 能量條</h3>
         <div id="energy-bar-content"><div class="loading">⏳ 載入中...</div></div>
       </div>
@@ -199,7 +200,7 @@
       </div>
 
       <!-- F11-C: Milestone 評分明細（按群分組、點看河流圖） -->
-      <div class="milestone-section" id="milestone-details-section" data-tab="skills" style="display:none">
+      <div class="milestone-section empty-hide" id="milestone-details-section" data-tab="skills">
         <h3>📋 Milestone 評分明細</h3>
         <div style="color:#64748b;font-size:13px;margin-bottom:12px">💡 點任一 milestone 看歷次評核河流圖 + 教官質性回饋</div>
         <div id="milestone-details-content"></div>
@@ -639,7 +640,7 @@
         const ebSec = document.getElementById('energy-bar-section');
         const ebContent = document.getElementById('energy-bar-content');
         if (eb.enabled) {
-          ebSec.style.display = '';
+          ebSec.classList.remove('empty-hide');
           const periodName = eb.period === 'monthly' ? '本月' : '本週';
           // 第一版：直接顯示框架（之後接活動資料）
           ebContent.innerHTML = `
@@ -656,7 +657,7 @@
             <div style="color:#94a3b8;font-size:12px;margin-top:8px;text-align:center">💡 出題 / 答題 / EPA 評核都會累積能量</div>
           `;
         } else {
-          ebSec.style.display = '';
+          ebSec.classList.remove('empty-hide');
           ebContent.innerHTML = '<div class="empty-hint">⏳ 指導員尚未開啟能量條</div>';
         }
 
@@ -1117,11 +1118,11 @@
       });
 
       if (groupsWithData.length === 0) {
-        section.style.display = 'none';
+        section.classList.add('empty-hide');
         return;
       }
-
-      section.style.display = 'block';
+      // 有資料、移除 empty-hide、讓 tab 切換邏輯接管
+      section.classList.remove('empty-hide');
       let html = '';
       groupsWithData.forEach(g => {
         const inGroup = _mItems.filter(m => m.groupId === g.id);
