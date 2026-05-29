@@ -638,6 +638,11 @@
     });
 
     function renderReview(items) {
+      // F11-H bug fix: 重置 submit 按鈕（避免上次評完後 disabled + 顯示「⏳ 寫入中...」殘留）
+      const sbtn = document.getElementById('btn-submit');
+      sbtn.disabled = false;
+      sbtn.innerHTML = `✅ 確認送出 <span id="submit-count-badge">（${items.length} 筆）</span>`;
+
       const ev = getEvaluatorInfo();
       const g = groups.find(x => x.id === currentGroupId);
 
@@ -736,6 +741,15 @@
     document.getElementById('btn-eval-more').addEventListener('click', () => {
       Object.keys(evalDraft).forEach(k => delete evalDraft[k]);
       currentGroupId = null;
+      // F11-H bug fix: 重置兩個按鈕的狀態（避免上次成功後殘留 disabled）
+      const sbtn = document.getElementById('btn-submit');
+      sbtn.disabled = false;
+      sbtn.innerHTML = '✅ 確認送出 <span id="submit-count-badge"></span>';
+      const rbtn = document.getElementById('btn-review');
+      if (rbtn) {
+        rbtn.disabled = true; // 因為 evalDraft 已清空
+        rbtn.innerHTML = '📋 確認評量內容 <span id="review-count-badge"></span>';
+      }
       showStep('step1');
     });
 
