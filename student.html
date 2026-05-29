@@ -195,6 +195,7 @@
           <canvas id="milestone-radar"></canvas>
         </div>
         <div class="empty-hint" id="radar-empty-hint">⏳ 尚無評核資料、教官評核後雷達會自動更新</div>
+        <div id="radar-drill-hint" style="display:none;text-align:center;color:#0d9488;font-size:13px;margin-top:6px">💡 點雷達任一維度 → 看該維度評分明細</div>
         <div class="radar-actions">
           <button class="btn-eval" id="btn-eval-epa">📝 填寫 Milestone 評核</button>
           <button class="btn-copy" id="btn-copy-link">🔗 複製連結</button>
@@ -676,6 +677,9 @@
         // F14-C: 錯題本班級開關 → 控制底部「錯題本」tab 顯示
         mistakeBookEnabled = !!(s.mistakeBook && s.mistakeBook.enabled);
         applyMistakeBookVisibility();
+
+        // F15+: 該班 EPA 計分排除設定
+        _epaScoring = s.epaScoring || {};
 
         // F15: 訓練簽到連結從全域設定讀
         try {
@@ -1172,6 +1176,19 @@
     let _mEvals = [];
     let _mScores = {};
     let _mRecentN = 3;
+    let _epaScoring = {};            // F15+: 該班 EPA 計分排除設定
+    let _selectedMsGroup = null;     // F15+: 評分明細目前選中的維度
+
+    // F15+: 判斷一筆評核是否「列入計分」（依該班排除設定）
+    function isEvalCounted(e) {
+      const cfg = _epaScoring || {};
+      if ((cfg.excludeRoles || []).includes(e.evaluatorRole)) return false;
+      if ((cfg.excludeUnits || []).includes(e.evaluatorUnit)) return false;
+      if ((cfg.excludeEvaluators || []).includes(e.evaluatorName)) return false;
+      if ((cfg.excludeMilestones || []).includes(e.milestoneId)) return false;
+      return true;
+    }
+
     async function loadMilestoneRadar() {
       try {
         // 1. 讀啟用的 milestone 群（5 角）
@@ -1214,10 +1231,10 @@
           if (settingsDoc.exists()) recentN = settingsDoc.data().milestoneRecentN || 3;
         } catch (e) {}
 
-        // 5. 計算每個 milestone 的最近 N 次平均
+        // 5. 計算每個 milestone 的最近 N 次平均（只算「列入計分」的評核）
         const milestoneScores = {};
         milestones.forEach(m => {
-          const myEvals = evaluations.filter(e => e.milestoneId === m.id);
+          const myEvals = evaluations.filter(e => e.milestoneId === m.id && isEvalCounted(e));
           if (myEvals.length === 0) { milestoneScores[m.id] = null; return; }
           const recent = myEvals.slice(0, recentN);
           const sum = recent.reduce((acc, e) => acc + (e.level || 0), 0);
@@ -1271,6 +1288,14 @@
           options: {
             responsive: true,
             maintainAspectRatio: true,
+            onClick: (evt) => {
+              if (!radarChart) return;
+              const pts = radarChart.getElementsAtEventForMode(evt, 'nearest', { intersect: false }, true);
+              if (pts.length) {
+                const g = _mGroups[pts[0].index];
+                if (g) selectMilestoneGroup(g.id);
+              }
+            },
             scales: {
               r: {
                 min: 0,
@@ -1307,72 +1332,93 @@
     }
 
     // ===== F11-C: Milestone 評分明細 + 河流圖 =====
+    // F15+: 點雷達某維度 → 顯示該維度評分明細
+    function selectMilestoneGroup(groupId) {
+      _selectedMsGroup = groupId;
+      renderMilestoneDetails();
+      const section = document.getElementById('milestone-details-section');
+      if (section && !section.classList.contains('empty-hide')) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    // F15+: 鑽取式評分明細（只顯示選中的維度；預設隱藏）
     function renderMilestoneDetails() {
       const section = document.getElementById('milestone-details-section');
       const content = document.getElementById('milestone-details-content');
       if (!section || !content) return;
 
-      // 只顯示有評核紀錄的群
+      // 有評核資料的群（給雷達提示用）
       const groupsWithData = _mGroups.filter(g => {
         const inGroup = _mItems.filter(m => m.groupId === g.id);
         return inGroup.some(m => _mScores[m.id] !== null);
       });
+      const drillHint = document.getElementById('radar-drill-hint');
+      if (drillHint) drillHint.style.display = groupsWithData.length > 0 ? 'block' : 'none';
 
-      if (groupsWithData.length === 0) {
-        section.classList.add('empty-hide');
+      // 未選維度 → 隱藏明細
+      if (!_selectedMsGroup) { section.classList.add('empty-hide'); return; }
+      const g = _mGroups.find(x => x.id === _selectedMsGroup);
+      if (!g) { section.classList.add('empty-hide'); return; }
+
+      const inGroup = _mItems.filter(m => m.groupId === g.id);
+      const itemsWithScore = inGroup.filter(m => _mScores[m.id] !== null);
+      section.classList.remove('empty-hide');
+
+      // 維度切換 chips（點雷達或這裡都能換）
+      const chips = _mGroups.map(x => {
+        const active = x.id === _selectedMsGroup;
+        return `<button class="ms-group-chip" data-gid="${x.id}" style="background:${active ? '#0d9488' : '#f1f5f9'};color:${active ? 'white' : '#64748b'};border:none;padding:5px 12px;border-radius:14px;cursor:pointer;font-size:13px;font-family:inherit">${x.name}</button>`;
+      }).join(' ');
+
+      let html = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${chips}</div>`;
+
+      if (itemsWithScore.length === 0) {
+        html += `<div class="empty-hint">「${g.name}」維度目前尚無評核資料</div>`;
+        content.innerHTML = html;
+        content.querySelectorAll('.ms-group-chip').forEach(b => b.addEventListener('click', () => selectMilestoneGroup(b.dataset.gid)));
         return;
       }
-      // 有資料、移除 empty-hide、讓 tab 切換邏輯接管
-      section.classList.remove('empty-hide');
-      let html = '';
-      groupsWithData.forEach(g => {
-        const inGroup = _mItems.filter(m => m.groupId === g.id);
-        const itemsWithScore = inGroup.filter(m => _mScores[m.id] !== null);
-        if (itemsWithScore.length === 0) return;
 
-        // 群平均
-        const sum = itemsWithScore.reduce((acc, m) => acc + _mScores[m.id], 0);
-        const groupAvg = sum / itemsWithScore.length;
+      const sum = itemsWithScore.reduce((acc, m) => acc + _mScores[m.id], 0);
+      const groupAvg = sum / itemsWithScore.length;
 
-        html += `<div style="margin-bottom:20px">
-          <div style="background:linear-gradient(135deg,#14b8a6,#0d9488);color:white;padding:10px 16px;border-radius:8px 8px 0 0;display:flex;justify-content:space-between;align-items:center">
-            <strong>${g.id} ${g.name}</strong>
-            <span style="font-size:13px;opacity:0.9">綜合 Level ${groupAvg.toFixed(2)}（最近 ${_mRecentN} 筆平均）</span>
-          </div>
-          <table style="width:100%;border-collapse:collapse;background:white;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;overflow:hidden">
-            <thead>
-              <tr style="background:#f8fafc">
-                <th style="padding:8px 12px;text-align:left;font-size:12px;color:#64748b;font-weight:600">ID</th>
-                <th style="padding:8px 12px;text-align:left;font-size:12px;color:#64748b;font-weight:600">項目</th>
-                <th style="padding:8px 12px;text-align:left;font-size:12px;color:#64748b;font-weight:600">步驟</th>
-                <th style="padding:8px 12px;text-align:center;font-size:12px;color:#64748b;font-weight:600">平均</th>
-                <th style="padding:8px 12px;text-align:center;font-size:12px;color:#64748b;font-weight:600">次數</th>
-                <th style="padding:8px 12px;text-align:center;font-size:12px;color:#64748b;font-weight:600">趨勢</th>
-              </tr>
-            </thead>
-            <tbody>`;
+      html += `<div>
+        <div style="background:linear-gradient(135deg,#14b8a6,#0d9488);color:white;padding:10px 16px;border-radius:8px 8px 0 0;display:flex;justify-content:space-between;align-items:center">
+          <strong>${g.id} ${g.name}</strong>
+          <span style="font-size:13px;opacity:0.9">綜合 Level ${groupAvg.toFixed(2)}（最近 ${_mRecentN} 筆平均）</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;background:white;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;overflow:hidden">
+          <thead>
+            <tr style="background:#f8fafc">
+              <th style="padding:8px 12px;text-align:left;font-size:12px;color:#64748b;font-weight:600">ID</th>
+              <th style="padding:8px 12px;text-align:left;font-size:12px;color:#64748b;font-weight:600">項目</th>
+              <th style="padding:8px 12px;text-align:left;font-size:12px;color:#64748b;font-weight:600">步驟</th>
+              <th style="padding:8px 12px;text-align:center;font-size:12px;color:#64748b;font-weight:600">平均</th>
+              <th style="padding:8px 12px;text-align:center;font-size:12px;color:#64748b;font-weight:600">次數</th>
+              <th style="padding:8px 12px;text-align:center;font-size:12px;color:#64748b;font-weight:600">趨勢</th>
+            </tr>
+          </thead>
+          <tbody>`;
 
-        // 排序：分數低的在前（提醒學員加強）
-        itemsWithScore.sort((a, b) => (_mScores[a.id] || 0) - (_mScores[b.id] || 0));
-
-        itemsWithScore.forEach(m => {
-          const score = _mScores[m.id];
-          const count = _mEvals.filter(e => e.milestoneId === m.id).length;
-          const scoreColor = score >= 4 ? '#10b981' : score >= 3 ? '#f59e0b' : '#ef4444';
-          html += `<tr style="border-top:1px solid #e2e8f0;cursor:pointer" onclick="window._openRiver('${m.id}')" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
-            <td style="padding:10px 12px;font-family:monospace;font-size:13px;color:#64748b">${m.id}</td>
-            <td style="padding:10px 12px;font-weight:600;color:#1e293b">${m.name}</td>
-            <td style="padding:10px 12px"><span style="background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:10px;font-size:12px">${m.step || '—'}</span></td>
-            <td style="padding:10px 12px;text-align:center;font-weight:700;color:${scoreColor};font-size:16px">${score.toFixed(1)}</td>
-            <td style="padding:10px 12px;text-align:center;color:#64748b">${count}</td>
-            <td style="padding:10px 12px;text-align:center"><button style="background:#14b8a6;color:white;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">📈 詳細</button></td>
-          </tr>`;
-        });
-
-        html += '</tbody></table></div>';
+      itemsWithScore.sort((a, b) => (_mScores[a.id] || 0) - (_mScores[b.id] || 0));
+      itemsWithScore.forEach(m => {
+        const score = _mScores[m.id];
+        const count = _mEvals.filter(e => e.milestoneId === m.id).length;
+        const scoreColor = score >= 4 ? '#10b981' : score >= 3 ? '#f59e0b' : '#ef4444';
+        html += `<tr style="border-top:1px solid #e2e8f0;cursor:pointer" onclick="window._openRiver('${m.id}')" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+          <td style="padding:10px 12px;font-family:monospace;font-size:13px;color:#64748b">${m.id}</td>
+          <td style="padding:10px 12px;font-weight:600;color:#1e293b">${m.name}</td>
+          <td style="padding:10px 12px"><span style="background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:10px;font-size:12px">${m.step || '—'}</span></td>
+          <td style="padding:10px 12px;text-align:center;font-weight:700;color:${scoreColor};font-size:16px">${score.toFixed(1)}</td>
+          <td style="padding:10px 12px;text-align:center;color:#64748b">${count}</td>
+          <td style="padding:10px 12px;text-align:center"><button style="background:#14b8a6;color:white;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">📈 詳細</button></td>
+        </tr>`;
       });
 
+      html += '</tbody></table></div>';
       content.innerHTML = html;
+      content.querySelectorAll('.ms-group-chip').forEach(b => b.addEventListener('click', () => selectMilestoneGroup(b.dataset.gid)));
     }
 
     // 全域函式給 onclick 用
@@ -1423,6 +1469,8 @@
         return '—';
       });
       const data = evalsAsc.map(e => e.level || 0);
+      // F15+: 不計分的點用灰色標示
+      const pointColors = evalsAsc.map(e => isEvalCounted(e) ? 'rgba(20, 184, 166, 1)' : '#cbd5e1');
 
       const ctx = document.getElementById('river-chart');
       if (riverChart) riverChart.destroy();
@@ -1436,7 +1484,7 @@
               data,
               backgroundColor: 'rgba(20, 184, 166, 0.15)',
               borderColor: 'rgba(20, 184, 166, 1)',
-              pointBackgroundColor: 'rgba(20, 184, 166, 1)',
+              pointBackgroundColor: pointColors,
               pointBorderColor: '#fff',
               pointRadius: 5,
               borderWidth: 3,
@@ -1476,9 +1524,11 @@
           const date = e.evaluatedAt?.seconds ? new Date(e.evaluatedAt.seconds * 1000).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
           const lv = e.level ?? 0;
           const fb = e.qualitativeFeedback?.trim() || '（無文字回饋）';
-          lhtml += `<div style="border-left:4px solid ${levelColors[lv] || '#6b7280'};background:#f8fafc;padding:10px 14px;margin-bottom:8px;border-radius:0 8px 8px 0">
+          const counted = isEvalCounted(e);
+          const excludeTag = counted ? '' : '<span style="background:#e2e8f0;color:#64748b;padding:1px 8px;border-radius:8px;font-size:11px;margin-left:6px">不列入計分</span>';
+          lhtml += `<div style="border-left:4px solid ${counted ? (levelColors[lv] || '#6b7280') : '#cbd5e1'};background:${counted ? '#f8fafc' : '#f1f5f9'};padding:10px 14px;margin-bottom:8px;border-radius:0 8px 8px 0">
             <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:4px">
-              <div style="color:#64748b;font-size:12px">${date} ・ ${e.evaluatorName || '—'}（${e.evaluatorRole || '—'}）／ ${e.evaluatorUnit || '—'}</div>
+              <div style="color:#64748b;font-size:12px">${date} ・ ${e.evaluatorName || '—'}（${e.evaluatorRole || '—'}）／ ${e.evaluatorUnit || '—'}${excludeTag}</div>
               <div style="background:${levelColors[lv] || '#6b7280'};color:white;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700">Level ${lv}</div>
             </div>
             <div style="color:${e.qualitativeFeedback?.trim() ? '#1e293b' : '#94a3b8'};font-size:13px;font-style:${e.qualitativeFeedback?.trim() ? 'normal' : 'italic'}">${fb}</div>

@@ -428,6 +428,19 @@
         </div>
 
         <div class="card">
+          <h2><span>📊 EPA 計分配置（每班獨立）</span></h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
+            💡 選班級後、勾選要<strong>排除計分</strong>的身分 / 單位 / 評核者 / Milestone（勾起來＝不列入該班雷達與評分明細的平均）。<br>
+            ⚠️ 被排除的評核<strong>仍會</strong>顯示在學員的 Milestone 詳細視窗（灰色標示「不列入計分」、質性回饋照看）。
+          </p>
+          <div class="form-group" style="max-width:340px">
+            <label>選擇班級</label>
+            <select id="epa-class"><option value="">請選班級...</option></select>
+          </div>
+          <div id="epa-config-body"><div class="placeholder" style="padding:30px"><div class="icon">📊</div><p>請先選擇班級</p></div></div>
+        </div>
+
+        <div class="card">
           <h2><span>⚙️ 系統設定（班級層級）</span>
             <button class="btn btn-ghost" id="btn-refresh-settings">🔄 重新載入</button>
           </h2>
@@ -1357,6 +1370,7 @@
     async function loadSettings() {
       loadGlobalSettings();
       loadFormula();
+      loadEpaConfig();
       const listEl = document.getElementById('settings-list');
       listEl.innerHTML = '<div class="loading">⏳ 載入班級設定...</div>';
       try {
@@ -1404,12 +1418,11 @@
       const btn = document.querySelector(`button[data-save-settings="${classId}"]`);
       btn.disabled = true; btn.textContent = '⏳';
       try {
+        // 用 dot-path 更新、避免覆蓋掉 settings.epaScoring 等其他設定
         await updateDoc(doc(db, 'classes', classId), {
-          settings: {
-            energyBar: { enabled: ebEnabled, target: ebTarget, period: ebPeriod },
-            mistakeBook: { enabled: mbEnabled },
-            leaderboard: { enabled: lbEnabled }
-          },
+          'settings.energyBar': { enabled: ebEnabled, target: ebTarget, period: ebPeriod },
+          'settings.mistakeBook': { enabled: mbEnabled },
+          'settings.leaderboard': { enabled: lbEnabled },
           settingsUpdatedAt: serverTimestamp(),
           settingsUpdatedBy: currentUser.email
         });
@@ -1569,6 +1582,130 @@
         btn.disabled = false; btn.textContent = '💾 儲存公式（記入變更歷史）';
       }
     });
+
+    // ===== F15+: EPA 計分配置（每班獨立排除）=====
+    let epaClassesCache = [];
+    let epaMilestonesCache = [];
+
+    async function loadEpaConfig() {
+      try {
+        if (epaClassesCache.length === 0) {
+          const cSnap = await getDocs(collection(db, 'classes'));
+          epaClassesCache = [];
+          cSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) epaClassesCache.push({ id: d.id, ...data }); });
+          epaClassesCache.sort((a, b) => (b.year || 0) - (a.year || 0));
+        }
+        const sel = document.getElementById('epa-class');
+        let html = '<option value="">請選班級...</option>';
+        epaClassesCache.forEach(c => { html += `<option value="${c.id}">${c.displayName || c.id}</option>`; });
+        sel.innerHTML = html;
+        if (!sel._bound) { sel.addEventListener('change', () => loadEpaConfigForClass(sel.value)); sel._bound = true; }
+      } catch (e) { console.error('loadEpaConfig', e); }
+    }
+
+    async function loadEpaConfigForClass(classId) {
+      const body = document.getElementById('epa-config-body');
+      if (!classId) { body.innerHTML = '<div class="placeholder" style="padding:30px"><div class="icon">📊</div><p>請先選擇班級</p></div>'; return; }
+      body.innerHTML = '<div class="loading">⏳ 載入該班評核資料...</div>';
+      try {
+        // 載入該班所有評核、聚合身分/單位/評核者
+        const evSnap = await getDocs(query(collection(db, 'milestone_evaluations'), where('classId', '==', classId)));
+        const roleCount = {}, unitCount = {}, evaluatorCount = {};
+        evSnap.forEach(d => {
+          const e = d.data();
+          const role = e.evaluatorRole || '(未填身分)';
+          const unit = e.evaluatorUnit || '(未填單位)';
+          const name = e.evaluatorName || '(匿名)';
+          roleCount[role] = (roleCount[role] || 0) + 1;
+          unitCount[unit] = (unitCount[unit] || 0) + 1;
+          evaluatorCount[name] = (evaluatorCount[name] || 0) + 1;
+        });
+        // milestones（給排除特定 milestone 用）
+        if (epaMilestonesCache.length === 0) {
+          const mSnap = await getDocs(collection(db, 'milestones'));
+          epaMilestonesCache = [];
+          mSnap.forEach(d => epaMilestonesCache.push({ id: d.id, ...d.data() }));
+          epaMilestonesCache.sort((a, b) => a.id.localeCompare(b.id));
+        }
+        // 現有設定
+        const cls = epaClassesCache.find(c => c.id === classId) || {};
+        const cfg = (cls.settings && cls.settings.epaScoring) || {};
+        const exRoles = cfg.excludeRoles || [];
+        const exUnits = cfg.excludeUnits || [];
+        const exEvals = cfg.excludeEvaluators || [];
+        const exMs = cfg.excludeMilestones || [];
+
+        const chk = (group, val, label, count, checked) =>
+          `<label style="display:inline-flex;align-items:center;gap:6px;background:#1e293b;padding:6px 12px;border-radius:8px;border:1px solid ${checked ? '#dc2626' : '#334155'};cursor:pointer;font-size:13px;margin:0 6px 6px 0">
+            <input type="checkbox" class="epa-${group}" value="${val.replace(/"/g, '&quot;')}" ${checked ? 'checked' : ''} style="width:auto;margin:0"> ${label}${count != null ? ` <span style="color:#64748b">(${count})</span>` : ''}
+          </label>`;
+
+        const rolesHtml = Object.keys(roleCount).length
+          ? Object.keys(roleCount).sort().map(r => chk('role', r, r, roleCount[r], exRoles.includes(r))).join('')
+          : '<span style="color:#64748b;font-size:13px">（該班尚無評核資料）</span>';
+        const unitsHtml = Object.keys(unitCount).length
+          ? Object.keys(unitCount).sort().map(u => chk('unit', u, u, unitCount[u], exUnits.includes(u))).join('')
+          : '<span style="color:#64748b;font-size:13px">（該班尚無評核資料）</span>';
+        const evalsHtml = Object.keys(evaluatorCount).length
+          ? Object.keys(evaluatorCount).sort((a, b) => evaluatorCount[b] - evaluatorCount[a]).map(n => chk('evaluator', n, n, evaluatorCount[n], exEvals.includes(n))).join('')
+          : '<span style="color:#64748b;font-size:13px">（該班尚無評核資料）</span>';
+        const msHtml = epaMilestonesCache.map(m => chk('milestone', m.id, `${m.id} ${m.name || ''}`, null, exMs.includes(m.id))).join('');
+
+        body.innerHTML = `
+          <div style="margin-bottom:16px">
+            <label style="display:block;color:#94a3b8;font-size:12px;text-transform:uppercase;margin-bottom:8px">🧑‍🏫 排除身分（含「學員」＝排除自評/學員互評）</label>
+            <div>${rolesHtml}</div>
+          </div>
+          <div style="margin-bottom:16px">
+            <label style="display:block;color:#94a3b8;font-size:12px;text-transform:uppercase;margin-bottom:8px">🏥 排除單位</label>
+            <div>${unitsHtml}</div>
+          </div>
+          <div style="margin-bottom:16px">
+            <label style="display:block;color:#94a3b8;font-size:12px;text-transform:uppercase;margin-bottom:8px">👤 排除特定評核者</label>
+            <div>${evalsHtml}</div>
+          </div>
+          <details style="margin-bottom:16px">
+            <summary style="color:#94a3b8;font-size:12px;text-transform:uppercase;cursor:pointer;margin-bottom:8px">🎯 排除特定 Milestone（點開）</summary>
+            <div style="margin-top:8px">${msHtml}</div>
+          </details>
+          <button class="btn btn-green" id="btn-save-epa" data-class="${classId}">💾 儲存此班 EPA 計分配置</button>
+          <div id="epa-save-msg"></div>
+        `;
+        document.getElementById('btn-save-epa').addEventListener('click', () => saveEpaConfig(classId));
+      } catch (e) {
+        body.innerHTML = `<div class="err-msg">${e.message}</div>`;
+      }
+    }
+
+    async function saveEpaConfig(classId) {
+      const btn = document.getElementById('btn-save-epa');
+      const msg = document.getElementById('epa-save-msg');
+      msg.innerHTML = '';
+      const grab = (g) => Array.from(document.querySelectorAll(`.epa-${g}:checked`)).map(cb => cb.value);
+      const epaScoring = {
+        excludeRoles: grab('role'),
+        excludeUnits: grab('unit'),
+        excludeEvaluators: grab('evaluator'),
+        excludeMilestones: grab('milestone')
+      };
+      btn.disabled = true; btn.textContent = '⏳ 儲存中...';
+      try {
+        await updateDoc(doc(db, 'classes', classId), {
+          'settings.epaScoring': epaScoring,
+          settingsUpdatedAt: serverTimestamp(),
+          settingsUpdatedBy: currentUser.email
+        });
+        // 更新快取
+        const c = epaClassesCache.find(x => x.id === classId);
+        if (c) { c.settings = c.settings || {}; c.settings.epaScoring = epaScoring; }
+        msg.innerHTML = '<div class="ok-msg">✅ 已儲存（學員端下次載入生效）</div>';
+        setTimeout(() => { msg.innerHTML = ''; }, 3000);
+      } catch (e) {
+        msg.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 儲存此班 EPA 計分配置';
+      }
+    }
 
     // ===== F10-A: Milestone 主檔管理 =====
     let msCurrentSubTab = 'ms-groups';
