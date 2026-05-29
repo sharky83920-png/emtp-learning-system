@@ -677,6 +677,26 @@
         mistakeBookEnabled = !!(s.mistakeBook && s.mistakeBook.enabled);
         applyMistakeBookVisibility();
 
+        // F15: 訓練簽到連結從全域設定讀
+        try {
+          const gsDoc = await getDoc(doc(db, 'system_settings', 'global'));
+          const url = gsDoc.exists() ? (gsDoc.data().externalLinks?.trainingSignIn || '') : '';
+          const linkEl = document.getElementById('ext-signin-link');
+          if (linkEl) {
+            if (url) {
+              linkEl.href = url;
+              linkEl.style.opacity = '1';
+              linkEl.style.pointerEvents = 'auto';
+              linkEl.textContent = '📥 開啟訓練簽到系統 →';
+            } else {
+              linkEl.href = '#';
+              linkEl.style.opacity = '0.5';
+              linkEl.style.pointerEvents = 'none';
+              linkEl.textContent = '⏳ Master 尚未設定簽到連結';
+            }
+          }
+        } catch (e) { console.warn('load training url', e); }
+
         // F13-J: 能量條獨立 section（不再用 feature-grid）
         const ebSec = document.getElementById('energy-bar-section');
         const ebContent = document.getElementById('energy-bar-content');

@@ -355,6 +355,79 @@
 
       <section class="tab-content" id="tab-settings">
         <div class="card">
+          <h2><span>🌐 全域系統設定</span></h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
+            💡 全系統共用的設定。儲存後立即生效（學員端下次載入會套用）。
+          </p>
+          <div id="global-settings-body">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">
+              <div class="form-group" style="margin-bottom:0">
+                <label>及格分數</label>
+                <input type="number" id="gs-passing" min="0" max="100" value="75">
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label>Milestone 平均算法</label>
+                <select id="gs-ms-method">
+                  <option value="recent_n">最近 N 次平均</option>
+                  <option value="all_average">全部平均</option>
+                  <option value="latest_only">只看最新一次</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label>最近 N 次（算法選「最近 N 次」時用）</label>
+                <input type="number" id="gs-ms-recentn" min="1" max="20" value="3">
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label>Milestone 達標門檻（Level 0–5）</label>
+                <input type="number" id="gs-ms-threshold" min="0" max="5" value="4">
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label>QR 簽核時效（秒）</label>
+                <input type="number" id="gs-qr-ttl" min="30" value="300">
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label>EPA 評核 Token 時效（秒）</label>
+                <input type="number" id="gs-eval-ttl" min="60" value="86400">
+              </div>
+            </div>
+            <div class="form-group" style="margin-top:14px">
+              <label>訓練簽到系統 URL（學員端「實習」tab 用）</label>
+              <input type="url" id="gs-training-url" placeholder="https://...承辦醫院簽到系統...">
+            </div>
+            <button class="btn btn-green" id="btn-save-global" style="margin-top:6px">💾 儲存全域設定</button>
+            <div id="global-settings-msg"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2><span>📐 公式設定 — 綜合測驗績效排名</span></h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
+            💡 可用變數：<code style="color:#fcd34d">attempts</code>（作答題數）、<code style="color:#fcd34d">accuracy</code>（正確率 0~1）。支援 Math.* 函式。改動會記入變更歷史。
+          </p>
+          <div id="formula-body">
+            <div class="form-group">
+              <label>選擇預設</label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap" id="formula-presets"></div>
+            </div>
+            <div class="form-group">
+              <label>表達式</label>
+              <input type="text" id="formula-expr" style="font-family:monospace" placeholder="Math.sqrt(attempts) * accuracy">
+            </div>
+            <div class="form-group">
+              <label>說明</label>
+              <input type="text" id="formula-desc" placeholder="綜合測驗績效全班排名公式">
+            </div>
+            <div style="background:#0f172a;padding:12px 14px;border-radius:8px;margin-bottom:14px">
+              <div style="color:#94a3b8;font-size:12px;margin-bottom:6px">🔍 即時預覽（範例資料）</div>
+              <div id="formula-preview" style="font-family:monospace;font-size:13px;color:#cbd5e1">—</div>
+            </div>
+            <button class="btn btn-green" id="btn-save-formula">💾 儲存公式（記入變更歷史）</button>
+            <div id="formula-msg"></div>
+            <div id="formula-history" style="margin-top:14px"></div>
+          </div>
+        </div>
+
+        <div class="card">
           <h2><span>⚙️ 系統設定（班級層級）</span>
             <button class="btn btn-ghost" id="btn-refresh-settings">🔄 重新載入</button>
           </h2>
@@ -1282,6 +1355,8 @@
     
     // === 系統設定 (F8) ===
     async function loadSettings() {
+      loadGlobalSettings();
+      loadFormula();
       const listEl = document.getElementById('settings-list');
       listEl.innerHTML = '<div class="loading">⏳ 載入班級設定...</div>';
       try {
@@ -1347,6 +1422,153 @@
     }
 
     document.getElementById('btn-refresh-settings').addEventListener('click', loadSettings);
+
+    // ===== F15: 全域系統設定 =====
+    async function loadGlobalSettings() {
+      try {
+        const snap = await getDoc(doc(db, 'system_settings', 'global'));
+        const d = snap.exists() ? snap.data() : {};
+        document.getElementById('gs-passing').value = d.passingScore ?? 75;
+        document.getElementById('gs-ms-method').value = d.milestoneAvgMethod || 'recent_n';
+        document.getElementById('gs-ms-recentn').value = d.milestoneRecentN ?? 3;
+        document.getElementById('gs-ms-threshold').value = d.milestoneThresholdDefault ?? 4;
+        document.getElementById('gs-qr-ttl').value = d.qrTokenTTL ?? 300;
+        document.getElementById('gs-eval-ttl').value = d.evaluationTokenTTL ?? 86400;
+        document.getElementById('gs-training-url').value = (d.externalLinks && d.externalLinks.trainingSignIn) || '';
+      } catch (e) { console.error('loadGlobalSettings', e); }
+    }
+
+    document.getElementById('btn-save-global').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-save-global');
+      const msg = document.getElementById('global-settings-msg');
+      msg.innerHTML = '';
+      btn.disabled = true; btn.textContent = '⏳ 儲存中...';
+      try {
+        await setDoc(doc(db, 'system_settings', 'global'), {
+          passingScore: parseInt(document.getElementById('gs-passing').value) || 75,
+          milestoneAvgMethod: document.getElementById('gs-ms-method').value,
+          milestoneRecentN: parseInt(document.getElementById('gs-ms-recentn').value) || 3,
+          milestoneThresholdDefault: parseInt(document.getElementById('gs-ms-threshold').value) || 4,
+          qrTokenTTL: parseInt(document.getElementById('gs-qr-ttl').value) || 300,
+          evaluationTokenTTL: parseInt(document.getElementById('gs-eval-ttl').value) || 86400,
+          externalLinks: { trainingSignIn: document.getElementById('gs-training-url').value.trim() },
+          masterEmails: MASTER_EMAILS,
+          updatedAt: serverTimestamp(),
+          updatedBy: currentUser.email
+        }, { merge: true });
+        msg.innerHTML = '<div class="ok-msg">✅ 已儲存</div>';
+        setTimeout(() => { msg.innerHTML = ''; }, 3000);
+      } catch (e) {
+        msg.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 儲存全域設定';
+      }
+    });
+
+    // ===== F15: 公式設定 =====
+    const FORMULA_PRESETS = [
+      { name: '平衡型', expr: 'Math.sqrt(attempts) * accuracy' },
+      { name: '新手友善', expr: 'Math.log10(attempts + 1) * accuracy * 25' },
+      { name: '刷題王', expr: 'Math.pow(attempts, 0.6) * accuracy' },
+      { name: '純品質', expr: 'accuracy * 100' }
+    ];
+    let formulaHistoryCache = [];
+
+    function evalFormula(expr, attempts, accuracy) {
+      // 僅 Master 可寫入、此處只做預覽。限制只能用 Math 與兩個變數。
+      try {
+        const fn = new Function('attempts', 'accuracy', 'Math', `"use strict"; return (${expr});`);
+        const v = fn(attempts, accuracy, Math);
+        return (typeof v === 'number' && isFinite(v)) ? v : NaN;
+      } catch (e) { return NaN; }
+    }
+
+    function updateFormulaPreview() {
+      const expr = document.getElementById('formula-expr').value;
+      const samples = [
+        { name: '馮昱哲', attempts: 9825, accuracy: 0.97 },
+        { name: '洪銘彥', attempts: 4442, accuracy: 0.959 },
+        { name: '新手小明', attempts: 120, accuracy: 0.65 }
+      ];
+      const lines = samples.map(s => {
+        const v = evalFormula(expr, s.attempts, s.accuracy);
+        return `${s.name} (${s.attempts} 題, ${Math.round(s.accuracy * 100)}%) = ${isNaN(v) ? '⚠️ 公式錯誤' : v.toFixed(2)}`;
+      });
+      document.getElementById('formula-preview').innerHTML = lines.join('<br>');
+    }
+
+    async function loadFormula() {
+      // 預設按鈕
+      const presetEl = document.getElementById('formula-presets');
+      presetEl.innerHTML = FORMULA_PRESETS.map((p, i) => `<button class="btn btn-ghost" data-preset="${i}">${p.name}</button>`).join('');
+      presetEl.querySelectorAll('button[data-preset]').forEach(b => b.addEventListener('click', () => {
+        document.getElementById('formula-expr').value = FORMULA_PRESETS[b.dataset.preset].expr;
+        updateFormulaPreview();
+      }));
+      try {
+        const snap = await getDoc(doc(db, 'formulas', 'weighted_score'));
+        const d = snap.exists() ? snap.data() : {};
+        document.getElementById('formula-expr').value = d.expression || FORMULA_PRESETS[0].expr;
+        document.getElementById('formula-desc').value = d.description || '綜合測驗績效全班排名';
+        formulaHistoryCache = d.changeHistory || [];
+      } catch (e) { console.error('loadFormula', e); }
+      updateFormulaPreview();
+      renderFormulaHistory();
+    }
+
+    function renderFormulaHistory() {
+      const el = document.getElementById('formula-history');
+      if (!formulaHistoryCache.length) { el.innerHTML = '<div style="color:#64748b;font-size:12px">尚無變更歷史</div>'; return; }
+      const rows = [...formulaHistoryCache].reverse().slice(0, 10).map(h => {
+        const t = h.changedAt?.seconds ? new Date(h.changedAt.seconds * 1000).toLocaleString('zh-TW') : (h.changedAt || '');
+        return `<div style="font-size:12px;color:#94a3b8;padding:6px 0;border-bottom:1px solid #1e293b">
+          <span style="color:#cbd5e1">${t}</span> · ${h.changedBy || ''}<br>
+          <span style="font-family:monospace;color:#fca5a5">${h.from || '(無)'}</span> → <span style="font-family:monospace;color:#6ee7b7">${h.to || ''}</span>
+        </div>`;
+      }).join('');
+      el.innerHTML = `<div style="color:#94a3b8;font-size:12px;font-weight:600;margin-bottom:6px">🕘 變更歷史</div>${rows}`;
+    }
+
+    document.getElementById('formula-expr').addEventListener('input', updateFormulaPreview);
+
+    document.getElementById('btn-save-formula').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-save-formula');
+      const msg = document.getElementById('formula-msg');
+      msg.innerHTML = '';
+      const expr = document.getElementById('formula-expr').value.trim();
+      const desc = document.getElementById('formula-desc').value.trim();
+      if (!expr) { msg.innerHTML = '<div class="err-msg">❌ 請填表達式</div>'; return; }
+      // 驗證表達式可計算
+      if (isNaN(evalFormula(expr, 100, 0.8))) { msg.innerHTML = '<div class="err-msg">❌ 表達式無法計算、請檢查語法（只能用 attempts / accuracy / Math.*）</div>'; return; }
+      btn.disabled = true; btn.textContent = '⏳ 儲存中...';
+      try {
+        const ref = doc(db, 'formulas', 'weighted_score');
+        const snap = await getDoc(ref);
+        const oldExpr = snap.exists() ? snap.data().expression : null;
+        const history = snap.exists() ? (snap.data().changeHistory || []) : [];
+        if (oldExpr !== expr) {
+          history.push({ changedAt: Timestamp.now(), changedBy: currentUser.email, from: oldExpr, to: expr });
+        }
+        await setDoc(ref, {
+          formulaId: 'weighted_score',
+          expression: expr,
+          description: desc,
+          variables: ['attempts', 'accuracy'],
+          presets: FORMULA_PRESETS,
+          effectiveFrom: serverTimestamp(),
+          changeHistory: history,
+          updatedAt: serverTimestamp()
+        });
+        formulaHistoryCache = history;
+        renderFormulaHistory();
+        msg.innerHTML = '<div class="ok-msg">✅ 已儲存</div>';
+        setTimeout(() => { msg.innerHTML = ''; }, 3000);
+      } catch (e) {
+        msg.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 儲存公式（記入變更歷史）';
+      }
+    });
 
     // ===== F10-A: Milestone 主檔管理 =====
     let msCurrentSubTab = 'ms-groups';
