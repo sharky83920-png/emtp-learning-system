@@ -63,6 +63,18 @@
     .skill-block { width: 22px; height: 22px; border-radius: 4px; background: #e2e8f0; }
     .skill-block.filled { background: #10b981; }
     .skill-overflow { color: #10b981; font-size: 13px; font-weight: 600; margin-left: 6px; }
+    /* F13-F: 底部 3 tab 切換 */
+    main { padding-bottom: 90px !important; }
+    .bottom-tabs { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e2e8f0; display: flex; padding: 6px 4px; box-shadow: 0 -4px 20px rgba(0,0,0,0.06); z-index: 90; }
+    .bottom-tabs button { flex: 1; background: transparent; border: none; padding: 10px 6px; color: #94a3b8; font-size: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; font-family: inherit; border-radius: 8px; transition: all 0.15s; }
+    .bottom-tabs button .bt-icon { font-size: 22px; }
+    .bottom-tabs button.active { color: #3b82f6; background: #eff6ff; font-weight: 600; }
+    [data-tab] { display: none; }
+    [data-tab].tab-active { display: block; }
+    .upload-btn { display: inline-flex; align-items: center; gap: 4px; background: #f1f5f9; color: #475569; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; border: 1px solid #cbd5e1; }
+    .upload-btn:hover { background: #e2e8f0; }
+    .uploaded-thumb { display: inline-block; max-width: 100px; max-height: 80px; margin-top: 6px; border: 1px solid #e2e8f0; border-radius: 6px; vertical-align: middle; }
+    .upload-row { display: flex; gap: 8px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -107,7 +119,7 @@
       </div>
 
       <!-- F11-F: 6 角學科雷達（D1-D6） -->
-      <div class="milestone-section">
+      <div class="milestone-section" data-tab="academic">
         <h3>📊 學科綜合雷達（國考範圍）</h3>
         <div class="radar-container">
           <canvas id="academic-radar"></canvas>
@@ -116,7 +128,7 @@
       </div>
 
       <!-- F12-B: 歷次考試成績落點趨勢河流圖 -->
-      <div class="milestone-section">
+      <div class="milestone-section" data-tab="academic">
         <h3>🌊 歷次考試成績落點趨勢</h3>
         <div style="position:relative;height:280px">
           <canvas id="score-river-chart"></canvas>
@@ -125,7 +137,7 @@
       </div>
 
       <!-- F11-A: Milestone 群能力 5 角雷達 -->
-      <div class="milestone-section">
+      <div class="milestone-section" data-tab="skills">
         <h3>🎯 Milestone 群能力</h3>
         <div class="radar-container">
           <canvas id="milestone-radar"></canvas>
@@ -173,14 +185,14 @@
       </div>
 
       <!-- F11-C: Milestone 評分明細（按群分組、點看河流圖） -->
-      <div class="milestone-section" id="milestone-details-section" style="display:none">
+      <div class="milestone-section" id="milestone-details-section" data-tab="skills" style="display:none">
         <h3>📋 Milestone 評分明細</h3>
         <div style="color:#64748b;font-size:13px;margin-bottom:12px">💡 點任一 milestone 看歷次評核河流圖 + 教官質性回饋</div>
         <div id="milestone-details-content"></div>
       </div>
 
       <!-- F11-B: 核心技術簽核清單 -->
-      <div class="milestone-section">
+      <div class="milestone-section" data-tab="skills">
         <h3>🛠️ 核心技術簽核清單</h3>
         <div id="core-skills-list"><div class="loading">⏳ 載入中...</div></div>
       </div>
@@ -207,13 +219,52 @@
             </div>
             <div class="form-group">
               <label>題目內容</label>
-              <textarea id="nq-text" rows="3" placeholder="請輸入題幹..."></textarea>
+              <textarea id="nq-text" rows="6" placeholder="請輸入題幹..." style="font-size:15px"></textarea>
+              <div class="upload-row">
+                <label class="upload-btn">📷 上傳題目圖
+                  <input type="file" id="nq-img-text" accept="image/*" style="display:none">
+                </label>
+                <span id="nq-img-text-info" style="color:#94a3b8;font-size:12px">無</span>
+                <img id="nq-img-text-preview" class="uploaded-thumb" style="display:none">
+              </div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-              <div class="form-group"><label style="color:#3b82f6">選項 A</label><textarea id="nq-opt-A" rows="2"></textarea></div>
-              <div class="form-group"><label style="color:#3b82f6">選項 B</label><textarea id="nq-opt-B" rows="2"></textarea></div>
-              <div class="form-group"><label style="color:#3b82f6">選項 C</label><textarea id="nq-opt-C" rows="2"></textarea></div>
-              <div class="form-group"><label style="color:#3b82f6">選項 D</label><textarea id="nq-opt-D" rows="2"></textarea></div>
+            <div style="display:grid;grid-template-columns:1fr;gap:10px">
+              <div class="form-group" style="margin-bottom:6px"><label style="color:#3b82f6">選項 A</label><textarea id="nq-opt-A" rows="3" style="font-size:15px"></textarea>
+                <div class="upload-row">
+                  <label class="upload-btn">📷 A 附圖
+                    <input type="file" id="nq-img-A" accept="image/*" style="display:none">
+                  </label>
+                  <span id="nq-img-A-info" style="color:#94a3b8;font-size:12px">無</span>
+                  <img id="nq-img-A-preview" class="uploaded-thumb" style="display:none">
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:6px"><label style="color:#3b82f6">選項 B</label><textarea id="nq-opt-B" rows="3" style="font-size:15px"></textarea>
+                <div class="upload-row">
+                  <label class="upload-btn">📷 B 附圖
+                    <input type="file" id="nq-img-B" accept="image/*" style="display:none">
+                  </label>
+                  <span id="nq-img-B-info" style="color:#94a3b8;font-size:12px">無</span>
+                  <img id="nq-img-B-preview" class="uploaded-thumb" style="display:none">
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:6px"><label style="color:#3b82f6">選項 C</label><textarea id="nq-opt-C" rows="3" style="font-size:15px"></textarea>
+                <div class="upload-row">
+                  <label class="upload-btn">📷 C 附圖
+                    <input type="file" id="nq-img-C" accept="image/*" style="display:none">
+                  </label>
+                  <span id="nq-img-C-info" style="color:#94a3b8;font-size:12px">無</span>
+                  <img id="nq-img-C-preview" class="uploaded-thumb" style="display:none">
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:6px"><label style="color:#3b82f6">選項 D</label><textarea id="nq-opt-D" rows="3" style="font-size:15px"></textarea>
+                <div class="upload-row">
+                  <label class="upload-btn">📷 D 附圖
+                    <input type="file" id="nq-img-D" accept="image/*" style="display:none">
+                  </label>
+                  <span id="nq-img-D-info" style="color:#94a3b8;font-size:12px">無</span>
+                  <img id="nq-img-D-preview" class="uploaded-thumb" style="display:none">
+                </div>
+              </div>
             </div>
             <div class="form-group">
               <label style="color:#10b981;font-weight:700">正確答案</label>
@@ -321,7 +372,7 @@
       </div>
 
       <!-- F13-C + F13-D + F13-E: 題庫 + 出題進度 + 答題系統 -->
-      <div class="milestone-section">
+      <div class="milestone-section" data-tab="academic">
         <h3>📝 題庫與答題</h3>
         <div style="color:#64748b;font-size:13px;margin-bottom:12px">💡 依照排定的出題日累積題庫、隨機抽題練習。</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">
@@ -331,7 +382,33 @@
         </div>
       </div>
 
-      <div class="feature-grid" id="features"><div class="loading">⏳ 載入中...</div></div>
+      <div class="feature-grid" id="features" data-tab="academic"><div class="loading">⏳ 載入中...</div></div>
+
+      <!-- F13-F: 實習 tab（外部連結） -->
+      <div class="milestone-section" data-tab="internship">
+        <h3>🏥 訓練簽到系統</h3>
+        <div style="color:#64748b;font-size:13px;margin-bottom:14px">📥 訓練 / 實習簽到由 TP 承辦醫院提供的外部系統處理。</div>
+        <a href="#" id="ext-signin-link" target="_blank" style="display:block;text-align:center;background:linear-gradient(135deg,#10b981,#059669);color:white;padding:18px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;box-shadow:0 4px 12px rgba(16,185,129,0.3)">
+          📥 開啟訓練簽到系統 →
+        </a>
+        <div style="color:#94a3b8;font-size:12px;margin-top:12px;text-align:center">⚙️ 連結網址由 Master 在系統設定中維護</div>
+      </div>
+
+      <!-- F13-F: 底部 3 tab 切換 -->
+      <nav class="bottom-tabs">
+        <button data-bottom-tab="academic" class="active">
+          <span class="bt-icon">📚</span>
+          <span>學科</span>
+        </button>
+        <button data-bottom-tab="skills">
+          <span class="bt-icon">🎯</span>
+          <span>技術簽核</span>
+        </button>
+        <button data-bottom-tab="internship">
+          <span class="bt-icon">🏥</span>
+          <span>實習</span>
+        </button>
+      </nav>
     </main>
   </div>
 
@@ -339,6 +416,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
     import { getFirestore, collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, Timestamp, arrayUnion, runTransaction, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -354,7 +432,40 @@
     const auth = getAuth(app);
     setPersistence(auth, inMemoryPersistence);
     const db = getFirestore(app);
+    const storage = getStorage(app);
     let currentStudent = null;
+
+    // F13-G: 圖片 resize + 上傳到 Firebase Storage
+    async function resizeImage(file, maxWidth = 1200) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onerror = reject;
+          img.onload = () => {
+            const scale = Math.min(1, maxWidth / img.width);
+            const w = Math.round(img.width * scale);
+            const h = Math.round(img.height * scale);
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            canvas.toBlob(b => b ? resolve(b) : reject(new Error('blob fail')), 'image/jpeg', 0.85);
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    async function uploadImageToStorage(file, prefix) {
+      if (!file || !file.type.startsWith('image/')) throw new Error('檔案必須是圖片');
+      const resized = await resizeImage(file, 1200);
+      const filename = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2,6)}.jpg`;
+      const path = `questions/${currentStudent.classId}/${filename}`;
+      const r = storageRef(storage, path);
+      await uploadBytes(r, resized, { contentType: 'image/jpeg' });
+      return await getDownloadURL(r);
+    }
 
     function showLogin(errMsg) {
       document.getElementById('login-screen').style.display = 'flex';
@@ -1311,10 +1422,42 @@
       if (e.target === e.currentTarget) document.getElementById('eval-link-modal').style.display = 'none';
     });
 
-    // ===== F13-C: 新增自創題庫 =====
+    // ===== F13-C + F13-G: 新增自創題庫（含圖片上傳） =====
     let nqSchedule = [];
     let nqBooks = [];
     let nqChapters = [];
+    // F13-G: 暫存 4 個選項 + 題目的待上傳檔案（送出時才上傳）
+    const nqImageFiles = { text: null, A: null, B: null, C: null, D: null };
+
+    function bindImageUpload(key) {
+      const input = document.getElementById(`nq-img-${key}`);
+      const info = document.getElementById(`nq-img-${key}-info`);
+      const preview = document.getElementById(`nq-img-${key}-preview`);
+      if (!input) return;
+      input.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) { nqImageFiles[key] = null; info.textContent = '無'; preview.style.display = 'none'; return; }
+        if (!file.type.startsWith('image/')) { alert('請選擇圖片'); input.value = ''; return; }
+        nqImageFiles[key] = file;
+        info.textContent = `✓ ${file.name} (${Math.round(file.size / 1024)} KB)`;
+        info.style.color = '#10b981';
+        const reader = new FileReader();
+        reader.onload = (ev) => { preview.src = ev.target.result; preview.style.display = 'inline-block'; };
+        reader.readAsDataURL(file);
+      });
+    }
+    ['text','A','B','C','D'].forEach(bindImageUpload);
+    function clearNqImages() {
+      ['text','A','B','C','D'].forEach(key => {
+        nqImageFiles[key] = null;
+        const input = document.getElementById(`nq-img-${key}`);
+        const info = document.getElementById(`nq-img-${key}-info`);
+        const preview = document.getElementById(`nq-img-${key}-preview`);
+        if (input) input.value = '';
+        if (info) { info.textContent = '無'; info.style.color = '#94a3b8'; }
+        if (preview) preview.style.display = 'none';
+      });
+    }
 
     document.getElementById('btn-new-question').addEventListener('click', openNewQuestionModal);
     document.getElementById('btn-new-q-close').addEventListener('click', () => document.getElementById('new-q-modal').style.display = 'none');
@@ -1435,9 +1578,27 @@
       if (!optA || !optB || !optC || !optD) { errEl.innerHTML = '<div class="err-msg">❌ 4 個選項都要填</div>'; return; }
 
       const btn = document.getElementById('btn-submit-question');
-      btn.disabled = true; btn.textContent = '⏳ 送出中...';
+      btn.disabled = true; btn.textContent = '⏳ 上傳圖片中...';
 
       try {
+        // F13-G: 先上傳圖片到 Storage
+        const imageUrls = { text: null, A: null, B: null, C: null, D: null };
+        const tasks = [];
+        for (const key of ['text','A','B','C','D']) {
+          if (nqImageFiles[key]) {
+            tasks.push((async () => {
+              try {
+                imageUrls[key] = await uploadImageToStorage(nqImageFiles[key], `q_${key}`);
+              } catch (e) {
+                console.error(`圖片 ${key} 上傳失敗:`, e);
+                throw new Error(`圖片 ${key === 'text' ? '題目' : '選項 ' + key} 上傳失敗：${e.message}`);
+              }
+            })());
+          }
+        }
+        if (tasks.length > 0) await Promise.all(tasks);
+
+        btn.textContent = '⏳ 送出題目中...';
         // 流水號（民國年月日）
         const today = new Date();
         const rocY = today.getFullYear() - 1911;
@@ -1451,7 +1612,8 @@
           if (counterDoc.exists()) nextNum = (counterDoc.data().lastNumber || 0) + 1;
           const qid = `${dateStr}-${nextNum}`;
           const qRef = doc(db, 'questions', qid);
-          tx.set(qRef, {
+          // F13-I: 同時存「原始版本」快照、編輯時不動
+          const fullData = {
             serialDate: dateStr,
             serialNumber: nextNum,
             createdBy: currentStudent.id,
@@ -1460,13 +1622,13 @@
             createdByClassId: currentStudent.classId,
             scheduledDate,
             questionText,
-            questionImageUrl: null,
+            questionImageUrl: imageUrls.text,
             difficulty,
             options: {
-              A: { text: optA, imageUrl: null },
-              B: { text: optB, imageUrl: null },
-              C: { text: optC, imageUrl: null },
-              D: { text: optD, imageUrl: null }
+              A: { text: optA, imageUrl: imageUrls.A },
+              B: { text: optB, imageUrl: imageUrls.B },
+              C: { text: optC, imageUrl: imageUrls.C },
+              D: { text: optD, imageUrl: imageUrls.D }
             },
             correctAnswer,
             source: {
@@ -1475,7 +1637,11 @@
               chapterNumber: chapterNumber || null,
               page: page || null
             },
-            derivedDimension: dimension || null,
+            derivedDimension: dimension || null
+          };
+          tx.set(qRef, {
+            ...fullData,
+            originalVersion: { ...fullData, savedAt: Timestamp.now() },  // F13-I: 原始快照
             attemptCount: 0,
             correctRate: 0,
             reportCount: 0,
@@ -1499,6 +1665,7 @@
         });
 
         alert(`✅ 題目已送出！\n\n題號：${questionId}\n出題日：${scheduledDate}`);
+        clearNqImages();
         document.getElementById('new-q-modal').style.display = 'none';
       } catch (e) {
         console.error(e);
@@ -1570,6 +1737,23 @@
         grid.innerHTML = `<div class="err-msg">${e.message}</div>`;
       }
     }
+
+    // ===== F13-F: 學員端分頁切換 =====
+    function switchStudentTab(tab) {
+      document.querySelectorAll('.bottom-tabs button').forEach(b => b.classList.remove('active'));
+      const target = document.querySelector(`.bottom-tabs button[data-bottom-tab="${tab}"]`);
+      if (target) target.classList.add('active');
+      document.querySelectorAll('[data-tab]').forEach(el => {
+        if (el.dataset.tab === tab) el.classList.add('tab-active');
+        else el.classList.remove('tab-active');
+      });
+      window.scrollTo(0, 0);
+    }
+    document.querySelectorAll('.bottom-tabs button').forEach(b => {
+      b.addEventListener('click', () => switchStudentTab(b.dataset.bottomTab));
+    });
+    // 預設「學科」
+    switchStudentTab('academic');
 
     // ===== F13-E: 答題系統 =====
     let quizState = null; // { questions, currentIdx, answers, startedAt }

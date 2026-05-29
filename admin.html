@@ -654,10 +654,41 @@
     </div>
   </div>
 
+  <!-- F13-H: 題庫批次匯入 Modal -->
+  <div class="modal-overlay" id="qm-bulk-modal">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:780px">
+      <div class="modal-header"><h3>📤 批次匯入題庫（CSV）</h3><button class="modal-close" id="qm-bulk-close">×</button></div>
+      <div class="modal-body">
+        <div style="background:#0f172a;padding:14px;border-radius:8px;margin-bottom:12px;font-size:13px;color:#cbd5e1;line-height:1.6">
+          💡 <strong>欄位順序</strong>：題目, A, B, C, D, 正確答案, 難易度, 書籍ID, 章節編號, 頁碼, 維度, 出題者姓名, 出題者班級, 出題日期<br>
+          ⚠️ 題號（流水號）系統自動生成、不需提供。圖片本次不支援批次（之後再做）。<br>
+          ⚠️ 難易度填 easy/medium/hard、維度填 D1-D6（或留空、系統會依章節自動帶）。
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <label class="btn btn-green" style="cursor:pointer">📤 上傳 CSV
+            <input type="file" id="qm-bulk-file" accept=".csv,.tsv,.txt" style="display:none">
+          </label>
+          <span style="color:#94a3b8;font-size:13px;align-self:center" id="qm-bulk-file-info">尚未選檔</span>
+        </div>
+        <div class="form-group">
+          <label>內容預覽（每行一題）</label>
+          <textarea id="qm-bulk-text" rows="10" placeholder="先「📤 上傳 CSV」或貼上資料、再按「🔍 預覽」"></textarea>
+        </div>
+        <div id="qm-bulk-preview"></div>
+        <div id="qm-bulk-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="qm-bulk-cancel">取消</button>
+        <button class="btn" id="btn-qm-bulk-preview">🔍 預覽</button>
+        <button class="btn btn-green" id="btn-qm-bulk-commit" disabled>💾 寫入</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, where, writeBatch, onSnapshot, Timestamp, arrayUnion, increment } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, where, writeBatch, onSnapshot, Timestamp, arrayUnion, increment, runTransaction } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -3053,24 +3084,29 @@
       } catch (e) { alert('❌ ' + e.message); }
     }
 
-    // ===== F13-A: 題庫管理（查詢 / 隱藏 / 顯示） =====
+    // ===== F13-A + F13-H + F13-I: 題庫管理（查詢 / 隱藏 / 批次匯入 / 下載原始） =====
     let qmCache = [];
     let qmBooksCache = [];
+    let qmChaptersCache = [];
     let qmFilters = { bookId: '', dimension: '', visibility: 'visible' };
+    let qmBatchPreview = null;
 
     async function loadQuestionsPage() {
       const el = document.getElementById('questions-content');
       el.innerHTML = '<div class="loading">⏳ 載入中...</div>';
       try {
-        const [qSnap, bSnap] = await Promise.all([
+        const [qSnap, bSnap, chSnap] = await Promise.all([
           getDocs(collection(db, 'questions')),
-          getDocs(collection(db, 'books'))
+          getDocs(collection(db, 'books')),
+          getDocs(collection(db, 'chapters'))
         ]);
         qmCache = [];
         qSnap.forEach(d => qmCache.push({ id: d.id, ...d.data() }));
         qmCache.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
         qmBooksCache = [];
         bSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) qmBooksCache.push({ id: d.id, ...data }); });
+        qmChaptersCache = [];
+        chSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) qmChaptersCache.push({ id: d.id, ...data }); });
         renderQuestionsPage();
       } catch (e) { el.innerHTML = `<div class="err-msg">${e.message}</div>`; }
     }
@@ -3111,7 +3147,11 @@
               <option value="all"${qmFilters.visibility === 'all' ? ' selected' : ''}>全部</option>
             </select>
           </div>
-          <div style="color:#94a3b8;font-size:13px;margin-left:auto">符合 ${filtered.length} / 共 ${qmCache.length} 題</div>
+          <div style="flex:1"></div>
+          <button class="btn btn-ghost" id="btn-qm-bulk-tpl">📥 範本 CSV</button>
+          <button class="btn btn-green" id="btn-qm-bulk-import">📤 批次匯入</button>
+          <button class="btn" id="btn-qm-export">📦 全部下載原始</button>
+          <div style="color:#94a3b8;font-size:13px;margin-left:8px;width:100%;text-align:right">符合 ${filtered.length} / 共 ${qmCache.length} 題</div>
         </div>
       `;
       if (filtered.length === 0) {
@@ -3132,10 +3172,11 @@
             <td>${diff}</td>
             <td style="font-size:13px">${text}${text.length === 40 ? '...' : ''}</td>
             <td>${state}</td>
-            <td>
+            <td style="white-space:nowrap">
+              <button class="btn btn-ghost" data-qm-dl="${q.id}" title="下載原始版本">📥</button>
               ${q.isVisible === false
-                ? `<button class="btn btn-ghost" data-qm-show="${q.id}">👁️ 顯示</button>`
-                : `<button class="btn btn-orange" data-qm-hide="${q.id}">🚫 隱藏</button>`}
+                ? `<button class="btn btn-ghost" data-qm-show="${q.id}">👁️</button>`
+                : `<button class="btn btn-orange" data-qm-hide="${q.id}">🚫</button>`}
             </td>
           </tr>`;
         });
@@ -3146,8 +3187,49 @@
       document.getElementById('qm-f-book').addEventListener('change', (e) => { qmFilters.bookId = e.target.value; renderQuestionsPage(); });
       document.getElementById('qm-f-dim').addEventListener('change', (e) => { qmFilters.dimension = e.target.value; renderQuestionsPage(); });
       document.getElementById('qm-f-vis').addEventListener('change', (e) => { qmFilters.visibility = e.target.value; renderQuestionsPage(); });
+      document.getElementById('btn-qm-bulk-tpl').addEventListener('click', downloadQuestionsTpl);
+      document.getElementById('btn-qm-bulk-import').addEventListener('click', () => document.getElementById('qm-bulk-modal').classList.add('active'));
+      document.getElementById('btn-qm-export').addEventListener('click', exportAllQuestions);
       el.querySelectorAll('button[data-qm-hide]').forEach(b => b.addEventListener('click', () => toggleQuestionVis(b.dataset.qmHide, false)));
       el.querySelectorAll('button[data-qm-show]').forEach(b => b.addEventListener('click', () => toggleQuestionVis(b.dataset.qmShow, true)));
+      el.querySelectorAll('button[data-qm-dl]').forEach(b => b.addEventListener('click', () => downloadOneOriginal(b.dataset.qmDl)));
+    }
+
+    // F13-I: 下載原始版本
+    function downloadOneOriginal(id) {
+      const q = qmCache.find(x => x.id === id);
+      if (!q) return;
+      const orig = q.originalVersion || { note: '此題目沒有原始版本快照（早於 F13-I 上傳）', currentSnapshot: q };
+      const blob = new Blob([JSON.stringify(orig, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${id}_original.json`;
+      a.click();
+    }
+    function exportAllQuestions() {
+      if (qmCache.length === 0) { alert('沒有題目可匯出'); return; }
+      const exportData = qmCache.map(q => ({
+        id: q.id,
+        original: q.originalVersion || null,
+        current: q
+      }));
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.download = `questions_full_export_${dateStr}.json`;
+      a.click();
+    }
+
+    // F13-H: 範本 CSV
+    function downloadQuestionsTpl() {
+      const csv = '題目內容,選項A,選項B,選項C,選項D,正確答案,難易度,書籍ID,章節編號,頁碼,維度,出題者姓名,出題者班級,出題日期\n' +
+                  '範例：下列何者...,選項A內容,選項B內容,選項C內容,選項D內容,B,medium,EMT-P,27,1330,D3,王小明,TP17,2026-05-28\n';
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = '題庫批次匯入範本.csv';
+      a.click();
     }
 
     async function toggleQuestionVis(id, isVisible) {
@@ -3157,6 +3239,188 @@
         if (q) q.isVisible = isVisible;
         renderQuestionsPage();
       } catch (e) { alert('❌ ' + e.message); }
+    }
+
+    // F13-H: 題庫批次匯入
+    document.getElementById('qm-bulk-close').addEventListener('click', () => document.getElementById('qm-bulk-modal').classList.remove('active'));
+    document.getElementById('qm-bulk-cancel').addEventListener('click', () => document.getElementById('qm-bulk-modal').classList.remove('active'));
+    document.getElementById('qm-bulk-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('qm-bulk-modal').classList.remove('active'); });
+    document.getElementById('qm-bulk-file').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      document.getElementById('qm-bulk-file-info').textContent = `✓ ${file.name}`;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        let text = ev.target.result;
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        document.getElementById('qm-bulk-text').value = text.trim();
+      };
+      reader.readAsText(file, 'UTF-8');
+      e.target.value = '';
+    });
+    document.getElementById('btn-qm-bulk-preview').addEventListener('click', previewQmBulk);
+    document.getElementById('btn-qm-bulk-commit').addEventListener('click', commitQmBulk);
+
+    function parseCsvLine(line) {
+      // 簡易 CSV parser、支援 "" 內逗號
+      const result = [];
+      let cur = '';
+      let inQuote = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') {
+          if (inQuote && line[i+1] === '"') { cur += '"'; i++; }
+          else inQuote = !inQuote;
+        } else if (c === ',' && !inQuote) {
+          result.push(cur); cur = '';
+        } else cur += c;
+      }
+      result.push(cur);
+      return result;
+    }
+
+    function previewQmBulk() {
+      const raw = document.getElementById('qm-bulk-text').value;
+      const errEl = document.getElementById('qm-bulk-error');
+      const prevEl = document.getElementById('qm-bulk-preview');
+      errEl.innerHTML = ''; prevEl.innerHTML = '';
+      const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+      if (lines.length === 0) { errEl.innerHTML = '<div class="err-msg">❌ 無資料</div>'; return; }
+      // 第一行如果是表頭則跳過
+      if (/題目|選項A|難易度|出題者/.test(lines[0])) lines.shift();
+
+      const rows = [];
+      lines.forEach((line, idx) => {
+        const parts = parseCsvLine(line);
+        if (parts.length < 6) { rows.push({ line: idx + 1, err: `欄位不足、至少 6 欄（題目+ABCD+答案）、實際 ${parts.length}` }); return; }
+        const [qText, A, B, C, D, ans, diff, bookId, chNum, page, dim, creatorName, creatorClass, schedDate] = parts;
+        if (!qText.trim()) { rows.push({ line: idx + 1, err: '題目空白' }); return; }
+        if (!['A','B','C','D'].includes((ans || '').trim().toUpperCase())) { rows.push({ line: idx + 1, err: `正確答案無效 "${ans}"` }); return; }
+        if (!A.trim() || !B.trim() || !C.trim() || !D.trim()) { rows.push({ line: idx + 1, err: '4 選項不可空白' }); return; }
+        // 維度：如果有填用填的、否則查章節
+        let finalDim = (dim || '').trim().toUpperCase();
+        if (!finalDim && bookId && chNum) {
+          const ch = qmChaptersCache.find(c => c.bookId === bookId.trim() && c.chapterNumber === chNum.trim());
+          if (ch) finalDim = ch.dimension || '';
+        }
+        const finalDiff = ['easy','medium','hard'].includes((diff || '').trim().toLowerCase()) ? diff.trim().toLowerCase() : 'medium';
+        rows.push({
+          line: idx + 1,
+          questionText: qText.trim(),
+          optA: A.trim(), optB: B.trim(), optC: C.trim(), optD: D.trim(),
+          correctAnswer: ans.trim().toUpperCase(),
+          difficulty: finalDiff,
+          bookId: (bookId || '').trim() || null,
+          chapterNumber: (chNum || '').trim() || null,
+          page: (page || '').trim() || null,
+          dimension: finalDim || null,
+          creatorName: (creatorName || 'Master 匯入').trim(),
+          creatorClass: (creatorClass || '匯入').trim(),
+          scheduledDate: (schedDate || new Date().toISOString().slice(0,10)).trim(),
+          ok: true
+        });
+      });
+
+      const okCount = rows.filter(r => r.ok).length;
+      const errCount = rows.filter(r => r.err).length;
+
+      let html = '<h4 style="color:#fcd34d;margin:12px 0 8px">預覽結果：</h4>';
+      html += '<table class="table"><thead><tr><th>行</th><th>題目摘要</th><th>答案</th><th>來源</th><th>維度</th><th>狀態</th></tr></thead><tbody>';
+      rows.slice(0, 100).forEach(r => {
+        const text = (r.questionText || '').substring(0, 40);
+        const src = r.bookId ? `${r.bookId} Ch${r.chapterNumber || '?'}` : '—';
+        const status = r.err ? `<span class="tag-pill red">❌ ${r.err}</span>` : `<span class="tag-pill">✅ OK</span>`;
+        html += `<tr><td class="num">${r.line}</td><td style="font-size:12px">${text}${text.length === 40 ? '...' : ''}</td><td>${r.correctAnswer || '—'}</td><td style="font-size:12px">${src}</td><td>${r.dimension || '—'}</td><td>${status}</td></tr>`;
+      });
+      html += '</tbody></table>';
+      if (rows.length > 100) html += `<div style="color:#94a3b8;font-size:12px;text-align:center;margin-top:8px">⚠️ 僅顯示前 100 筆（共 ${rows.length} 筆）</div>`;
+      html += `<div style="margin-top:12px;display:flex;gap:6px"><span class="tag-pill">有效 ${okCount}</span>${errCount > 0 ? `<span class="tag-pill red">錯誤 ${errCount}</span>` : ''}</div>`;
+      prevEl.innerHTML = html;
+      qmBatchPreview = rows.filter(r => r.ok);
+      document.getElementById('btn-qm-bulk-commit').disabled = okCount === 0;
+      document.getElementById('btn-qm-bulk-commit').textContent = `💾 寫入 ${okCount} 筆`;
+    }
+
+    async function commitQmBulk() {
+      if (!qmBatchPreview || qmBatchPreview.length === 0) return;
+      const items = qmBatchPreview;
+      if (!confirm(`確定批次匯入 ${items.length} 筆題目？\n\n⚠️ 此操作會建立題目、流水號自動生成、不可復原（只能逐筆隱藏）。`)) return;
+      const btn = document.getElementById('btn-qm-bulk-commit');
+      btn.disabled = true; btn.textContent = '⏳ 寫入中...';
+      let nNew = 0, nFail = 0;
+      const failures = [];
+
+      try {
+        for (let i = 0; i < items.length; i++) {
+          const r = items[i];
+          btn.textContent = `⏳ ${i+1}/${items.length}`;
+          try {
+            // 每題單獨 transaction
+            await runTransaction(db, async (tx) => {
+              const today = new Date();
+              const rocY = today.getFullYear() - 1911;
+              const dateStr = `${rocY}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+              const counterRef = doc(db, 'counters', dateStr);
+              const counterDoc = await tx.get(counterRef);
+              let nextNum = 1;
+              if (counterDoc.exists()) nextNum = (counterDoc.data().lastNumber || 0) + 1;
+              const qid = `${dateStr}-${nextNum}`;
+              const qRef = doc(db, 'questions', qid);
+              // 找 chapter
+              let chapterId = null;
+              if (r.bookId && r.chapterNumber) {
+                const ch = qmChaptersCache.find(c => c.bookId === r.bookId && c.chapterNumber === r.chapterNumber);
+                if (ch) chapterId = ch.id;
+              }
+              const fullData = {
+                serialDate: dateStr,
+                serialNumber: nextNum,
+                createdBy: 'bulk_import',
+                createdByName: r.creatorName,
+                createdByRole: 'master',
+                createdByClassId: r.creatorClass,
+                scheduledDate: r.scheduledDate,
+                questionText: r.questionText,
+                questionImageUrl: null,
+                difficulty: r.difficulty,
+                options: {
+                  A: { text: r.optA, imageUrl: null },
+                  B: { text: r.optB, imageUrl: null },
+                  C: { text: r.optC, imageUrl: null },
+                  D: { text: r.optD, imageUrl: null }
+                },
+                correctAnswer: r.correctAnswer,
+                source: { bookId: r.bookId, chapterId, chapterNumber: r.chapterNumber, page: r.page },
+                derivedDimension: r.dimension
+              };
+              tx.set(qRef, {
+                ...fullData,
+                originalVersion: { ...fullData, savedAt: Timestamp.now(), importedFrom: 'bulk_csv' },
+                attemptCount: 0, correctRate: 0, reportCount: 0,
+                isVisible: true, isActive: true,
+                createdAt: serverTimestamp(),
+                createdByEmail: currentUser.email
+              });
+              tx.set(counterRef, { date: dateStr, lastNumber: nextNum, updatedAt: serverTimestamp() }, { merge: true });
+            });
+            nNew++;
+          } catch (e) {
+            nFail++;
+            failures.push(`第 ${r.line} 行：${e.message}`);
+          }
+        }
+        let msg = `✅ 完成！\n\n新建 ${nNew} 筆\n失敗 ${nFail} 筆`;
+        if (failures.length > 0) msg += '\n\n失敗清單（前 5）：\n' + failures.slice(0, 5).join('\n');
+        alert(msg);
+        document.getElementById('qm-bulk-modal').classList.remove('active');
+        document.getElementById('qm-bulk-text').value = '';
+        qmBatchPreview = null;
+        await loadQuestionsPage();
+      } catch (e) {
+        alert('❌ 整批失敗：' + e.message);
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 寫入';
+      }
     }
 
     // ===== F11-E: QR Code 5 分鐘簽核 =====
