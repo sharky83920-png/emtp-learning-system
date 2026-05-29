@@ -2067,11 +2067,15 @@
       const q = quizState.questions[quizState.currentIdx];
       const total = quizState.questions.length;
       const idx = quizState.currentIdx;
+      // 還原這題之前選過的答案（允許作答中往前翻不會遺失、目前單向但保留彈性）
+      const prev = quizState.answers[idx];
+      quizState.currentSelection = prev ? prev.selectedAnswer : null;
       document.getElementById('quiz-progress').textContent = `第 ${idx + 1} / ${total} 題`;
       document.getElementById('quiz-bar').style.width = `${(idx / total) * 100}%`;
 
       const diffLabel = { easy: '🟢 易', medium: '🟡 中', hard: '🔴 難' };
       const opts = q.options || {};
+      const isLast = idx === total - 1;
       let html = `
         <div style="display:flex;gap:8px;margin-bottom:14px;font-size:12px">
           <span style="background:#f1f5f9;color:#475569;padding:3px 10px;border-radius:10px;font-family:monospace">${q.id}</span>
@@ -2082,53 +2086,55 @@
         <div id="quiz-opts" style="display:flex;flex-direction:column;gap:10px">
           ${['A','B','C','D'].map(k => `
             <button class="quiz-opt-btn" data-opt="${k}" style="background:white;border:2px solid #e2e8f0;padding:14px 18px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:15px;text-align:left;color:#1e293b;transition:all 0.15s;display:flex;gap:12px;align-items:flex-start">
-              <span style="background:#f1f5f9;color:#3b82f6;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">${k}</span>
+              <span class="quiz-opt-letter" style="background:#f1f5f9;color:#3b82f6;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">${k}</span>
               <span style="flex:1;white-space:pre-wrap">${opts[k]?.text || ''}</span>
             </button>
           `).join('')}
         </div>
-        <div id="quiz-feedback" style="display:none;margin-top:18px"></div>
+        <button id="btn-quiz-confirm" disabled style="width:100%;margin-top:18px;background:#cbd5e1;color:white;border:none;padding:14px;border-radius:10px;cursor:not-allowed;font-family:inherit;font-size:15px;font-weight:700;transition:all 0.15s">${isLast ? '✅ 完成並看結果' : '確定並下一題 →'}</button>
       `;
       document.getElementById('quiz-body').innerHTML = html;
       document.querySelectorAll('.quiz-opt-btn').forEach(btn => {
-        btn.addEventListener('click', () => answerQuiz(btn.dataset.opt));
+        btn.addEventListener('click', () => selectQuizOption(btn.dataset.opt));
       });
+      document.getElementById('btn-quiz-confirm').addEventListener('click', confirmQuizAnswer);
+      // 若先前已選、還原高亮 + 啟用按鈕
+      if (quizState.currentSelection) selectQuizOption(quizState.currentSelection);
     }
 
-    function answerQuiz(opt) {
-      const q = quizState.questions[quizState.currentIdx];
-      const correct = q.correctAnswer;
-      const isCorrect = opt === correct;
-      // 鎖按鈕
+    // 選答：只高亮、不揭曉答案（做完才公布）
+    function selectQuizOption(opt) {
+      quizState.currentSelection = opt;
       document.querySelectorAll('.quiz-opt-btn').forEach(btn => {
-        btn.disabled = true;
-        btn.style.cursor = 'default';
-        const optKey = btn.dataset.opt;
-        if (optKey === correct) {
-          btn.style.background = '#dcfce7';
-          btn.style.borderColor = '#10b981';
-        } else if (optKey === opt && !isCorrect) {
-          btn.style.background = '#fef2f2';
-          btn.style.borderColor = '#ef4444';
+        const sel = btn.dataset.opt === opt;
+        btn.style.background = sel ? '#eff6ff' : 'white';
+        btn.style.borderColor = sel ? '#3b82f6' : '#e2e8f0';
+        const letter = btn.querySelector('.quiz-opt-letter');
+        if (letter) {
+          letter.style.background = sel ? '#3b82f6' : '#f1f5f9';
+          letter.style.color = sel ? 'white' : '#3b82f6';
         }
       });
-      // 紀錄
-      quizState.answers.push({ questionId: q.id, selectedAnswer: opt, correctAnswer: correct, isCorrect, dimension: q.derivedDimension || null });
-      // 顯示回饋
-      const fb = document.getElementById('quiz-feedback');
-      let fbHtml = `<div style="background:${isCorrect ? '#dcfce7' : '#fef2f2'};border-left:4px solid ${isCorrect ? '#10b981' : '#ef4444'};color:${isCorrect ? '#065f46' : '#991b1b'};padding:12px 16px;border-radius:8px;margin-bottom:12px;font-weight:600">${isCorrect ? '✅ 答對了！' : `❌ 答錯了、正確答案是 ${correct}`}</div>`;
-      if (q.explanation) fbHtml += `<div style="background:#f8fafc;padding:12px 16px;border-radius:8px;margin-bottom:12px;font-size:14px;color:#334155">💡 ${q.explanation}</div>`;
-      if (q.source?.bookId) fbHtml += `<div style="color:#94a3b8;font-size:12px;margin-bottom:12px">📚 出處：${q.source.bookId}${q.source.chapterNumber ? ' Ch' + q.source.chapterNumber : ''}${q.source.page ? ' p.' + q.source.page : ''}</div>`;
-      const isLast = quizState.currentIdx === quizState.questions.length - 1;
-      fbHtml += `<button id="btn-quiz-next" style="width:100%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border:none;padding:14px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:15px;font-weight:700">${isLast ? '📊 看測驗結果' : '➡️ 下一題'}</button>`;
-      fb.innerHTML = fbHtml;
-      fb.style.display = 'block';
-      document.getElementById('btn-quiz-next').addEventListener('click', nextQuizQuestion);
+      const confirmBtn = document.getElementById('btn-quiz-confirm');
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.style.cursor = 'pointer';
+        confirmBtn.style.background = 'linear-gradient(135deg,#6366f1,#8b5cf6)';
+      }
     }
 
-    async function nextQuizQuestion() {
+    async function confirmQuizAnswer() {
+      if (!quizState || !quizState.currentSelection) { alert('請先選一個答案'); return; }
+      const idx = quizState.currentIdx;
+      const q = quizState.questions[idx];
+      const opt = quizState.currentSelection;
+      const isCorrect = opt === q.correctAnswer;
+      // 紀錄（不揭曉）；用 index 賦值、支援重答同題覆蓋
+      quizState.answers[idx] = { questionId: q.id, selectedAnswer: opt, correctAnswer: q.correctAnswer, isCorrect, dimension: q.derivedDimension || null };
+      quizState.currentSelection = null;
       quizState.currentIdx++;
       if (quizState.currentIdx >= quizState.questions.length) {
+        document.getElementById('quiz-bar').style.width = '100%';
         await finishQuiz();
       } else {
         renderQuizQuestion();
