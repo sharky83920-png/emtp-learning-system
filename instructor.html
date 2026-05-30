@@ -128,6 +128,18 @@
           <h2>⚡ 能量條設定</h2>
           <div id="energy-body"><div class="placeholder" style="padding:20px"><div class="icon">⏳</div></div></div>
         </div>
+
+        <div class="card">
+          <h2>🏆 綜合測驗績效排名（本班）</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:10px">依刷題數與正確率、套用 Master 設定的公式計算。只計綜合測驗（不含專項練習）。</p>
+          <div id="rank-perf"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
+        </div>
+
+        <div class="card">
+          <h2>📊 各班出題戰力</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:10px">各班學員累積出題數（現役題庫）。你的班高亮。</p>
+          <div id="rank-questions"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
+        </div>
       </section>
 
       <section class="tab-content" id="tab-signoff">
@@ -643,6 +655,66 @@
     async function loadScheduleTab() {
       if (!selectedClassId) return;
       await Promise.all([loadScheduleList(), loadEnergyBar()]);
+      loadPerfRanking();
+      loadQuestionPower();
+    }
+
+    // ===== F16: 戰力排行 =====
+    function safeEvalFormula(expr, attempts, accuracy) {
+      try { const fn = new Function('attempts', 'accuracy', 'Math', `"use strict"; return (${expr});`); const v = fn(attempts, accuracy, Math); return (typeof v === 'number' && isFinite(v)) ? v : 0; }
+      catch (e) { return 0; }
+    }
+
+    async function loadPerfRanking() {
+      const el = document.getElementById('rank-perf');
+      el.innerHTML = '<div class="placeholder" style="padding:12px"><div class="icon">⏳</div></div>';
+      try {
+        // 公式
+        let expr = 'Math.sqrt(attempts) * accuracy';
+        try { const f = await getDoc(doc(db, 'formulas', 'weighted_score')); if (f.exists() && f.data().expression) expr = f.data().expression; } catch (e) {}
+        // 本班學員
+        const stuSnap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
+        const students = {}; stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false) students[d.id] = { name: s.name, no: s.studentNo, attempts: 0, correct: 0 }; });
+        // 本班 scoring 作答（不含 practice、只算有作答）
+        const atSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', selectedClassId)));
+        atSnap.forEach(d => { const a = d.data(); if (a.examMode === 'practice') return; if (a.answered === false) return; const s = students[a.studentId]; if (!s) return; s.attempts++; if (a.isCorrect) s.correct++; });
+        const rows = Object.values(students).map(s => { const accuracy = s.attempts ? s.correct / s.attempts : 0; return { ...s, accuracy, score: safeEvalFormula(expr, s.attempts, accuracy) }; });
+        rows.sort((a, b) => b.score - a.score);
+        const ranked = rows.filter(r => r.attempts > 0);
+        if (ranked.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">本班尚無綜合測驗作答紀錄</div>'; return; }
+        const medal = ['🥇', '🥈', '🥉'];
+        el.innerHTML = `<div style="font-size:11px;color:#94a3b8;margin-bottom:6px">公式：<code>${expr}</code></div>` + ranked.map((r, i) => `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid #f1f5f9;${i < 3 ? 'background:#fffbeb' : ''}">
+            <span style="width:30px;font-weight:700;color:#475569">${medal[i] || (i + 1)}</span>
+            <span style="flex:1;font-size:14px">${r.no}. ${r.name}</span>
+            <span style="font-size:12px;color:#64748b">${r.attempts}題·${Math.round(r.accuracy * 100)}%</span>
+            <span style="font-weight:700;color:#3b82f6;min-width:54px;text-align:right">${r.score.toFixed(1)}</span>
+          </div>`).join('');
+      } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+    }
+
+    async function loadQuestionPower() {
+      const el = document.getElementById('rank-questions');
+      el.innerHTML = '<div class="placeholder" style="padding:12px"><div class="icon">⏳</div></div>';
+      try {
+        const qSnap = await getDocs(collection(db, 'questions'));
+        const byClass = {};
+        qSnap.forEach(d => { const q = d.data(); if (q.isVisible === false || q.isActive === false) return; const c = q.createdByClassId || '其他'; byClass[c] = (byClass[c] || 0) + 1; });
+        const list = Object.entries(byClass).map(([cid, n]) => ({ cid, n })).sort((a, b) => b.n - a.n);
+        if (list.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">尚無題目</div>'; return; }
+        const max = list[0].n;
+        // 班級顯示名
+        const nameCache = {};
+        for (const it of list) { try { const c = await getDoc(doc(db, 'classes', it.cid)); nameCache[it.cid] = c.exists() ? (c.data().displayName || it.cid) : it.cid; } catch (e) { nameCache[it.cid] = it.cid; } }
+        el.innerHTML = list.map(it => {
+          const mine = it.cid === selectedClassId;
+          const pct = max ? (it.n / max) * 100 : 0;
+          return `<div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span style="font-weight:${mine ? '700' : '400'};color:${mine ? '#e11d48' : '#1e293b'}">${mine ? '⭐ ' : ''}${nameCache[it.cid]}</span><span style="color:#64748b">${it.n} 題</span></div>
+            <div style="height:10px;background:#f1f5f9;border-radius:5px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${mine ? '#e11d48' : '#3b82f6'};border-radius:5px"></div></div>
+          </div>`;
+        }).join('');
+      } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
     }
 
     async function loadScheduleList() {

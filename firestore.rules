@@ -1,0 +1,81 @@
+rules_version = '2';
+// EMTP-learning system — Firestore Security Rules（F17 基礎防護 v1）
+// 部署：Firebase Console → Firestore → 規則 → 貼上 → 發布
+// 設計原則：
+//   1. 敏感寫入（系統設定/公式/主檔/班級/帳號）只有 Master 能寫
+//   2. 登入下拉需要：classes / students / instructors 未登入也能「讀」
+//   3. eval.html 免登入（token 機制）→ 開放 milestone_evaluations 建立、evaluation_tokens 讀寫
+//   4. 題目永不真刪（delete: false）
+//   5. 其餘未列出的路徑一律拒絕
+// ⚠️ 已知限制：因登入採「下拉選姓名」，students/instructors 需開放讀取（含身分證欄位）。
+//    若要更嚴格，需改登入流程（自行輸入帳號、不列清單）— 留待後續。
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function authed() { return request.auth != null; }
+    function isMaster() { return authed() && request.auth.token.email == 'sharky83920@gmail.com'; }
+
+    // ── 登入下拉需要未登入可讀 ──
+    match /classes/{id}      { allow read: if true; allow write: if isMaster(); }
+    match /students/{id}     { allow read: if true; allow write: if isMaster(); }
+    match /instructors/{id}  { allow read: if true; allow write: if isMaster(); }
+
+    // ── 系統 / 設定 / 主檔：Master 維護、大家可讀 ──
+    match /system_settings/{id}  { allow read: if true; allow write: if isMaster(); }
+    match /formulas/{id}         { allow read: if true; allow write: if isMaster(); }
+    match /milestone_groups/{id} { allow read: if true; allow write: if isMaster(); }
+    match /milestones/{id}       { allow read: if true; allow write: if isMaster(); }
+    match /units/{id}            { allow read: if true; allow write: if isMaster(); }
+    match /evaluator_roles/{id}  { allow read: if true; allow write: if isMaster(); }
+    match /core_skills/{id}      { allow read: if true; allow write: if isMaster(); }
+    match /books/{id}            { allow read: if true; allow write: if isMaster(); }
+    match /chapters/{id}         { allow read: if true; allow write: if isMaster(); }
+    match /counters/{id}         { allow read: if authed(); allow write: if authed(); }
+
+    // ── 著作權 / 稽核 ──
+    match /app_versions/{id}  { allow read: if isMaster(); allow write: if isMaster(); }
+    match /audit_logs/{id}    { allow read: if isMaster(); allow create: if authed(); allow update, delete: if false; }
+    match /user_consents/{id} { allow read: if isMaster(); allow create: if authed(); }
+
+    // ── EPA 評核（eval.html 免登入、靠 token）──
+    match /milestone_evaluations/{id} {
+      allow read: if authed();
+      allow create: if true;                 // eval.html 免登入評核
+      allow update, delete: if isMaster();
+    }
+    match /evaluation_tokens/{id} {
+      allow read: if true;                   // eval 驗證 token
+      allow create: if authed();             // 學員產生連結
+      allow update: if true;                 // 評核完成更新次數
+    }
+
+    // ── 題庫 / 答題 ──
+    match /questions/{id} {
+      allow read: if authed();
+      allow create: if authed();             // 學員出題
+      allow update: if authed();             // 指導員勘誤校正
+      allow delete: if false;                // 永不真刪、只能隱藏
+    }
+    match /question_attempts/{id}      { allow read: if authed(); allow create: if authed(); allow update, delete: if isMaster(); }
+    match /mistake_book/{id}           { allow read: if authed(); allow write: if authed(); }
+    match /question_error_reports/{id} { allow read: if authed(); allow create: if authed(); allow update: if authed(); allow delete: if isMaster(); }
+    match /question_schedule/{id}      { allow read: if authed(); allow write: if authed(); }
+
+    // ── 核心技術簽核 / QR ──
+    match /core_skill_signoffs/{id}  { allow read: if authed(); allow create: if authed(); allow update, delete: if isMaster(); }
+    match /qr_signoff_sessions/{id}  { allow read: if authed(); allow create: if authed(); allow update: if authed(); }
+
+    // ── 成績 ──
+    match /exam_scores_total/{id} { allow read: if authed(); allow write: if authed(); }
+    match /exam_scores_radar/{id} { allow read: if authed(); allow write: if authed(); }
+    match /upload_batches/{id}    { allow read: if authed(); allow write: if authed(); }
+
+    // ── 公告 / 通知 ──
+    match /announcements/{id} { allow read: if authed(); allow write: if authed(); }
+    match /notifications/{id} { allow read: if authed(); allow create: if authed(); allow update: if authed(); allow delete: if isMaster(); }
+
+    // ── 其餘一律拒絕 ──
+    match /{document=**} { allow read, write: if false; }
+  }
+}

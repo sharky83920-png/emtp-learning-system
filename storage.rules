@@ -1,0 +1,23 @@
+rules_version = '2';
+// EMTP-learning system — Storage Security Rules（F17 基礎防護 v1）
+// 部署：Firebase Console → Storage → 規則 → 貼上 → 發布
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // 操作標準 PDF：大家可看、只有 Master 能上傳
+    match /core_skill_standards/{file} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.token.email == 'sharky83920@gmail.com';
+    }
+
+    // 題目圖片：大家可看、登入者（學員出題）可上傳
+    match /questions/{cls}/{file} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // 其餘一律拒絕
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}
