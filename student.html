@@ -63,6 +63,9 @@
     .skill-blocks { display: flex; gap: 4px; }
     .skill-block { width: 22px; height: 22px; border-radius: 4px; background: #e2e8f0; }
     .skill-block.filled { background: #10b981; }
+    /* 彩虹進度條（能量條 + 技術簽核共用）*/
+    .rainbow-track { position: relative; height: 12px; border-radius: 6px; overflow: hidden; background: linear-gradient(90deg,#ef4444,#f97316,#eab308,#22c55e,#06b6d4,#3b82f6,#8b5cf6); }
+    .rainbow-cover { position: absolute; right: 0; top: 0; height: 100%; background: #e2e8f0; transition: width 0.5s; }
     .skill-overflow { color: #10b981; font-size: 13px; font-weight: 600; margin-left: 6px; }
     /* F13-F: 底部 3 tab 切換 */
     main { padding-bottom: 90px !important; }
@@ -454,12 +457,12 @@
         <h3>🎯 專項練習（不計分）</h3>
         <div style="color:#64748b;font-size:13px;margin-bottom:12px">針對單一維度抽題練習、不列入計分。</div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px" id="practice-buttons">
-          <button class="practice-btn" data-dim="D1" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D1 緊急救護系統</button>
-          <button class="practice-btn" data-dim="D2" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D2 基礎醫學含評估</button>
-          <button class="practice-btn" data-dim="D3" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D3 創傷</button>
-          <button class="practice-btn" data-dim="D4" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D4 非創傷</button>
-          <button class="practice-btn" data-dim="D5" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D5 特殊族群</button>
-          <button class="practice-btn" data-dim="D6" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D6 災難及特殊情境</button>
+          <button class="practice-btn" data-dim="D1" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D1 緊急救護系統</button>
+          <button class="practice-btn" data-dim="D2" style="background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D2 基礎醫學含評估</button>
+          <button class="practice-btn" data-dim="D3" style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D3 創傷</button>
+          <button class="practice-btn" data-dim="D4" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D4 非創傷</button>
+          <button class="practice-btn" data-dim="D5" style="background:#faf5ff;color:#7e22ce;border:1px solid #e9d5ff;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D5 特殊族群</button>
+          <button class="practice-btn" data-dim="D6" style="background:#f0fdfa;color:#0f766e;border:1px solid #99f6e4;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D6 災難及特殊情境</button>
         </div>
       </div>
 
@@ -755,8 +758,8 @@
               </div>
               <div style="font-size:36px">⚡</div>
             </div>
-            <div style="height:10px;background:#f1f5f9;border-radius:6px;margin-top:12px;overflow:hidden">
-              <div id="eb-bar" style="height:100%;background:linear-gradient(90deg,#fbbf24,#f59e0b);width:0%;transition:width 0.5s"></div>
+            <div class="rainbow-track" style="margin-top:12px;height:14px">
+              <div class="rainbow-cover" id="eb-cover" style="width:100%"></div>
             </div>
             <div style="color:#94a3b8;font-size:12px;margin-top:8px;text-align:center">💡 完成 10 題 = 1 趟（${periodName}重置）</div>
           `;
@@ -1624,16 +1627,16 @@
           const displayDone = Math.min(done, target);
           const isDone = done >= target;
           const overflow = done > target ? done - target : 0;
-          let blocks = '';
-          for (let i = 0; i < target; i++) blocks += `<div class="skill-block${i < displayDone ? ' filled' : ''}"></div>`;
-          const overflowText = overflow > 0 ? `<span class="skill-overflow">+${overflow}</span>` : '';
+          const pct = Math.min(100, (displayDone / target) * 100);
           const doneIcon = isDone ? '✅' : '';
-          return `<div class="skill-item${isDone ? ' done' : ''}">
-            <div class="skill-info">
+          return `<div class="skill-item${isDone ? ' done' : ''}" style="display:block">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px">
               <div class="skill-name">${skill.name} ${doneIcon}</div>
-              <div class="skill-progress">目標 ${target} 次 ・ 完成 ${done} 次</div>
+              <div class="skill-progress" style="font-size:12px;color:#64748b;white-space:nowrap">完成 ${done} / ${target} 次${overflow > 0 ? ` <span style="color:#10b981;font-weight:700">+${overflow}</span>` : ''}</div>
             </div>
-            <div class="skill-blocks">${blocks}${overflowText}</div>
+            <div class="rainbow-track">
+              <div class="rainbow-cover" style="width:${100 - pct}%"></div>
+            </div>
           </div>`;
         }
 
@@ -2150,13 +2153,8 @@
         const count = sessions.size;
         const pct = Math.min(100, target ? (count / target) * 100 : 0);
         const el = document.getElementById('eb-current'); if (el) el.textContent = count;
-        const bar = document.getElementById('eb-bar');
-        if (bar) {
-          bar.style.width = pct + '%';
-          // 漸層：紅(低 0°) → 綠(中 120°) → 藍(高 240°)
-          const hue = pct * 2.4;
-          bar.style.background = `hsl(${hue}, 75%, 48%)`;
-        }
+        const cover = document.getElementById('eb-cover');
+        if (cover) cover.style.width = (100 - pct) + '%';  // 灰幕從右邊縮、露出彩虹
       } catch (e) { console.warn('[energy]', e); }
     }
 
