@@ -2565,9 +2565,17 @@
         if (pdfFile) {
           if (pdfFile.type !== 'application/pdf') { errEl.innerHTML = '<div class="err-msg">❌ 檔案必須是 PDF</div>'; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
           btn.textContent = '⏳ 上傳 PDF...';
-          const r = storageRef(storage, `core_skill_standards/${id}.pdf`);
-          await uploadBytes(r, pdfFile, { contentType: 'application/pdf' });
-          extra.testStandardUrl = await getDownloadURL(r);
+          try {
+            const r = storageRef(storage, `core_skill_standards/${id}.pdf`);
+            const uploadP = uploadBytes(r, pdfFile, { contentType: 'application/pdf' });
+            const timeoutP = new Promise((_, rej) => setTimeout(() => rej(new Error('上傳逾時（30 秒）')), 30000));
+            await Promise.race([uploadP, timeoutP]);
+            extra.testStandardUrl = await getDownloadURL(r);
+          } catch (upErr) {
+            errEl.innerHTML = `<div class="err-msg">❌ PDF 上傳失敗：${upErr.message}<br><br>👉 最可能原因：Firebase Storage 尚未啟用。<br>請開 Console → Storage → 「開始使用」（位置選 asia-east1）後再試。</div>`;
+            btn.disabled = false; btn.textContent = '💾 儲存';
+            return;
+          }
         }
         await setDoc(doc(db, 'core_skills', id), {
           name, targetCount: target, testStandard: standard,
