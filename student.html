@@ -758,8 +758,9 @@
             <div style="height:10px;background:#f1f5f9;border-radius:6px;margin-top:12px;overflow:hidden">
               <div id="eb-bar" style="height:100%;background:linear-gradient(90deg,#fbbf24,#f59e0b);width:0%;transition:width 0.5s"></div>
             </div>
-            <div style="color:#94a3b8;font-size:12px;margin-top:8px;text-align:center">💡 每完成一次測驗 = 1 趟（${periodName}重置）</div>
+            <div style="color:#94a3b8;font-size:12px;margin-top:8px;text-align:center">💡 完成 10 題 = 1 趟（${periodName}重置）</div>
           `;
+          _energyCfg = { period: eb.period, target: eb.target, enabled: true };
           updateEnergyCount(eb.period, eb.target);
         } else {
           ebSec.classList.remove('empty-hide');
@@ -2127,6 +2128,7 @@
     // ===== F13-E: 答題系統 =====
     let quizState = null; // { questions, currentIdx, answers, startedAt }
     // ===== 能量條：本週期完成測驗場次 = 趟數 =====
+    let _energyCfg = null;
     function energyPeriodStart(period) {
       const d = new Date(); d.setHours(0, 0, 0, 0);
       if (period === 'monthly') { d.setDate(1); return d; }
@@ -2139,27 +2141,41 @@
         const snap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', currentStudent.id)));
         const start = energyPeriodStart(period).getTime();
         const sessions = new Set();
-        snap.forEach(d => { const a = d.data(); const t = a.attemptedAt?.seconds ? a.attemptedAt.seconds * 1000 : 0; if (t >= start && a.examSessionId) sessions.add(a.examSessionId); });
+        snap.forEach(d => {
+          const a = d.data();
+          const t = a.attemptedAt?.seconds ? a.attemptedAt.seconds * 1000 : 0;
+          // 只算「完成 10 題」的場次（sessionCompleted !== false；舊資料無此欄位視為完成）
+          if (t >= start && a.examSessionId && a.sessionCompleted !== false) sessions.add(a.examSessionId);
+        });
         const count = sessions.size;
+        const pct = Math.min(100, target ? (count / target) * 100 : 0);
         const el = document.getElementById('eb-current'); if (el) el.textContent = count;
-        const bar = document.getElementById('eb-bar'); if (bar) bar.style.width = Math.min(100, target ? (count / target) * 100 : 0) + '%';
+        const bar = document.getElementById('eb-bar');
+        if (bar) {
+          bar.style.width = pct + '%';
+          // 漸層：紅(低 0°) → 綠(中 120°) → 藍(高 240°)
+          const hue = pct * 2.4;
+          bar.style.background = `hsl(${hue}, 75%, 48%)`;
+        }
       } catch (e) { console.warn('[energy]', e); }
     }
 
     const QUIZ_SIZE = 10;
 
     document.getElementById('btn-start-quiz').addEventListener('click', startQuiz);
-    document.getElementById('btn-quiz-close').addEventListener('click', () => {
-      if (quizState && quizState.currentIdx < quizState.questions.length) {
-        if (!confirm('確定離開測驗？\n\n未完成的紀錄不會儲存。')) return;
+    document.getElementById('btn-quiz-close').addEventListener('click', async () => {
+      if (quizState) {
+        if (!confirm('確定交卷？\n\n未作答的題目會算「做錯」，且未完成 10 題不列入能量條趟數。')) return;
+        await finishQuiz(false);   // 中途交卷：未答算錯、仍進結論頁
+      } else {
+        document.getElementById('quiz-modal').style.display = 'none';
       }
-      document.getElementById('quiz-modal').style.display = 'none';
-      quizState = null;
     });
     document.getElementById('btn-quiz-result-close').addEventListener('click', async () => {
       document.getElementById('quiz-result-modal').style.display = 'none';
-      // 重新整理 6 角雷達 + 核心技術（A2 雷達會更新）
+      // 重新整理 6 角雷達 + 能量條趟數
       try { await loadAcademicRadar(); } catch (e) {}
+      if (_energyCfg?.enabled) updateEnergyCount(_energyCfg.period, _energyCfg.target);
     });
 
     function beginQuiz(questions, mode, label) {
@@ -2279,20 +2295,26 @@
       quizState.currentIdx++;
       if (quizState.currentIdx >= quizState.questions.length) {
         document.getElementById('quiz-bar').style.width = '100%';
-        await finishQuiz();
+        await finishQuiz(true);
       } else {
         renderQuizQuestion();
       }
     }
 
-    async function finishQuiz() {
-      // 計算總分
+    async function finishQuiz(completed) {
+      // 填補未作答的題目 → 算「做錯」（防止遇到不會就跳出刷答對率）
+      for (let i = 0; i < quizState.questions.length; i++) {
+        if (!quizState.answers[i]) {
+          const q = quizState.questions[i];
+          quizState.answers[i] = { questionId: q.id, selectedAnswer: null, correctAnswer: q.correctAnswer, isCorrect: false, dimension: q.derivedDimension || null, unanswered: true };
+        }
+      }
+      // 計算總分（固定以題數為分母、未答算錯）
+      const total = quizState.questions.length;
       const correct = quizState.answers.filter(a => a.isCorrect).length;
-      const total = quizState.answers.length;
       const score = Math.round((correct / total) * 100);
       // 寫入 question_attempts（用 batch）
       try {
-        // 先查每題是否首刷（簡化：直接寫、isFirstAttempt 統一 true、之後 server 校正）
         const wb = [];
         for (const a of quizState.answers) {
           const ref = doc(collection(db, 'question_attempts'));
@@ -2301,9 +2323,11 @@
             classId: currentStudent.classId,
             questionId: a.questionId,
             dimension: a.dimension,
-            selectedAnswer: a.selectedAnswer,
+            selectedAnswer: a.selectedAnswer,    // 未作答為 null
             correctAnswer: a.correctAnswer,
             isCorrect: a.isCorrect,
+            answered: !a.unanswered,             // 刷題數只算有作答的
+            sessionCompleted: completed === true,// 完成 10 題才算一趟
             isFirstAttempt: true,
             examMode: quizState.mode === 'practice' ? 'practice' : 'scoring',
             examSessionId: quizState.sessionId,
@@ -2363,7 +2387,9 @@
             </div>
             <div style="color:#1e293b;font-size:14px;line-height:1.6;margin-bottom:10px;white-space:pre-wrap">${q.questionText || ''}</div>
             <div style="font-size:13px;color:#065f46;margin-bottom:3px"><strong>標答：${a.correctAnswer}.</strong> ${correctText}</div>
-            ${a.isCorrect ? '' : `<div style="font-size:13px;color:#991b1b;margin-bottom:8px"><strong>作答：${a.selectedAnswer}.</strong> ${selectedText}</div>`}
+            ${a.isCorrect ? '' : (a.selectedAnswer == null
+              ? `<div style="font-size:13px;color:#991b1b;margin-bottom:8px"><strong>作答：未作答（算錯）</strong></div>`
+              : `<div style="font-size:13px;color:#991b1b;margin-bottom:8px"><strong>作答：${a.selectedAnswer}.</strong> ${selectedText}</div>`)}
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,0,0,0.06)">
               ${srcHtml}
               <div style="display:flex;align-items:center;gap:6px">
