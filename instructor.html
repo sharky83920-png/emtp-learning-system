@@ -99,12 +99,25 @@
     <main>
       <section class="tab-content active" id="tab-schedule">
         <div class="card">
-          <h2>📋 班級管理總覽</h2>
-          <div class="build-box">
-            <div class="icon">🚧</div>
-            <h3>新功能建置中</h3>
-            <p>出題排程 / 繳交追蹤 / 能量條設定<br>正在搬遷中、敬請期待。</p>
+          <h2>📅 應繳出題日設定</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:12px">設定本班的應繳出題日、學員需在指定日期出題。</p>
+          <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;background:#f8fafc;padding:12px;border-radius:10px;margin-bottom:14px">
+            <div style="flex:1;min-width:140px">
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">日期</label>
+              <input type="date" id="sched-date" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit">
+            </div>
+            <div style="width:90px">
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">每人題數</label>
+              <input type="number" id="sched-per" value="1" min="1" max="10" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit">
+            </div>
+            <button id="sched-add" style="background:#10b981;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600">＋ 新增</button>
           </div>
+          <div id="sched-list"><div class="placeholder" style="padding:20px"><div class="icon">⏳</div></div></div>
+        </div>
+
+        <div class="card" id="energy-card">
+          <h2>⚡ 能量條設定</h2>
+          <div id="energy-body"><div class="placeholder" style="padding:20px"><div class="icon">⏳</div></div></div>
         </div>
       </section>
 
@@ -193,7 +206,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, query, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, query, where, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -353,6 +366,7 @@
         sel.innerHTML = items.map(c => `<option value="${c.id}">${c.displayName || c.id}</option>`).join('');
         selectedClassId = items[0].id;
         sel.value = selectedClassId;
+        loadScheduleTab(); // 預設首頁就是出題追蹤
       } catch (e) {
         sel.innerHTML = '<option value="">❌ 載入失敗</option>';
       }
@@ -362,6 +376,7 @@
       selectedClassId = e.target.value;
       const active = document.querySelector('.bottom-tabs button.active')?.dataset.tab;
       if (active === 'corrections') loadCorrections();
+      if (active === 'schedule') loadScheduleTab();
     });
 
     // ===== 底部 Tab 切換 =====
@@ -372,6 +387,7 @@
         btn.classList.add('active');
         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
         if (btn.dataset.tab === 'corrections') loadCorrections();
+        if (btn.dataset.tab === 'schedule') loadScheduleTab();
         window.scrollTo(0, 0);
       });
     });
@@ -509,6 +525,124 @@
         msg.innerHTML = `<div style="color:#ef4444;font-size:13px">❌ ${e.message}</div>`;
       } finally {
         fixBtn.disabled = false; rejBtn.disabled = false;
+      }
+    }
+
+    // ===== F16-C: 出題追蹤（應繳出題日 + 能量條）=====
+    let schedCache = [];
+
+    async function loadScheduleTab() {
+      if (!selectedClassId) return;
+      await Promise.all([loadScheduleList(), loadEnergyBar()]);
+    }
+
+    async function loadScheduleList() {
+      const el = document.getElementById('sched-list');
+      el.innerHTML = '<div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div>';
+      try {
+        const snap = await getDocs(query(collection(db, 'question_schedule'), where('classId', '==', selectedClassId)));
+        schedCache = [];
+        snap.forEach(d => { const data = d.data(); if (data.isActive !== false) schedCache.push({ id: d.id, ...data }); });
+        schedCache.sort((a, b) => (a.scheduledDate || '').localeCompare(b.scheduledDate || ''));
+        if (schedCache.length === 0) {
+          el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">尚未設定應繳出題日</div>';
+          return;
+        }
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        el.innerHTML = `<div style="font-size:13px;color:#475569;margin-bottom:8px">已設定 ${schedCache.length} 個應繳日</div><div style="display:flex;gap:8px;flex-wrap:wrap">` +
+          schedCache.map(s => {
+            const past = new Date(s.scheduledDate) < today;
+            return `<div style="background:${past ? '#e2e8f0' : '#dbeafe'};color:${past ? '#64748b' : '#1e40af'};padding:6px 12px;border-radius:18px;font-size:13px;display:flex;align-items:center;gap:8px">
+              <span>${s.scheduledDate}${s.questionsPerStudent > 1 ? `（${s.questionsPerStudent}題）` : ''}</span>
+              <button data-del="${s.id}" style="background:rgba(0,0,0,0.15);border:none;color:inherit;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:11px;line-height:1">×</button>
+            </div>`;
+          }).join('') + '</div>';
+        el.querySelectorAll('button[data-del]').forEach(b => b.addEventListener('click', () => removeScheduleDate(b.dataset.del)));
+      } catch (e) {
+        el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`;
+      }
+    }
+
+    document.getElementById('sched-add').addEventListener('click', async () => {
+      const date = document.getElementById('sched-date').value;
+      const per = parseInt(document.getElementById('sched-per').value) || 1;
+      if (!selectedClassId) { alert('請先選班級'); return; }
+      if (!date) { alert('請選日期'); return; }
+      if (schedCache.some(s => s.scheduledDate === date)) { alert('此日期已存在'); return; }
+      const btn = document.getElementById('sched-add');
+      btn.disabled = true;
+      try {
+        await setDoc(doc(collection(db, 'question_schedule')), {
+          classId: selectedClassId, scheduledDate: date, questionsPerStudent: per,
+          isActive: true, createdBy: currentInstructor.id, createdByName: currentInstructor.name,
+          createdAt: serverTimestamp()
+        });
+        document.getElementById('sched-date').value = '';
+        loadScheduleList();
+      } catch (e) { alert('❌ ' + e.message); }
+      finally { btn.disabled = false; }
+    });
+
+    async function removeScheduleDate(id) {
+      if (!confirm('刪除此應繳日？')) return;
+      try { await deleteDoc(doc(db, 'question_schedule', id)); loadScheduleList(); }
+      catch (e) { alert('❌ ' + e.message); }
+    }
+
+    async function loadEnergyBar() {
+      const el = document.getElementById('energy-body');
+      const canEdit = !!(currentInstructor.permissions || {}).canEditEnergyBar;
+      try {
+        const cDoc = await getDoc(doc(db, 'classes', selectedClassId));
+        const eb = (cDoc.exists() && cDoc.data().settings && cDoc.data().settings.energyBar) || { enabled: false, target: 15, period: 'weekly' };
+        const dis = canEdit ? '' : 'disabled';
+        el.innerHTML = `
+          ${canEdit ? '' : '<div style="background:#fff7ed;color:#9a3412;font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px">🔒 你沒有「修改能量條」權限、僅供檢視</div>'}
+          <label style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;font-size:14px">
+            <span>開啟學員端顯示</span>
+            <input type="checkbox" id="eb-enabled" ${eb.enabled ? 'checked' : ''} ${dis} style="width:42px;height:24px;cursor:pointer">
+          </label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+            <div>
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">週期模式</label>
+              <select id="eb-period" ${dis} style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit">
+                <option value="weekly" ${eb.period === 'weekly' ? 'selected' : ''}>每週重置</option>
+                <option value="monthly" ${eb.period === 'monthly' ? 'selected' : ''}>每月重置</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">目標趟數</label>
+              <input type="number" id="eb-target" value="${eb.target || 15}" min="1" max="100" ${dis} style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit">
+            </div>
+          </div>
+          ${canEdit ? '<button id="eb-save" style="width:100%;background:#f59e0b;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700">💾 儲存此班級設定</button><div id="eb-msg"></div>' : ''}
+        `;
+        if (canEdit) document.getElementById('eb-save').addEventListener('click', saveEnergyBar);
+      } catch (e) {
+        el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`;
+      }
+    }
+
+    async function saveEnergyBar() {
+      const btn = document.getElementById('eb-save');
+      const msg = document.getElementById('eb-msg');
+      btn.disabled = true; btn.textContent = '⏳ 儲存中...';
+      try {
+        await updateDoc(doc(db, 'classes', selectedClassId), {
+          'settings.energyBar': {
+            enabled: document.getElementById('eb-enabled').checked,
+            period: document.getElementById('eb-period').value,
+            target: parseInt(document.getElementById('eb-target').value) || 15
+          },
+          settingsUpdatedAt: serverTimestamp(),
+          settingsUpdatedBy: currentInstructor.name
+        });
+        msg.innerHTML = '<div style="color:#10b981;font-size:13px;margin-top:8px">✅ 已儲存（學員端下次載入生效）</div>';
+        setTimeout(() => { msg.innerHTML = ''; }, 3000);
+      } catch (e) {
+        msg.innerHTML = `<div style="color:#ef4444;font-size:13px;margin-top:8px">❌ ${e.message}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 儲存此班級設定';
       }
     }
   </script>
