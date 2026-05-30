@@ -334,8 +334,9 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    let currentInstructor = null;   // { id, email, name, managedClassIds, permissions }
+    let currentInstructor = null;   // { id, email, name, managedClassIds }
     let selectedClassId = null;
+    let classPerms = {};            // 目前所選班級的「指導員權限」（班級共用、隨班切換）
 
     // 權限標籤對照
     const PERM_LABELS = {
@@ -459,17 +460,40 @@
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('dashboard').style.display = 'block';
 
-      // 權限閘門（不顯示權限清單給指導員、只決定 tab / 卡片顯示）
-      const perms = currentInstructor.permissions || {};
-      // 分頁層級：沒權限的整個分頁鈕藏掉（點不過去）
-      document.getElementById('tabbtn-corrections').style.display = perms.canHandleCorrections ? '' : 'none';
-      document.getElementById('tabbtn-signoff').style.display = perms.canQRSignoff ? '' : 'none';
-      // 卡片層級：出題追蹤頁內的能量條 / 各班出題戰力
-      document.getElementById('energy-card').style.display = perms.canEditEnergyBar ? '' : 'none';
-      document.getElementById('classpower-card').style.display = perms.canViewClassPower ? '' : 'none';
-
+      // 權限改成「班級共用」：實際閘門在選定班級後由 applyClassPermissions() 套用
       // 班級下拉（只有自己負責的班）
       loadOwnClasses();
+    }
+
+    // 讀取目前所選班級的「指導員權限」（班級共用），並套用顯示閘門
+    async function refreshClassPerms() {
+      classPerms = {};
+      if (selectedClassId) {
+        try {
+          const c = await getDoc(doc(db, 'classes', selectedClassId));
+          classPerms = (c.exists() && c.data().instructorPermissions) || {};
+        } catch (e) { classPerms = {}; }
+      }
+      applyClassPermissions();
+    }
+
+    // 依 classPerms 決定分頁鈕 / 卡片顯示；若目前分頁被隱藏則退回「出題追蹤」
+    function applyClassPermissions() {
+      const p = classPerms || {};
+      // 分頁層級：沒權限整個分頁鈕藏掉（點不過去）
+      document.getElementById('tabbtn-corrections').style.display = p.canHandleCorrections ? '' : 'none';
+      document.getElementById('tabbtn-signoff').style.display = p.canQRSignoff ? '' : 'none';
+      // 卡片層級：出題追蹤頁內的能量條 / 各班出題戰力
+      document.getElementById('energy-card').style.display = p.canEditEnergyBar ? '' : 'none';
+      document.getElementById('classpower-card').style.display = p.canViewClassPower ? '' : 'none';
+      // 目前所在分頁若被隱藏 → 退回出題追蹤（只切換、不在這裡載入；由呼叫端載入）
+      const activeBtn = document.querySelector('.bottom-tabs button.active');
+      if (activeBtn && activeBtn.style.display === 'none') {
+        document.querySelectorAll('.bottom-tabs button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelector('.bottom-tabs button[data-tab="schedule"]').classList.add('active');
+        document.getElementById('tab-schedule').classList.add('active');
+      }
     }
 
     async function loadOwnClasses() {
@@ -487,19 +511,21 @@
         sel.innerHTML = items.map(c => `<option value="${c.id}">${c.displayName || c.id}</option>`).join('');
         selectedClassId = items[0].id;
         sel.value = selectedClassId;
-        loadScheduleTab(); // 預設首頁就是出題追蹤
+        await refreshClassPerms();   // 先套用此班權限閘門
+        loadScheduleTab();           // 預設首頁就是出題追蹤
       } catch (e) {
         sel.innerHTML = '<option value="">❌ 載入失敗</option>';
       }
     }
 
-    document.getElementById('class-select').addEventListener('change', (e) => {
+    document.getElementById('class-select').addEventListener('change', async (e) => {
       selectedClassId = e.target.value;
+      await refreshClassPerms();   // 換班 → 重新套用該班權限（可能切回出題追蹤）
       const active = document.querySelector('.bottom-tabs button.active')?.dataset.tab;
       if (active === 'corrections') loadCorrections();
-      if (active === 'schedule') loadScheduleTab();
-      if (active === 'other') loadOtherTab();
-      if (active === 'signoff') { const pl = document.getElementById('prog-list'); if (pl) pl.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">選技術項目查看全班達標狀況</div>'; const ps = document.getElementById('prog-skill'); if (ps) ps.value = ''; }
+      else if (active === 'schedule') loadScheduleTab();
+      else if (active === 'other') loadOtherTab();
+      else if (active === 'signoff') { const pl = document.getElementById('prog-list'); if (pl) pl.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">選技術項目查看全班達標狀況</div>'; const ps = document.getElementById('prog-skill'); if (ps) ps.value = ''; }
     });
 
     // ===== 底部 Tab 切換 =====
@@ -674,7 +700,7 @@
 
     async function loadScheduleTab() {
       if (!selectedClassId) return;
-      const perms = currentInstructor.permissions || {};
+      const perms = classPerms || {};
       const tasks = [loadScheduleList()];
       if (perms.canEditEnergyBar) tasks.push(loadEnergyBar());   // 沒權限不載、卡片已隱藏
       await Promise.all(tasks);
@@ -815,7 +841,7 @@
 
     async function loadEnergyBar() {
       const el = document.getElementById('energy-body');
-      const canEdit = !!(currentInstructor.permissions || {}).canEditEnergyBar;
+      const canEdit = !!(classPerms || {}).canEditEnergyBar;
       try {
         const cDoc = await getDoc(doc(db, 'classes', selectedClassId));
         const eb = (cDoc.exists() && cDoc.data().settings && cDoc.data().settings.energyBar) || { enabled: false, target: 15, period: 'weekly' };
@@ -1009,7 +1035,7 @@
 
     async function loadOtherTab() {
       if (!selectedClassId) return;
-      const perms = currentInstructor.permissions || {};
+      const perms = classPerms || {};
       // 預設下架日 +7
       const d = document.getElementById('ann-expire');
       if (d && !d.value) { const t = new Date(); t.setDate(t.getDate() + 7); d.value = t.toISOString().slice(0, 10); }
@@ -1131,7 +1157,7 @@
 
     async function loadMistakeBookToggle() {
       const el = document.getElementById('mb-body');
-      const canEdit = !!(currentInstructor.permissions || {}).canToggleMistakeBook;
+      const canEdit = !!(classPerms || {}).canToggleMistakeBook;
       try {
         const cDoc = await getDoc(doc(db, 'classes', selectedClassId));
         const enabled = !!(cDoc.exists() && cDoc.data().settings && cDoc.data().settings.mistakeBook && cDoc.data().settings.mistakeBook.enabled);

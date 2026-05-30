@@ -483,6 +483,18 @@
         </div>
         <div class="form-group"><label>年度</label><input type="number" id="class-year" value="2026"></div>
         <div class="form-group"><label>備註（可選）</label><input type="text" id="class-description"></div>
+        <div class="form-group">
+          <label>👮 指導員權限（本班共用、所有帶這個班的指導員都吃這份）</label>
+          <div style="background:#0f172a;border:1px solid #334155;border-radius:6px;padding:12px;">
+            <div style="color:#6ee7b7;margin-bottom:8px;font-size:12px;line-height:1.7;">🟢 基本權限（強制開）：查看本班學員 / 雷達 / 河流 / 能量條 / 戰力 / 班級題庫</div>
+            <h4 style="color:#60a5fa;margin-bottom:8px;font-size:13px;">🔵 進階權限（可開關）</h4>
+            <div id="class-instructor-permissions" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px;"></div>
+            <div style="margin-top:8px;display:flex;gap:8px">
+              <button type="button" id="cls-perm-all" class="btn btn-ghost" style="font-size:12px;padding:4px 10px">全選</button>
+              <button type="button" id="cls-perm-none" class="btn btn-ghost" style="font-size:12px;padding:4px 10px">全不選</button>
+            </div>
+          </div>
+        </div>
         <div id="class-modal-error"></div>
       </div>
       <div class="modal-footer">
@@ -588,15 +600,13 @@
         <div class="form-group">
           <label>權限設定</label>
           <div style="background:#0f172a;border:1px solid #334155;border-radius:6px;padding:12px;">
-            <h4 style="color:#6ee7b7;margin-bottom:8px;font-size:13px;">🟢 Tier A：基本權限（強制開、不可關）</h4>
+            <h4 style="color:#6ee7b7;margin-bottom:8px;font-size:13px;">🟢 基本權限（強制開、不可關）</h4>
             <div style="margin-bottom:12px;color:#94a3b8;font-size:13px;line-height:1.8;">
               ✅ 查看自己班學員清單 / 雷達圖 / 河流圖 / 能量條 / 戰力排行 / 班級題庫
             </div>
-            <h4 style="color:#60a5fa;margin-bottom:8px;font-size:13px;">🔵 Tier B：進階權限（可開關）</h4>
-            <div id="instructor-permissions" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px;"></div>
-            <div style="margin-top:8px;display:flex;gap:8px">
-              <button type="button" id="btn-perm-all" class="btn btn-ghost" style="font-size:12px;padding:4px 10px">全選</button>
-              <button type="button" id="btn-perm-none" class="btn btn-ghost" style="font-size:12px;padding:4px 10px">全不選</button>
+            <div style="background:#1e293b;border:1px solid #475569;border-radius:8px;padding:10px 12px;color:#cbd5e1;font-size:13px;line-height:1.7;">
+              🔵 進階權限改成「<b style="color:#60a5fa">班級共用</b>」了：請到「<b>班級管理 → 編輯班級</b>」設定。<br>
+              <span style="color:#94a3b8;font-size:12px">同一班所有指導員都吃同一份權限、學員端也跟著班級走、不會因為換指導員而不一致。</span>
             </div>
           </div>
         </div>
@@ -1022,6 +1032,16 @@
     }
 
     let editingClassId = null;
+    // 班級層級指導員權限 checkboxes（本班共用）
+    function renderClassPerms(perms) {
+      perms = perms || {};
+      let html = '';
+      TIER_B_PERMISSIONS.forEach(p => {
+        html += `<label style="display:flex;align-items:center;gap:10px;cursor:pointer;color:#cbd5e1;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:9px 12px;white-space:nowrap"><input type="checkbox" value="${p.key}" class="class-perm-cb" ${perms[p.key] ? 'checked' : ''} style="width:18px;height:18px;flex-shrink:0"> ${p.label}</label>`;
+      });
+      document.getElementById('class-instructor-permissions').innerHTML = html;
+    }
+
     async function openClassModal(id) {
       editingClassId = id;
       document.getElementById('class-modal-title').textContent = '✏️ 編輯班級';
@@ -1035,6 +1055,7 @@
         document.getElementById('class-course-type').value = c.courseType || 'EMTP';
         document.getElementById('class-year').value = c.year || new Date().getFullYear();
         document.getElementById('class-description').value = c.description || '';
+        renderClassPerms(c.instructorPermissions);
         document.getElementById('class-modal-error').innerHTML = '';
         document.getElementById('class-modal').classList.add('active');
       } catch (e) { alert('❌ ' + e.message); }
@@ -1084,9 +1105,12 @@
       document.getElementById('class-course-type').value = 'EMTP';
       document.getElementById('class-year').value = new Date().getFullYear();
       document.getElementById('class-description').value = '';
+      renderClassPerms({});
       document.getElementById('class-modal-error').innerHTML = '';
       document.getElementById('class-modal').classList.add('active');
     });
+    document.getElementById('cls-perm-all').addEventListener('click', () => document.querySelectorAll('.class-perm-cb').forEach(cb => cb.checked = true));
+    document.getElementById('cls-perm-none').addEventListener('click', () => document.querySelectorAll('.class-perm-cb').forEach(cb => cb.checked = false));
     document.getElementById('class-modal-close').addEventListener('click', () => document.getElementById('class-modal').classList.remove('active'));
     document.getElementById('class-modal-cancel').addEventListener('click', () => document.getElementById('class-modal').classList.remove('active'));
     document.getElementById('class-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('class-modal').classList.remove('active'); });
@@ -1098,6 +1122,11 @@
       errEl.innerHTML = '';
       if (!classId || !name) { errEl.innerHTML = '<div class="err-msg">❌ 班級代碼跟顯示名稱必填</div>'; return; }
       if (!/^[A-Za-z0-9_-]+$/.test(classId)) { errEl.innerHTML = '<div class="err-msg">❌ 班級代碼只能含英數字、-、_</div>'; return; }
+      // 本班指導員權限（共用）
+      const instructorPermissions = {};
+      TIER_B_PERMISSIONS.forEach(p => { instructorPermissions[p.key] = false; });
+      Array.from(document.querySelectorAll('.class-perm-cb:checked')).forEach(cb => { instructorPermissions[cb.value] = true; });
+
       const btn = document.getElementById('class-modal-save');
       btn.disabled = true; btn.textContent = '⏳ 儲存中...';
       try {
@@ -1108,6 +1137,7 @@
             courseType: document.getElementById('class-course-type').value,
             year: parseInt(document.getElementById('class-year').value),
             description: document.getElementById('class-description').value.trim(),
+            instructorPermissions,
             updatedAt: serverTimestamp(), updatedBy: currentUser.email
           });
         } else {
@@ -1118,6 +1148,7 @@
             courseType: document.getElementById('class-course-type').value,
             year: parseInt(document.getElementById('class-year').value),
             description: document.getElementById('class-description').value.trim(),
+            instructorPermissions,
             isActive: true, archivedAt: null,
             createdAt: serverTimestamp(), createdBy: currentUser.email
           });
@@ -1475,17 +1506,15 @@
           listEl.innerHTML = '<div class="placeholder"><div class="icon">📭</div><h3>還沒有指導員</h3><p>點「➕ 新增指導員」</p></div>';
           return;
         }
-        let html = '<table class="table"><thead><tr><th>Email</th><th>姓名</th><th>能管班級</th><th>權限數</th><th>狀態</th><th>動作</th></tr></thead><tbody>';
+        let html = '<table class="table"><thead><tr><th>Email</th><th>姓名</th><th>能管班級</th><th>狀態</th><th>動作</th></tr></thead><tbody>';
         filtered.forEach(ins => {
           const isArchived = ins.isActive === false;
           const stateTag = isArchived ? '<span class="tag-pill gray">📦 封存</span>' : '<span class="tag-pill">✅</span>';
           const classes = (ins.managedClassIds || []).join(', ') || '—';
-          const permCount = Object.values(ins.permissions || {}).filter(v => v).length;
           html += `<tr>
             <td style="font-family:monospace;font-size:13px">${ins.email || '—'}</td>
             <td>${ins.name || '—'}</td>
             <td>${classes}</td>
-            <td><span class="tag-pill gray">Tier B: ${permCount}/${TIER_B_PERMISSIONS.length}</span></td>
             <td>${stateTag}</td>
             <td style="white-space:nowrap">${isArchived
               ? `<button class="btn btn-ghost" data-unarchive-i="${ins.id}">📂 恢復</button>`
@@ -1535,12 +1564,6 @@
       let classHtml = '';
       classes.forEach(c => { classHtml += `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;background:#1e293b;padding:6px 12px;border-radius:6px;color:#cbd5e1"><input type="checkbox" value="${c.id}" class="instructor-class-cb"> ${c.displayName || c.id}</label>`; });
       document.getElementById('instructor-classes-checkboxes').innerHTML = classHtml || '<span style="color:#94a3b8">沒有可用班級、先去班級管理新增</span>';
-      // 權限 checkboxes
-      let permHtml = '';
-      TIER_B_PERMISSIONS.forEach(p => {
-        permHtml += `<label style="display:flex;align-items:center;gap:10px;cursor:pointer;color:#cbd5e1;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:9px 12px;white-space:nowrap"><input type="checkbox" value="${p.key}" class="instructor-perm-cb" style="width:18px;height:18px;flex-shrink:0"> ${p.label}</label>`;
-      });
-      document.getElementById('instructor-permissions').innerHTML = permHtml;
 
       const idEl = document.getElementById('instructor-idnumber');
       const authStatusEl = document.getElementById('instructor-auth-status');
@@ -1553,8 +1576,6 @@
           document.getElementById('instructor-name').value = ins.name || '';
           idEl.value = ins.idNumber || '';
           (ins.managedClassIds || []).forEach(cid => { const cb = document.querySelector(`.instructor-class-cb[value="${cid}"]`); if (cb) cb.checked = true; });
-          const perms = ins.permissions || {};
-          Object.keys(perms).forEach(k => { const cb = document.querySelector(`.instructor-perm-cb[value="${k}"]`); if (cb && perms[k]) cb.checked = true; });
           if (ins.hasAuthAccount) {
             idEl.readOnly = true; idEl.style.opacity = '0.6';
             authStatusEl.innerHTML = '<span style="color:#6ee7b7">✅ 已建立登入帳號</span>';
@@ -1571,8 +1592,6 @@
       document.getElementById('instructor-modal').classList.add('active');
     }
 
-    document.getElementById('btn-perm-all').addEventListener('click', () => document.querySelectorAll('.instructor-perm-cb').forEach(cb => cb.checked = true));
-    document.getElementById('btn-perm-none').addEventListener('click', () => document.querySelectorAll('.instructor-perm-cb').forEach(cb => cb.checked = false));
     document.getElementById('btn-add-instructor').addEventListener('click', () => openInstructorModal(null));
     document.getElementById('instructor-modal-close').addEventListener('click', () => document.getElementById('instructor-modal').classList.remove('active'));
     document.getElementById('instructor-modal-cancel').addEventListener('click', () => document.getElementById('instructor-modal').classList.remove('active'));
@@ -1588,9 +1607,6 @@
       // 不需信箱：用身分證自動產生內部帳號 email
       const email = idNumber ? `${idNumber.toLowerCase()}@emtp.local` : '';
       const managedClassIds = Array.from(document.querySelectorAll('.instructor-class-cb:checked')).map(cb => cb.value);
-      const permissions = {};
-      TIER_B_PERMISSIONS.forEach(p => { permissions[p.key] = false; });
-      Array.from(document.querySelectorAll('.instructor-perm-cb:checked')).forEach(cb => { permissions[cb.value] = true; });
 
       const btn = document.getElementById('instructor-modal-save');
       btn.disabled = true; btn.textContent = '⏳';
@@ -1601,7 +1617,7 @@
           const snap = await getDoc(targetRef);
           existingData = snap.exists() ? snap.data() : {};
           await updateDoc(targetRef, {
-            name, managedClassIds, permissions,
+            name, managedClassIds,
             ...(idNumber ? { idNumber } : {}),
             updatedAt: serverTimestamp(), updatedBy: currentUser.email
           });
@@ -1611,7 +1627,7 @@
           if (!existing.empty) { errEl.innerHTML = '<div class="err-msg">❌ 此身分證已有指導員資料</div>'; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
           targetRef = doc(collection(db, 'instructors'));
           await setDoc(targetRef, {
-            email, name, managedClassIds, permissions, idNumber: idNumber || null,
+            email, name, managedClassIds, idNumber: idNumber || null,
             isActive: true, archivedAt: null, hasAuthAccount: false,
             createdAt: serverTimestamp(), createdBy: currentUser.email
           });
