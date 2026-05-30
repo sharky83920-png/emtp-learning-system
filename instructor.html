@@ -401,7 +401,8 @@
         list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         if (list.length === 0) { sel.innerHTML = '<option value="">⚠️ 此班沒有可登入的指導員</option>'; return; }
         let html = '<option value="">請選姓名...</option>';
-        list.forEach(i => { html += `<option value="${i.email}">${i.name}</option>`; });
+        // 登入 email 優先用「身分證推導」(免信箱帳號約定)、避免舊資料 email 欄位過期；沒身分證才退回 email 欄位
+        list.forEach(i => { const loginEmail = i.idNumber ? `${i.idNumber.toLowerCase()}@emtp.local` : (i.email || ''); html += `<option value="${loginEmail}">${i.name}</option>`; });
         sel.innerHTML = html;
         sel.disabled = false;
       } catch (e) {

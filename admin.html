@@ -594,6 +594,10 @@
             </div>
             <h4 style="color:#60a5fa;margin-bottom:8px;font-size:13px;">🔵 Tier B：進階權限（可開關）</h4>
             <div id="instructor-permissions" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px;"></div>
+            <div style="margin-top:8px;display:flex;gap:8px">
+              <button type="button" id="btn-perm-all" class="btn btn-ghost" style="font-size:12px;padding:4px 10px">全選</button>
+              <button type="button" id="btn-perm-none" class="btn btn-ghost" style="font-size:12px;padding:4px 10px">全不選</button>
+            </div>
           </div>
         </div>
         <div id="instructor-modal-error"></div>
@@ -1520,7 +1524,7 @@
       // 權限 checkboxes
       let permHtml = '';
       TIER_B_PERMISSIONS.forEach(p => {
-        permHtml += `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#cbd5e1"><input type="checkbox" value="${p.key}" class="instructor-perm-cb"> ${p.label}</label>`;
+        permHtml += `<label style="display:flex;align-items:center;gap:10px;cursor:pointer;color:#cbd5e1;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:9px 12px;white-space:nowrap"><input type="checkbox" value="${p.key}" class="instructor-perm-cb" style="width:18px;height:18px;flex-shrink:0"> ${p.label}</label>`;
       });
       document.getElementById('instructor-permissions').innerHTML = permHtml;
 
@@ -1553,6 +1557,8 @@
       document.getElementById('instructor-modal').classList.add('active');
     }
 
+    document.getElementById('btn-perm-all').addEventListener('click', () => document.querySelectorAll('.instructor-perm-cb').forEach(cb => cb.checked = true));
+    document.getElementById('btn-perm-none').addEventListener('click', () => document.querySelectorAll('.instructor-perm-cb').forEach(cb => cb.checked = false));
     document.getElementById('btn-add-instructor').addEventListener('click', () => openInstructorModal(null));
     document.getElementById('instructor-modal-close').addEventListener('click', () => document.getElementById('instructor-modal').classList.remove('active'));
     document.getElementById('instructor-modal-cancel').addEventListener('click', () => document.getElementById('instructor-modal').classList.remove('active'));
