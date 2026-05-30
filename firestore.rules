@@ -62,6 +62,7 @@ service cloud.firestore {
     match /mistake_book/{id}           { allow read: if authed(); allow write: if authed(); }
     match /question_error_reports/{id} { allow read: if authed(); allow create: if authed(); allow update: if authed(); allow delete: if isMaster(); }
     match /question_schedule/{id}      { allow read: if authed(); allow write: if authed(); }
+    match /question_submissions/{id}   { allow read: if authed(); allow create: if authed(); allow update, delete: if isMaster(); }
 
     // ── 核心技術簽核 / QR ──
     match /core_skill_signoffs/{id}  { allow read: if authed(); allow create: if authed(); allow update, delete: if isMaster(); }

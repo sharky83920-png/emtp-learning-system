@@ -226,7 +226,7 @@
       </div>
 
       <!-- F11-A: Milestone 群能力 5 角雷達 -->
-      <div class="milestone-section" data-tab="skills">
+      <div class="milestone-section" data-tab="skills" data-feat="milestone">
         <h3>🎯 Milestone 群能力</h3>
         <div class="radar-container">
           <canvas id="milestone-radar"></canvas>
@@ -286,7 +286,7 @@
       </div>
 
       <!-- F11-B: 核心技術簽核清單 -->
-      <div class="milestone-section" data-tab="skills">
+      <div class="milestone-section" data-tab="skills" data-feat="coreskill">
         <h3>🛠️ 核心技術簽核清單</h3>
         <div id="core-skills-list"><div class="loading">⏳ 載入中...</div></div>
       </div>
@@ -466,7 +466,7 @@
       </div>
 
       <!-- F13-C + F13-D + F13-E: 題庫 + 出題進度 + 答題系統 -->
-      <div class="milestone-section" data-tab="academic">
+      <div class="milestone-section" data-tab="academic" data-feat="quiz">
         <h3>📝 題庫與答題</h3>
         <div style="color:#64748b;font-size:13px;margin-bottom:12px">💡 依照排定的出題日累積題庫、隨機抽題練習。</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">
@@ -477,7 +477,7 @@
       </div>
 
       <!-- 專項練習（6 維度、不計分） -->
-      <div class="milestone-section" data-tab="academic">
+      <div class="milestone-section" data-tab="academic" data-feat="quiz">
         <h3>🎯 專項練習（不計分）</h3>
         <div style="color:#64748b;font-size:13px;margin-bottom:12px">針對單一維度抽題練習、不列入計分。</div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px" id="practice-buttons">
@@ -491,7 +491,7 @@
       </div>
 
       <!-- F13-F: 實習 tab（外部連結） -->
-      <div class="milestone-section" data-tab="internship">
+      <div class="milestone-section" data-tab="internship" data-feat="internship">
         <h3>🏥 訓練簽到系統</h3>
         <div style="color:#64748b;font-size:13px;margin-bottom:14px">📥 訓練 / 實習簽到由 TP 承辦醫院提供的外部系統處理。</div>
         <a href="#" id="ext-signin-link" target="_blank" style="display:block;text-align:center;background:linear-gradient(135deg,#10b981,#059669);color:white;padding:18px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;box-shadow:0 4px 12px rgba(16,185,129,0.3)">
@@ -743,6 +743,10 @@
         // F14-C: 錯題本班級開關 → 控制底部「錯題本」tab 顯示
         mistakeBookEnabled = !!(s.mistakeBook && s.mistakeBook.enabled);
         applyMistakeBookVisibility();
+
+        // 學員端功能開關（技術簽核/實習/Milestone/題庫練習）→ 沒開放就隱藏
+        studentFeatures = s.studentFeatures || {};
+        applyStudentFeatures();
 
         // F15+: 該班 EPA 計分排除設定
         _epaScoring = s.epaScoring || {};
@@ -2160,6 +2164,27 @@
       } else {
         loadMistakeSet().catch(() => {});
       }
+    }
+
+    // 學員端功能開關（班級層級、Master 在系統設定逐班設）：沒開放就隱藏
+    let studentFeatures = {};
+    function applyStudentFeatures() {
+      const sf = studentFeatures || {};
+      const off = k => sf[k] === false;                 // undefined＝預設顯示
+      const setHide = (feat, hide) => document.querySelectorAll(`[data-feat="${feat}"]`).forEach(el => el.classList.toggle('empty-hide', hide));
+      setHide('milestone', off('milestone'));
+      setHide('coreskill', off('coreSkill'));
+      setHide('quiz', off('quiz'));
+      setHide('internship', off('internship'));
+      // 底部分頁：技術簽核（Milestone＋核心技術都關才整個藏）
+      const skillsBtn = document.querySelector('.bottom-tabs button[data-bottom-tab="skills"]');
+      if (skillsBtn) skillsBtn.style.display = (off('milestone') && off('coreSkill')) ? 'none' : '';
+      // 實習分頁
+      const interBtn = document.querySelector('.bottom-tabs button[data-bottom-tab="internship"]');
+      if (interBtn) interBtn.style.display = off('internship') ? 'none' : '';
+      // 目前所在分頁若被整個藏掉 → 退回學科
+      const activeBtn = document.querySelector('.bottom-tabs button.active');
+      if (activeBtn && activeBtn.style.display === 'none') switchStudentTab('academic');
     }
     document.querySelectorAll('.bottom-tabs button').forEach(b => {
       b.addEventListener('click', () => switchStudentTab(b.dataset.bottomTab));

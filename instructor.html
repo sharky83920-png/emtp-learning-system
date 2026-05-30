@@ -124,13 +124,23 @@
           <div id="sched-list"><div class="placeholder" style="padding:20px"><div class="icon">⏳</div></div></div>
         </div>
 
+        <div class="card">
+          <h2>📋 出題繳交追蹤</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:10px">查特定出題日全班繳交狀況（🟢 已交達標 / 🔴 未交）。可指定學員。</p>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+            <select id="track-date" class="pri-select" style="flex:1;min-width:160px"><option value="">請選出題日...</option></select>
+            <select id="track-student" class="pri-select" style="flex:1;min-width:120px"><option value="">全部學員</option></select>
+          </div>
+          <div id="track-result"><div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">選出題日查看全班繳交狀況</div></div>
+        </div>
+
         <div class="card" id="energy-card">
           <h2>⚡ 能量條設定</h2>
           <div id="energy-body"><div class="placeholder" style="padding:20px"><div class="icon">⏳</div></div></div>
         </div>
 
         <div class="card">
-          <h2>🏆 綜合測驗績效排名（本班）</h2>
+          <h2>🏆 綜合測驗績效排名</h2>
           <p style="color:#64748b;font-size:13px;margin-bottom:10px">只計隨機綜合測驗（不含專項練習）。可選日期區間。全班依加權分數排名。</p>
           <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
             <input type="date" id="perf-start" style="padding:7px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit;font-size:13px">
@@ -704,6 +714,7 @@
       const tasks = [loadScheduleList()];
       if (perms.canEditEnergyBar) tasks.push(loadEnergyBar());   // 沒權限不載、卡片已隱藏
       await Promise.all(tasks);
+      populateTrackControls();                                    // 出題繳交追蹤（schedCache 已就緒）
       loadPerfRanking();                                          // 綜合績效排名維持顯示
       if (perms.canViewClassPower) loadQuestionPower();           // 各班出題戰力（需權限）
     }
@@ -838,6 +849,74 @@
       try { await deleteDoc(doc(db, 'question_schedule', id)); loadScheduleList(); }
       catch (e) { alert('❌ ' + e.message); }
     }
+
+    // ===== 出題繳交追蹤 =====
+    // 出題日下拉：最近且已到達的 3 筆放最前面，其次歷史（過往），最後尚未到期
+    function populateTrackControls() {
+      const dateSel = document.getElementById('track-date');
+      const stuSel = document.getElementById('track-student');
+      if (!dateSel) return;
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const arrived = schedCache.filter(s => new Date(s.scheduledDate) <= today)
+        .sort((a, b) => (b.scheduledDate || '').localeCompare(a.scheduledDate || '')); // 新→舊
+      const future = schedCache.filter(s => new Date(s.scheduledDate) > today)
+        .sort((a, b) => (a.scheduledDate || '').localeCompare(b.scheduledDate || ''));
+      const recent = arrived.slice(0, 3);
+      const older = arrived.slice(3);
+      const prev = dateSel.value;
+      let h = '<option value="">請選出題日...</option>';
+      if (recent.length) { h += '<optgroup label="🔥 最近可繳交（近期 3 筆）">'; recent.forEach(s => h += `<option value="${s.scheduledDate}">${s.scheduledDate}${s.questionsPerStudent > 1 ? `（${s.questionsPerStudent}題）` : ''}</option>`); h += '</optgroup>'; }
+      if (older.length) { h += '<optgroup label="📁 歷史排程（過往日期）">'; older.forEach(s => h += `<option value="${s.scheduledDate}">${s.scheduledDate}${s.questionsPerStudent > 1 ? `（${s.questionsPerStudent}題）` : ''}</option>`); h += '</optgroup>'; }
+      if (future.length) { h += '<optgroup label="⏳ 尚未到期">'; future.forEach(s => h += `<option value="${s.scheduledDate}">${s.scheduledDate}${s.questionsPerStudent > 1 ? `（${s.questionsPerStudent}題）` : ''}</option>`); h += '</optgroup>'; }
+      dateSel.innerHTML = h;
+      if (prev && schedCache.some(s => s.scheduledDate === prev)) dateSel.value = prev;
+      // 學員下拉
+      if (stuSel) {
+        getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId))).then(snap => {
+          const list = [];
+          snap.forEach(d => { const s = d.data(); if (s.isActive !== false) list.push({ id: d.id, name: s.name, no: s.studentNo }); });
+          list.sort((a, b) => (a.no || 0) - (b.no || 0));
+          stuSel.innerHTML = '<option value="">全部學員</option>' + list.map(s => `<option value="${s.id}">${s.no}. ${s.name}</option>`).join('');
+        }).catch(() => {});
+      }
+    }
+
+    async function loadTrackResult() {
+      const el = document.getElementById('track-result');
+      const date = document.getElementById('track-date').value;
+      const stuFilter = document.getElementById('track-student').value;
+      if (!date) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">選出題日查看全班繳交狀況</div>'; return; }
+      el.innerHTML = '<div class="placeholder" style="padding:12px"><div class="icon">⏳</div></div>';
+      try {
+        const sch = schedCache.find(s => s.scheduledDate === date);
+        const need = (sch && sch.questionsPerStudent) || 1;
+        // 全班在籍學員
+        const stuSnap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
+        let students = [];
+        stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false) students.push({ id: d.id, name: s.name, no: s.studentNo }); });
+        students.sort((a, b) => (a.no || 0) - (b.no || 0));
+        if (stuFilter) students = students.filter(s => s.id === stuFilter);
+        // 該班繳交紀錄（單一 classId 查詢、日期 client 端過濾）
+        const subSnap = await getDocs(query(collection(db, 'question_submissions'), where('classId', '==', selectedClassId)));
+        const countByStu = {};
+        subSnap.forEach(d => { const s = d.data(); if (s.scheduledDate === date) countByStu[s.studentId] = (countByStu[s.studentId] || 0) + 1; });
+        const rows = students.map(s => ({ ...s, cnt: countByStu[s.id] || 0, done: (countByStu[s.id] || 0) >= need }));
+        const total = rows.length, done = rows.filter(r => r.done).length, miss = total - done;
+        el.innerHTML = `
+          <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;flex-wrap:wrap;font-size:14px">
+            <span style="background:#f1f5f9;color:#475569;padding:5px 14px;border-radius:18px">總數 <b>${total}</b></span>
+            <span style="background:#dcfce7;color:#166534;padding:5px 14px;border-radius:18px">✅ 完成 <b>${done}</b></span>
+            <span style="background:#fee2e2;color:#991b1b;padding:5px 14px;border-radius:18px">❌ 未交 <b>${miss}</b></span>
+          </div>
+          <div style="font-size:11px;color:#94a3b8;text-align:center;margin-bottom:10px">達標門檻：每人 ${need} 題</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px">` +
+          rows.map(r => `<div style="border-radius:10px;padding:8px 6px;text-align:center;font-size:13px;border:1px solid ${r.done ? '#86efac' : '#fca5a5'};background:${r.done ? '#f0fdf4' : '#fef2f2'};color:${r.done ? '#166534' : '#991b1b'}">${r.done ? '✅' : '❌'} ${r.name}${need > 1 ? `<div style="font-size:10px;opacity:0.8">${r.cnt}/${need}</div>` : ''}</div>`).join('') +
+          '</div>' +
+          (rows.length === 0 ? '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">無學員</div>' : '');
+      } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+    }
+    document.getElementById('track-date').addEventListener('change', loadTrackResult);
+    document.getElementById('track-student').addEventListener('change', loadTrackResult);
 
     async function loadEnergyBar() {
       const el = document.getElementById('energy-body');
