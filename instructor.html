@@ -49,7 +49,17 @@
     .bottom-tabs button { flex: 1; background: transparent; border: none; padding: 8px 4px; color: #94a3b8; font-size: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; font-family: inherit; border-radius: 8px; }
     .bottom-tabs button .bt-icon { font-size: 21px; }
     .bottom-tabs button.active { color: #e11d48; background: #fff1f2; font-weight: 600; }
+    /* QR 簽核 */
+    .qr-active-box { background: #f0fdfa; border: 2px solid #14b8a6; border-radius: 14px; padding: 20px; text-align: center; }
+    .qr-countdown { font-size: 38px; font-weight: 700; color: #14b8a6; font-family: monospace; }
+    .qr-countdown.warning { color: #f59e0b; }
+    .qr-countdown.critical { color: #ef4444; }
+    .qr-scanned-list { background: white; padding: 12px; border-radius: 8px; max-height: 200px; overflow-y: auto; margin-top: 12px; text-align: left; }
+    .qr-student-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 13px; }
+    .qr-student-row:last-child { border-bottom: none; }
+    .pri-select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 14px; background: white; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -123,12 +133,36 @@
 
       <section class="tab-content" id="tab-signoff">
         <div class="card">
-          <h2>✅ 教官簽核</h2>
-          <div class="build-box">
-            <div class="icon">🚧</div>
-            <h3>新功能建置中</h3>
-            <p>QR 簽核 / Milestone 評量查詢 / 簽核進度</p>
+          <h2>📱 QR Code 現場簽核</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:12px">選技術項目 → 產生 5 分鐘 QR Code、學員掃碼即自動為該項目 +1 次簽核（同學員不可重複掃同一 QR）。</p>
+          <div id="qr-setup">
+            <div class="form-group" style="margin-bottom:12px">
+              <label style="display:block;font-size:13px;color:#475569;margin-bottom:6px;font-weight:600">技術項目</label>
+              <select id="qr-skill" class="pri-select"><option value="">載入中...</option></select>
+            </div>
+            <button id="btn-start-qr" style="width:100%;background:#10b981;color:white;border:none;padding:13px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700;font-size:15px">📱 產生 QR Code（5 分鐘）</button>
+            <div id="qr-setup-error"></div>
           </div>
+          <div id="qr-active" style="display:none">
+            <div class="qr-active-box">
+              <div style="color:#64748b;font-size:13px;margin-bottom:4px">⏰ 剩餘時間</div>
+              <div class="qr-countdown" id="qr-countdown">5:00</div>
+              <div style="margin-top:10px;color:#334155;font-size:14px"><strong id="qr-skill-name">—</strong></div>
+              <div style="background:white;padding:14px;border-radius:12px;display:inline-block;margin:12px 0"><img id="qr-img" style="display:block;width:240px;height:240px" alt="QR Code"></div>
+              <div style="color:#334155;font-size:14px">已掃描：<strong style="color:#10b981" id="qr-scanned-count">0</strong> 位</div>
+              <div class="qr-scanned-list" id="qr-scanned-list"><div style="color:#94a3b8;text-align:center">尚未有學員掃描</div></div>
+              <button id="btn-end-qr" style="margin-top:12px;width:100%;background:#ef4444;color:white;border:none;padding:11px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:600">⏹ 結束 Session</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>📊 全班簽核進度</h2>
+          <div class="form-group" style="margin-bottom:12px">
+            <label style="display:block;font-size:13px;color:#475569;margin-bottom:6px;font-weight:600">技術項目</label>
+            <select id="prog-skill" class="pri-select"><option value="">請選項目...</option></select>
+          </div>
+          <div id="prog-list"><div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">選技術項目查看全班達標狀況</div></div>
         </div>
       </section>
 
@@ -206,7 +240,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, query, where, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, query, where, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp, onSnapshot, Timestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -377,6 +411,7 @@
       const active = document.querySelector('.bottom-tabs button.active')?.dataset.tab;
       if (active === 'corrections') loadCorrections();
       if (active === 'schedule') loadScheduleTab();
+      if (active === 'signoff') { const pl = document.getElementById('prog-list'); if (pl) pl.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">選技術項目查看全班達標狀況</div>'; const ps = document.getElementById('prog-skill'); if (ps) ps.value = ''; }
     });
 
     // ===== 底部 Tab 切換 =====
@@ -388,6 +423,7 @@
         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
         if (btn.dataset.tab === 'corrections') loadCorrections();
         if (btn.dataset.tab === 'schedule') loadScheduleTab();
+        if (btn.dataset.tab === 'signoff') loadSignoffTab();
         window.scrollTo(0, 0);
       });
     });
@@ -643,6 +679,140 @@
         msg.innerHTML = `<div style="color:#ef4444;font-size:13px;margin-top:8px">❌ ${e.message}</div>`;
       } finally {
         btn.disabled = false; btn.textContent = '💾 儲存此班級設定';
+      }
+    }
+
+    // ===== F16-D: 教官簽核（QR + 簽核進度）=====
+    let signoffSkills = [];
+    let currentQrSession = null;
+    let qrCountdownTimer = null;
+    let qrSnapshotUnsub = null;
+
+    async function loadSignoffTab() {
+      // 載入核心技術項目
+      if (signoffSkills.length === 0) {
+        try {
+          const snap = await getDocs(collection(db, 'core_skills'));
+          signoffSkills = [];
+          snap.forEach(d => { const data = d.data(); if (data.isActive !== false) signoffSkills.push({ id: d.id, ...data }); });
+          signoffSkills.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+        } catch (e) { console.error('load skills', e); }
+      }
+      const optHtml = '<option value="">請選項目...</option>' + signoffSkills.map(s => `<option value="${s.id}" data-name="${s.name}" data-target="${s.targetCount || 1}">${s.name}（目標 ${s.targetCount || 1} 次）</option>`).join('');
+      document.getElementById('qr-skill').innerHTML = optHtml;
+      document.getElementById('prog-skill').innerHTML = optHtml;
+    }
+
+    document.getElementById('btn-start-qr').addEventListener('click', async () => {
+      const skillSel = document.getElementById('qr-skill');
+      const skillId = skillSel.value;
+      const skillName = skillSel.selectedOptions[0]?.dataset.name || skillId;
+      const errEl = document.getElementById('qr-setup-error');
+      errEl.innerHTML = '';
+      if (!selectedClassId) { errEl.innerHTML = '<div class="err-msg">❌ 請先選班級</div>'; return; }
+      if (!skillId) { errEl.innerHTML = '<div class="err-msg">❌ 請選技術項目</div>'; return; }
+      const btn = document.getElementById('btn-start-qr');
+      btn.disabled = true; btn.textContent = '⏳ 產生中...';
+      try {
+        const sessionId = 'qr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        const now = Date.now();
+        const classDisplay = document.getElementById('class-select').selectedOptions[0]?.textContent || selectedClassId;
+        await setDoc(doc(db, 'qr_signoff_sessions', sessionId), {
+          instructorId: currentInstructor.id, instructorName: currentInstructor.name,
+          skillId, skillName,
+          classId: selectedClassId, className: classDisplay,
+          createdAt: serverTimestamp(),
+          expiresAt: Timestamp.fromDate(new Date(now + 5 * 60 * 1000)),
+          scannedStudents: [], isActive: true
+        });
+        currentQrSession = { id: sessionId, expiresAtMs: now + 5 * 60 * 1000 };
+        document.getElementById('qr-setup').style.display = 'none';
+        document.getElementById('qr-active').style.display = 'block';
+        document.getElementById('qr-skill-name').textContent = `${skillName} · ${classDisplay}`;
+        const url = `${location.origin}${location.pathname.replace(/instructor\.html$/, 'student.html')}?qr=${sessionId}`;
+        if (typeof QRCode !== 'undefined') {
+          try { document.getElementById('qr-img').src = await QRCode.toDataURL(url, { width: 320, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } }); }
+          catch (qe) { alert('QR 產生失敗：' + qe.message); }
+        }
+        startQrCountdown();
+        qrSnapshotUnsub = onSnapshot(doc(db, 'qr_signoff_sessions', sessionId), (snap) => {
+          if (!snap.exists()) return;
+          const scanned = snap.data().scannedStudents || [];
+          document.getElementById('qr-scanned-count').textContent = scanned.length;
+          const listEl = document.getElementById('qr-scanned-list');
+          listEl.innerHTML = scanned.length === 0
+            ? '<div style="color:#94a3b8;text-align:center">尚未有學員掃描</div>'
+            : scanned.map((s, i) => { const t = s.scannedAt?.seconds ? new Date(s.scannedAt.seconds * 1000).toLocaleTimeString('zh-TW') : '—'; return `<div class="qr-student-row"><span>${i + 1}. ${s.studentName || s.studentId}</span><span style="color:#10b981;font-size:12px">✅ ${t}</span></div>`; }).join('');
+        });
+      } catch (e) {
+        errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = '📱 產生 QR Code（5 分鐘）';
+      }
+    });
+
+    function startQrCountdown() {
+      const el = document.getElementById('qr-countdown');
+      function tick() {
+        if (!currentQrSession) return;
+        const remain = Math.max(0, currentQrSession.expiresAtMs - Date.now());
+        el.textContent = `${Math.floor(remain / 60000)}:${String(Math.floor((remain % 60000) / 1000)).padStart(2, '0')}`;
+        el.classList.remove('warning', 'critical');
+        if (remain <= 60000) el.classList.add('critical');
+        else if (remain <= 120000) el.classList.add('warning');
+        if (remain <= 0) endQrSession(true);
+      }
+      tick();
+      qrCountdownTimer = setInterval(tick, 500);
+    }
+
+    async function endQrSession(isExpired) {
+      if (qrCountdownTimer) { clearInterval(qrCountdownTimer); qrCountdownTimer = null; }
+      if (qrSnapshotUnsub) { qrSnapshotUnsub(); qrSnapshotUnsub = null; }
+      if (currentQrSession) {
+        try { await updateDoc(doc(db, 'qr_signoff_sessions', currentQrSession.id), { isActive: false, endedAt: serverTimestamp(), endedReason: isExpired ? 'expired' : 'manual' }); } catch (e) {}
+      }
+      currentQrSession = null;
+      document.getElementById('qr-setup').style.display = 'block';
+      document.getElementById('qr-active').style.display = 'none';
+      if (isExpired) alert('⏰ QR Code 已過期（5 分鐘到）、可重新產生');
+    }
+
+    document.getElementById('btn-end-qr').addEventListener('click', () => { if (confirm('確定提早結束此 session？')) endQrSession(false); });
+
+    // 全班簽核進度
+    document.getElementById('prog-skill').addEventListener('change', loadSignoffProgress);
+
+    async function loadSignoffProgress() {
+      const skillSel = document.getElementById('prog-skill');
+      const skillId = skillSel.value;
+      const target = parseInt(skillSel.selectedOptions[0]?.dataset.target) || 1;
+      const el = document.getElementById('prog-list');
+      if (!skillId || !selectedClassId) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">選技術項目查看全班達標狀況</div>'; return; }
+      el.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:14px">⏳ 載入中...</div>';
+      try {
+        const [stuSnap, signSnap] = await Promise.all([
+          getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId))),
+          getDocs(query(collection(db, 'core_skill_signoffs'), where('classId', '==', selectedClassId), where('skillId', '==', skillId)))
+        ]);
+        const students = [];
+        stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false) students.push({ id: d.id, ...s }); });
+        students.sort((a, b) => (a.studentNo || 0) - (b.studentNo || 0));
+        const counts = {};
+        signSnap.forEach(d => { const sid = d.data().studentId; counts[sid] = (counts[sid] || 0) + 1; });
+        if (students.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">此班沒有學員</div>'; return; }
+        const done = students.filter(s => (counts[s.id] || 0) >= target).length;
+        el.innerHTML = `<div style="font-size:13px;color:#475569;margin-bottom:10px">達標 <strong style="color:#10b981">${done}</strong> / ${students.length} 人（目標 ${target} 次）</div>` +
+          students.map(s => {
+            const c = counts[s.id] || 0;
+            const ok = c >= target;
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:14px">
+              <span>${s.studentNo}. ${s.name}</span>
+              <span style="font-weight:700;color:${ok ? '#10b981' : '#f59e0b'}">${ok ? '✅' : ''} ${c}/${target}</span>
+            </div>`;
+          }).join('');
+      } catch (e) {
+        el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`;
       }
     }
   </script>
