@@ -237,11 +237,15 @@
         </div>
       </div>
 
-      <!-- F11-C: Milestone 評分明細（按群分組、點看河流圖） -->
-      <div class="milestone-section empty-hide" id="milestone-details-section" data-tab="skills">
-        <h3>📋 Milestone 評分明細</h3>
-        <div style="color:#64748b;font-size:13px;margin-bottom:12px">💡 點任一 milestone 看歷次評核河流圖 + 教官質性回饋</div>
-        <div id="milestone-details-content"></div>
+      <!-- F11-C / F15+: Milestone 維度評分明細（彈窗、點雷達某維度跳出） -->
+      <div id="ms-detail-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:1350;justify-content:center;align-items:flex-start;padding:20px;overflow-y:auto">
+        <div style="background:white;border-radius:16px;max-width:760px;width:100%;margin-top:20px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden">
+          <div style="background:linear-gradient(135deg,#14b8a6,#0d9488);color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center">
+            <h3 style="margin:0;font-size:17px" id="ms-detail-title">📋 維度評分明細</h3>
+            <button id="ms-detail-close" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:22px;cursor:pointer;line-height:1">×</button>
+          </div>
+          <div id="ms-detail-content" style="padding:18px 20px;max-height:75vh;overflow-y:auto"></div>
+        </div>
       </div>
 
       <!-- F11-B: 核心技術簽核清單 -->
@@ -401,7 +405,7 @@
       </div>
 
       <!-- F11-C: 單一 Milestone 河流圖 Modal -->
-      <div id="ms-river-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1000;justify-content:center;align-items:flex-start;padding:20px;overflow-y:auto">
+      <div id="ms-river-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1450;justify-content:center;align-items:flex-start;padding:20px;overflow-y:auto">
         <div style="background:white;border-radius:16px;padding:24px;max-width:680px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);margin:auto">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
             <div>
@@ -1323,8 +1327,8 @@
         _mScores = milestoneScores;
         _mRecentN = recentN;
 
-        // 10. F11-C: 渲染評分明細（如果有評核資料）
-        renderMilestoneDetails();
+        // 10. F15+: 更新「點雷達看明細」提示（明細改彈窗、點雷達才開）
+        updateDrillHint();
       } catch (e) {
         console.error('[F11-A] loadMilestoneRadar error:', e);
         document.getElementById('radar-empty-hint').innerHTML = `❌ 載入失敗：${e.message}`;
@@ -1332,40 +1336,37 @@
     }
 
     // ===== F11-C: Milestone 評分明細 + 河流圖 =====
-    // F15+: 點雷達某維度 → 顯示該維度評分明細
-    function selectMilestoneGroup(groupId) {
-      _selectedMsGroup = groupId;
-      renderMilestoneDetails();
-      const section = document.getElementById('milestone-details-section');
-      if (section && !section.classList.contains('empty-hide')) {
-        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }
-
-    // F15+: 鑽取式評分明細（只顯示選中的維度；預設隱藏）
-    function renderMilestoneDetails() {
-      const section = document.getElementById('milestone-details-section');
-      const content = document.getElementById('milestone-details-content');
-      if (!section || !content) return;
-
-      // 有評核資料的群（給雷達提示用）
+    // F15+: 依評核資料控制雷達下方「點雷達看明細」提示
+    function updateDrillHint() {
       const groupsWithData = _mGroups.filter(g => {
         const inGroup = _mItems.filter(m => m.groupId === g.id);
         return inGroup.some(m => _mScores[m.id] !== null);
       });
       const drillHint = document.getElementById('radar-drill-hint');
       if (drillHint) drillHint.style.display = groupsWithData.length > 0 ? 'block' : 'none';
+    }
 
-      // 未選維度 → 隱藏明細
-      if (!_selectedMsGroup) { section.classList.add('empty-hide'); return; }
+    // F15+: 點雷達某維度 → 彈出該維度評分明細
+    function selectMilestoneGroup(groupId) {
+      _selectedMsGroup = groupId;
+      renderMilestoneDetails();
+      document.getElementById('ms-detail-modal').style.display = 'flex';
+    }
+    function closeMsDetailModal() { document.getElementById('ms-detail-modal').style.display = 'none'; }
+
+    // F15+: 渲染選中維度的評分明細（進彈窗 body）
+    function renderMilestoneDetails() {
+      const content = document.getElementById('ms-detail-content');
+      const titleEl = document.getElementById('ms-detail-title');
+      if (!content) return;
       const g = _mGroups.find(x => x.id === _selectedMsGroup);
-      if (!g) { section.classList.add('empty-hide'); return; }
+      if (!g) return;
+      if (titleEl) titleEl.textContent = `📋 ${g.id} ${g.name} 評分明細`;
 
       const inGroup = _mItems.filter(m => m.groupId === g.id);
       const itemsWithScore = inGroup.filter(m => _mScores[m.id] !== null);
-      section.classList.remove('empty-hide');
 
-      // 維度切換 chips（點雷達或這裡都能換）
+      // 維度切換 chips（在彈窗內可直接換維度）
       const chips = _mGroups.map(x => {
         const active = x.id === _selectedMsGroup;
         return `<button class="ms-group-chip" data-gid="${x.id}" style="background:${active ? '#0d9488' : '#f1f5f9'};color:${active ? 'white' : '#64748b'};border:none;padding:5px 12px;border-radius:14px;cursor:pointer;font-size:13px;font-family:inherit">${x.name}</button>`;
@@ -1423,6 +1424,10 @@
 
     // 全域函式給 onclick 用
     window._openRiver = openMilestoneRiverModal;
+
+    // F15+: 維度明細彈窗關閉
+    document.getElementById('ms-detail-close').addEventListener('click', closeMsDetailModal);
+    document.getElementById('ms-detail-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeMsDetailModal(); });
 
     function openMilestoneRiverModal(milestoneId) {
       const m = _mItems.find(x => x.id === milestoneId);

@@ -201,6 +201,19 @@
           </div>
           <div id="ms-content"><div class="loading">⏳ 載入中...</div></div>
         </div>
+
+        <div class="card">
+          <h2><span>📊 Milestone EPA 計分配置（每班獨立）</span></h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
+            💡 選班級後、勾選要<strong>排除計分</strong>的身分 / 單位 / 評核者 / Milestone（勾起來＝不列入該班雷達與評分明細的平均）。<br>
+            ⚠️ 被排除的評核<strong>仍會</strong>顯示在學員的 Milestone 詳細視窗（灰色標示「不列入計分」、質性回饋照看）。
+          </p>
+          <div class="form-group" style="max-width:340px">
+            <label>選擇班級</label>
+            <select id="epa-class"><option value="">請選班級...</option></select>
+          </div>
+          <div id="epa-config-body"><div class="placeholder" style="padding:30px"><div class="icon">📊</div><p>請先選擇班級</p></div></div>
+        </div>
       </section>
 
       <section class="tab-content" id="tab-skills">
@@ -425,19 +438,6 @@
             <div id="formula-msg"></div>
             <div id="formula-history" style="margin-top:14px"></div>
           </div>
-        </div>
-
-        <div class="card">
-          <h2><span>📊 EPA 計分配置（每班獨立）</span></h2>
-          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
-            💡 選班級後、勾選要<strong>排除計分</strong>的身分 / 單位 / 評核者 / Milestone（勾起來＝不列入該班雷達與評分明細的平均）。<br>
-            ⚠️ 被排除的評核<strong>仍會</strong>顯示在學員的 Milestone 詳細視窗（灰色標示「不列入計分」、質性回饋照看）。
-          </p>
-          <div class="form-group" style="max-width:340px">
-            <label>選擇班級</label>
-            <select id="epa-class"><option value="">請選班級...</option></select>
-          </div>
-          <div id="epa-config-body"><div class="placeholder" style="padding:30px"><div class="icon">📊</div><p>請先選擇班級</p></div></div>
         </div>
 
         <div class="card">
@@ -1370,7 +1370,6 @@
     async function loadSettings() {
       loadGlobalSettings();
       loadFormula();
-      loadEpaConfig();
       const listEl = document.getElementById('settings-list');
       listEl.innerHTML = '<div class="loading">⏳ 載入班級設定...</div>';
       try {
@@ -1716,6 +1715,7 @@
     let msEditingId = null;
 
     async function loadMilestonesPage() {
+      loadEpaConfig();
       document.getElementById('ms-content').innerHTML = '<div class="loading">⏳ 載入中...</div>';
       try {
         await Promise.all([loadMsGroups(), loadMsUnits(), loadMsRoles(), loadMsItems()]);
