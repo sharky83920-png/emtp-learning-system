@@ -58,6 +58,7 @@ service cloud.firestore {
       allow delete: if false;                // 永不真刪、只能隱藏
     }
     match /question_attempts/{id}      { allow read: if authed(); allow create: if authed(); allow update, delete: if isMaster(); }
+    match /student_quiz_progress/{id}  { allow read: if authed(); allow write: if authed(); }
     match /mistake_book/{id}           { allow read: if authed(); allow write: if authed(); }
     match /question_error_reports/{id} { allow read: if authed(); allow create: if authed(); allow update: if authed(); allow delete: if isMaster(); }
     match /question_schedule/{id}      { allow read: if authed(); allow write: if authed(); }

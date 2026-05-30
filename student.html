@@ -525,7 +525,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, arrayUnion, runTransaction, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, arrayUnion, runTransaction, orderBy, limit, increment } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
 
     const firebaseConfig = {
@@ -2221,10 +2221,10 @@
       if (_energyCfg?.enabled) updateEnergyCount(_energyCfg.period, _energyCfg.target);
     });
 
-    function beginQuiz(questions, mode, label) {
-      if (!questions || questions.length === 0) { alert('⚠️ 此範圍目前沒有題目！'); return false; }
-      for (let i = questions.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [questions[i], questions[j]] = [questions[j], questions[i]]; }
-      const picked = questions.slice(0, Math.min(QUIZ_SIZE, questions.length));
+    // 已預先排序好的題庫 → 取前 min(QUIZ_SIZE, 數量)（caller 已按輪次排序、不重複）
+    function beginQuiz(orderedQuestions, mode, label) {
+      if (!orderedQuestions || orderedQuestions.length === 0) { alert('⚠️ 此範圍目前沒有題目！'); return false; }
+      const picked = orderedQuestions.slice(0, Math.min(QUIZ_SIZE, orderedQuestions.length));
       quizState = { questions: picked, currentIdx: 0, answers: [], startedAt: Date.now(), mode, sessionId: 'sess_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) };
       document.getElementById('quiz-mode-label').textContent = label;
       document.getElementById('quiz-modal').style.display = 'flex';
@@ -2239,12 +2239,26 @@
       return all;
     }
 
+    // 讀此學員每題刷過次數（輪次抽題用）
+    async function loadQuizProgress() {
+      try { const d = await getDoc(doc(db, 'student_quiz_progress', currentStudent.id)); return (d.exists() && d.data().counts) || {}; }
+      catch (e) { return {}; }
+    }
+    // 輪次排序：刷次最少的先（同層隨機）→ 抽出來就不會重複、刷滿一輪才換下一輪
+    function orderByRound(arr, counts) {
+      for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }  // 先洗牌（同層隨機）
+      arr.sort((a, b) => ((counts[a.id] || 0) - (counts[b.id] || 0)));  // 穩定排序：刷次少的在前
+      return arr;
+    }
+
     async function startQuiz() {
       const btn = document.getElementById('btn-start-quiz');
       btn.disabled = true; btn.textContent = '⏳ 抽題中...';
       try {
         const all = await loadVisibleQuestions();
         if (all.length === 0) { alert('⚠️ 題庫目前沒有題目、請先讓學員出題！'); return; }
+        const counts = await loadQuizProgress();
+        orderByRound(all, counts);
         beginQuiz(all, 'scoring', '🎲 隨機綜合測驗');
       } catch (e) { alert('❌ 抽題失敗：' + e.message); }
       finally { btn.disabled = false; btn.textContent = '🎲 隨機綜合測驗'; }
@@ -2260,6 +2274,8 @@
         const all = await loadVisibleQuestions();
         const filtered = all.filter(q => q.derivedDimension === dim);
         if (filtered.length === 0) { alert(`⚠️ 「${dim} ${DIM_NAMES[dim] || ''}」目前沒有題目`); return; }
+        const counts = await loadQuizProgress();
+        orderByRound(filtered, counts);
         beginQuiz(filtered, 'practice', `🎯 專項練習 · ${dim} ${DIM_NAMES[dim] || ''}（不計分）`);
       } catch (e) { alert('❌ 抽題失敗：' + e.message); }
       finally { btns.forEach(b => b.disabled = false); }
@@ -2379,6 +2395,13 @@
         }
         await Promise.all(wb);
       } catch (e) { console.warn('寫入 attempts:', e); }
+
+      // 更新刷次進度（這 10 題各 +1、含未作答的＝沒作答當錯也算刷過）→ 輪次抽題不重複
+      try {
+        const counts = {};
+        quizState.answers.forEach(a => { counts[a.questionId] = increment(1); });
+        await setDoc(doc(db, 'student_quiz_progress', currentStudent.id), { counts, updatedAt: serverTimestamp() }, { merge: true });
+      } catch (e) { console.warn('寫入刷次進度:', e); }
 
       // 先載入此學員已收藏的錯題（決定星星狀態）
       if (mistakeBookEnabled) { try { await loadMistakeSet(); } catch (e) {} }

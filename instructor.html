@@ -696,12 +696,12 @@
         const atSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', selectedClassId)));
         atSnap.forEach(d => {
           const a = d.data();
-          if (a.examMode === 'practice') return;
-          if (a.answered === false) return;
+          if (a.examMode === 'practice') return;          // 專項練習不算動能
           const t = a.attemptedAt?.seconds ? a.attemptedAt.seconds * 1000 : 0;
           if (t < startMs || t > endMs) return;
           const s = students[a.studentId]; if (!s) return;
-          s.attempts++; if (a.isCorrect) s.correct++;
+          s.attempts++;                                   // 沒作答的也算 1 題（防閃躲）
+          if (a.isCorrect) s.correct++;                   // 沒作答 isCorrect=false → 當錯
         });
         // 全班都列、依加權分數排名（沒作答的排最後）
         const rows = Object.values(students).map(s => { const accuracy = s.attempts ? s.correct / s.attempts : 0; return { ...s, accuracy, score: safeEvalFormula(expr, s.attempts, accuracy) }; });

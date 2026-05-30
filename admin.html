@@ -300,6 +300,19 @@
           </div>
           <div id="exams-content"><div class="loading">⏳ 載入中...</div></div>
         </div>
+
+        <div class="card">
+          <h2><span>📥 首刷雷達下載</span></h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">💡 匯出學員「每題最早一次作答」的 D1–D6 答對率（首刷雷達）。可整班或指定個人、可選日期區間。</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:12px">
+            <div class="form-group" style="margin-bottom:0;min-width:160px"><label>班級</label><select id="fr-class"><option value="">請選班級...</option></select></div>
+            <div class="form-group" style="margin-bottom:0;min-width:160px"><label>對象</label><select id="fr-student"><option value="">整班</option></select></div>
+            <div class="form-group" style="margin-bottom:0"><label>起日（空=全部）</label><input type="date" id="fr-start"></div>
+            <div class="form-group" style="margin-bottom:0"><label>迄日</label><input type="date" id="fr-end"></div>
+            <button class="btn btn-green" id="btn-fr-download">📥 下載 CSV</button>
+          </div>
+          <div id="fr-msg"></div>
+        </div>
       </section>
 
       <section class="tab-content" id="tab-schedule">
@@ -993,13 +1006,14 @@
           const isArchived = c.isActive === false;
           const stateTag = isArchived ? '<span class="tag-pill gray">📦 已封存</span>' : '<span class="tag-pill">✅ 啟用中</span>';
           const created = c.createdAt && c.createdAt.toDate ? c.createdAt.toDate().toLocaleDateString('zh-TW') : '—';
-          html += `<tr><td><code>${c.id}</code></td><td>${c.displayName || '—'}</td><td>${c.courseType || '—'}</td><td>${c.year || '—'}</td><td>${stateTag}</td><td style="color:#94a3b8;font-size:12px">${created}</td><td style="white-space:nowrap"><button class="btn btn-ghost" data-edit-class="${c.id}">✏️ 編輯</button>${isArchived ? `<button class="btn btn-ghost" data-unarchive="${c.id}">📂 恢復</button>` : `<button class="btn btn-orange" data-archive="${c.id}">📦 封存</button>`}</td></tr>`;
+          html += `<tr><td><code>${c.id}</code></td><td>${c.displayName || '—'}</td><td>${c.courseType || '—'}</td><td>${c.year || '—'}</td><td>${stateTag}</td><td style="color:#94a3b8;font-size:12px">${created}</td><td style="white-space:nowrap"><button class="btn btn-ghost" data-edit-class="${c.id}">✏️ 編輯</button>${isArchived ? `<button class="btn btn-ghost" data-unarchive="${c.id}">📂 恢復</button>` : `<button class="btn btn-orange" data-archive="${c.id}">📦 封存</button>`}<button class="btn btn-red" data-del-class="${c.id}" title="刪除">🗑</button></td></tr>`;
         });
         html += '</tbody></table>';
         listEl.innerHTML = html;
         listEl.querySelectorAll('button[data-archive]').forEach(b => b.addEventListener('click', () => archiveClass(b.dataset.archive)));
         listEl.querySelectorAll('button[data-unarchive]').forEach(b => b.addEventListener('click', () => unarchiveClass(b.dataset.unarchive)));
         listEl.querySelectorAll('button[data-edit-class]').forEach(b => b.addEventListener('click', () => openClassModal(b.dataset.editClass)));
+        listEl.querySelectorAll('button[data-del-class]').forEach(b => b.addEventListener('click', () => deleteClass(b.dataset.delClass)));
       } catch (e) { listEl.innerHTML = `<div class="err-msg">載入失敗: ${e.message}</div>`; }
     }
 
@@ -1030,6 +1044,25 @@
     async function unarchiveClass(classId) {
       try { await updateDoc(doc(db, 'classes', classId), { isActive: true, archivedAt: null }); loadClasses(); loadOverviewStats(); }
       catch (e) { alert('❌ ' + e.message); }
+    }
+    async function deleteClass(classId) {
+      if (!confirm(`⚠️ 確定「刪除」班級 ${classId}？\n會一併刪除「該班所有學員」、並把此班從指導員的負責清單移除。`)) return;
+      if (!confirm('再次確認：此操作無法復原！該班學員會全部刪除！')) return;
+      try {
+        // 1. 刪該班所有學員
+        const stuSnap = await getDocs(query(collection(db, 'students'), where('classId', '==', classId)));
+        await Promise.all(stuSnap.docs.map(d => deleteDoc(doc(db, 'students', d.id))));
+        // 2. 從所有指導員的 managedClassIds 移除此班
+        const insSnap = await getDocs(collection(db, 'instructors'));
+        await Promise.all(insSnap.docs.filter(d => (d.data().managedClassIds || []).includes(classId)).map(d => {
+          const ids = (d.data().managedClassIds || []).filter(x => x !== classId);
+          return updateDoc(doc(db, 'instructors', d.id), { managedClassIds: ids });
+        }));
+        // 3. 刪班級本身
+        await deleteDoc(doc(db, 'classes', classId));
+        alert('✅ 已刪除班級及其學員');
+        loadClasses(); loadOverviewStats();
+      } catch (e) { alert('❌ ' + e.message); }
     }
 
     document.getElementById('btn-toggle-archived').addEventListener('click', (e) => {
@@ -1131,7 +1164,7 @@
           const accountCell = hasAccount
             ? '<span class="tag-pill">✅ 已建</span>'
             : (s.email ? `<button class="btn" data-create-auth="${s.id}">🔑 建帳號</button>` : '<span class="tag-pill gray">需先填 Email</span>');
-          html += `<tr><td class="num">${s.studentNo}</td><td>${s.name || '—'}</td><td style="color:#94a3b8;font-size:13px">${s.email || '—'}</td><td>${accountCell}</td><td>${stateTag}</td><td style="white-space:nowrap"><button class="btn btn-ghost" data-edit-s="${s.id}">✏️</button>${isArchived ? `<button class="btn btn-ghost" data-unarchive-s="${s.id}">📂 恢復</button>` : `<button class="btn btn-orange" data-archive-s="${s.id}">📦 封存</button>`}</td></tr>`;
+          html += `<tr><td class="num">${s.studentNo}</td><td>${s.name || '—'}</td><td style="color:#94a3b8;font-size:13px">${s.email || '—'}</td><td>${accountCell}</td><td>${stateTag}</td><td style="white-space:nowrap"><button class="btn btn-ghost" data-edit-s="${s.id}">✏️</button>${isArchived ? `<button class="btn btn-ghost" data-unarchive-s="${s.id}">📂 恢復</button>` : `<button class="btn btn-orange" data-archive-s="${s.id}">📦 封存</button>`}<button class="btn btn-red" data-del-s="${s.id}" title="刪除">🗑</button></td></tr>`;
         });
         html += '</tbody></table>';
         listEl.innerHTML = html;
@@ -1139,6 +1172,7 @@
         listEl.querySelectorAll('button[data-archive-s]').forEach(b => b.addEventListener('click', () => archiveStudent(b.dataset.archiveS)));
         listEl.querySelectorAll('button[data-unarchive-s]').forEach(b => b.addEventListener('click', () => unarchiveStudent(b.dataset.unarchiveS)));
         listEl.querySelectorAll('button[data-edit-s]').forEach(b => b.addEventListener('click', () => openStudentEdit(b.dataset.editS)));
+        listEl.querySelectorAll('button[data-del-s]').forEach(b => b.addEventListener('click', () => deleteStudent(b.dataset.delS)));
       } catch (e) { listEl.innerHTML = `<div class="err-msg">${e.message}</div>`; }
     }
 
@@ -1155,6 +1189,13 @@
     }
     async function unarchiveStudent(studentId) {
       try { await updateDoc(doc(db, 'students', studentId), { isActive: true, archivedAt: null }); loadStudents(); loadOverviewStats(); }
+      catch (e) { alert('❌ ' + e.message); }
+    }
+    async function deleteStudent(studentId) {
+      const s = (await getDoc(doc(db, 'students', studentId))).data() || {};
+      if (!confirm(`⚠️ 確定「刪除」學員 ${s.name || studentId}？\n（班級不受影響；登入帳號需自行到 Firebase 後台清）`)) return;
+      if (!confirm('再次確認：此操作無法復原！')) return;
+      try { await deleteDoc(doc(db, 'students', studentId)); loadStudents(); loadOverviewStats(); }
       catch (e) { alert('❌ ' + e.message); }
     }
 
@@ -1428,9 +1469,9 @@
             <td>${classes}</td>
             <td><span class="tag-pill gray">Tier B: ${permCount}/${TIER_B_PERMISSIONS.length}</span></td>
             <td>${stateTag}</td>
-            <td>${isArchived
+            <td style="white-space:nowrap">${isArchived
               ? `<button class="btn btn-ghost" data-unarchive-i="${ins.id}">📂 恢復</button>`
-              : `<button class="btn" data-edit-i="${ins.id}">✏️ 編輯</button> <button class="btn btn-orange" data-archive-i="${ins.id}">📦 封存</button>`}</td>
+              : `<button class="btn" data-edit-i="${ins.id}">✏️ 編輯</button> <button class="btn btn-orange" data-archive-i="${ins.id}">📦 封存</button>`}<button class="btn btn-red" data-del-i="${ins.id}" title="刪除">🗑</button></td>
           </tr>`;
         });
         html += '</tbody></table>';
@@ -1438,6 +1479,7 @@
         listEl.querySelectorAll('button[data-archive-i]').forEach(b => b.addEventListener('click', () => archiveInstructor(b.dataset.archiveI)));
         listEl.querySelectorAll('button[data-unarchive-i]').forEach(b => b.addEventListener('click', () => unarchiveInstructor(b.dataset.unarchiveI)));
         listEl.querySelectorAll('button[data-edit-i]').forEach(b => b.addEventListener('click', () => openInstructorModal(b.dataset.editI)));
+        listEl.querySelectorAll('button[data-del-i]').forEach(b => b.addEventListener('click', () => deleteInstructor(b.dataset.delI)));
       } catch (e) { listEl.innerHTML = `<div class="err-msg">${e.message}</div>`; }
     }
 
@@ -1454,6 +1496,13 @@
     }
     async function unarchiveInstructor(id) {
       try { await updateDoc(doc(db, 'instructors', id), { isActive: true, archivedAt: null }); loadInstructors(); loadOverviewStats(); }
+      catch (e) { alert('❌ ' + e.message); }
+    }
+    async function deleteInstructor(id) {
+      const ins = (await getDoc(doc(db, 'instructors', id))).data() || {};
+      if (!confirm(`⚠️ 確定「刪除」指導員 ${ins.name || id}？\n（登入帳號需自行到 Firebase 後台清）`)) return;
+      if (!confirm('再次確認：此操作無法復原！')) return;
+      try { await deleteDoc(doc(db, 'instructors', id)); loadInstructors(); loadOverviewStats(); }
       catch (e) { alert('❌ ' + e.message); }
     }
 
@@ -3172,9 +3221,68 @@
         cSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) exClassesCache.push({ id: d.id, ...data }); });
         exClassesCache.sort((a, b) => (b.year || 0) - (a.year || 0));
         renderExamsContent();
+        // 首刷下載班級下拉
+        document.getElementById('fr-class').innerHTML = '<option value="">請選班級...</option>' + exClassesCache.map(c => `<option value="${c.id}">${c.displayName || c.id}</option>`).join('');
       } catch (e) { el.innerHTML = `<div class="err-msg">${e.message}</div>`; }
     }
     document.getElementById('btn-refresh-exams').addEventListener('click', loadExamsPage);
+
+    // ===== 首刷雷達下載 =====
+    document.getElementById('fr-class').addEventListener('change', async (e) => {
+      const cid = e.target.value;
+      const sel = document.getElementById('fr-student');
+      if (!cid) { sel.innerHTML = '<option value="">整班</option>'; return; }
+      const snap = await getDocs(query(collection(db, 'students'), where('classId', '==', cid)));
+      const list = []; snap.forEach(d => { const s = d.data(); if (s.isActive !== false) list.push({ id: d.id, ...s }); });
+      list.sort((a, b) => (a.studentNo || 0) - (b.studentNo || 0));
+      sel.innerHTML = '<option value="">整班</option>' + list.map(s => `<option value="${s.id}">${s.studentNo}. ${s.name}</option>`).join('');
+    });
+    document.getElementById('btn-fr-download').addEventListener('click', async () => {
+      const cid = document.getElementById('fr-class').value;
+      const sid = document.getElementById('fr-student').value;
+      const startStr = document.getElementById('fr-start').value;
+      const endStr = document.getElementById('fr-end').value;
+      const msg = document.getElementById('fr-msg');
+      msg.innerHTML = '';
+      if (!cid) { msg.innerHTML = '<div class="err-msg">❌ 請選班級</div>'; return; }
+      const startMs = startStr ? new Date(startStr + 'T00:00:00').getTime() : 0;
+      const endMs = endStr ? new Date(endStr + 'T23:59:59').getTime() : Infinity;
+      const btn = document.getElementById('btn-fr-download'); btn.disabled = true; btn.textContent = '⏳ 計算中...';
+      try {
+        // 學員清單
+        const stuSnap = await getDocs(query(collection(db, 'students'), where('classId', '==', cid)));
+        const students = {}; stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false && (!sid || d.id === sid)) students[d.id] = { no: s.studentNo, name: s.name }; });
+        // 該班 attempts → 每題首刷
+        const atSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', cid)));
+        const first = {}; // studentId -> { questionId -> {dim,isCorrect,t} }
+        atSnap.forEach(d => {
+          const a = d.data();
+          if (!a.questionId || !a.dimension || !students[a.studentId]) return;
+          const t = a.attemptedAt?.seconds ? a.attemptedAt.seconds * 1000 : 0;
+          if (t < startMs || t > endMs) return;
+          (first[a.studentId] = first[a.studentId] || {});
+          if (!first[a.studentId][a.questionId] || t < first[a.studentId][a.questionId].t) first[a.studentId][a.questionId] = { dim: a.dimension, isCorrect: a.isCorrect, t };
+        });
+        const dims = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'];
+        const esc = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+        const lines = [['學號', '姓名', ...dims.map(d => d + '首刷答對率%'), '首刷總題數'].map(esc).join(',')];
+        Object.entries(students).sort((a, b) => (a[1].no || 0) - (b[1].no || 0)).forEach(([id, s]) => {
+          const recs = Object.values(first[id] || {});
+          const sums = {}; dims.forEach(d => sums[d] = { c: 0, t: 0 });
+          recs.forEach(r => { if (sums[r.dim]) { sums[r.dim].t++; if (r.isCorrect) sums[r.dim].c++; } });
+          const row = [s.no, s.name, ...dims.map(d => sums[d].t ? Math.round(sums[d].c / sums[d].t * 100) : ''), recs.length];
+          lines.push(row.map(esc).join(','));
+        });
+        const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `首刷雷達_${cid}${sid ? '_個人' : ''}_${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        msg.innerHTML = `<div class="ok-msg">✅ 已下載（${Object.keys(students).length} 位）</div>`;
+        setTimeout(() => { msg.innerHTML = ''; }, 3000);
+      } catch (e) { msg.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '📥 下載 CSV'; }
+    });
     document.querySelectorAll('#tab-exams .sub-tab').forEach(b => {
       b.addEventListener('click', () => {
         document.querySelectorAll('#tab-exams .sub-tab').forEach(x => x.classList.remove('active'));
