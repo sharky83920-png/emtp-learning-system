@@ -479,6 +479,34 @@
     </div>
   </div>
 
+  <!-- 編輯學員 Modal -->
+  <div class="modal-overlay" id="student-edit-modal">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3>✏️ 編輯學員</h3><button class="modal-close" id="se-edit-close">×</button></div>
+      <div class="modal-body">
+        <div class="form-group"><label>學號（不可改）</label><input type="text" id="se-edit-no" readonly style="background:#0a0f1f;color:#94a3b8"></div>
+        <div class="form-group"><label>姓名</label><input type="text" id="se-edit-name"></div>
+        <div class="form-group"><label>Email（聯絡用、不影響登入）</label><input type="email" id="se-edit-email"></div>
+        <div id="se-edit-pw-section" style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px;margin-top:8px">
+          <h4 style="color:#60a5fa;font-size:13px;margin-bottom:8px">🔑 登入密碼（身分證）</h4>
+          <div id="se-edit-pw-noacct" style="display:none">
+            <div class="form-group" style="margin-bottom:0"><label>身分證字號（建帳號時的密碼）</label><input type="text" id="se-edit-id-new" maxlength="10" style="font-family:monospace;text-transform:uppercase"></div>
+          </div>
+          <div id="se-edit-pw-hasacct" style="display:none">
+            <p style="color:#94a3b8;font-size:12px;margin-bottom:8px">⚠️ 已建帳號。要改登入密碼需輸入「目前身分證」驗證、再設新的。</p>
+            <div class="form-group"><label>目前身分證（舊密碼）</label><input type="text" id="se-edit-id-old" maxlength="10" style="font-family:monospace;text-transform:uppercase" placeholder="留空＝不改密碼"></div>
+            <div class="form-group" style="margin-bottom:0"><label>新身分證（新密碼）</label><input type="text" id="se-edit-id-set" maxlength="10" style="font-family:monospace;text-transform:uppercase" placeholder="留空＝不改密碼"></div>
+          </div>
+        </div>
+        <div id="se-edit-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="se-edit-cancel">取消</button>
+        <button class="btn btn-green" id="se-edit-save">💾 儲存</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 單筆新增學員 Modal -->
   <div class="modal-overlay" id="student-modal">
     <div class="modal" onclick="event.stopPropagation()">
@@ -850,7 +878,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, updatePassword } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
     import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, where, writeBatch, onSnapshot, Timestamp, arrayUnion, increment, runTransaction } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
 
@@ -965,13 +993,33 @@
           const isArchived = c.isActive === false;
           const stateTag = isArchived ? '<span class="tag-pill gray">📦 已封存</span>' : '<span class="tag-pill">✅ 啟用中</span>';
           const created = c.createdAt && c.createdAt.toDate ? c.createdAt.toDate().toLocaleDateString('zh-TW') : '—';
-          html += `<tr><td><code>${c.id}</code></td><td>${c.displayName || '—'}</td><td>${c.courseType || '—'}</td><td>${c.year || '—'}</td><td>${stateTag}</td><td style="color:#94a3b8;font-size:12px">${created}</td><td>${isArchived ? `<button class="btn btn-ghost" data-unarchive="${c.id}">📂 恢復</button>` : `<button class="btn btn-orange" data-archive="${c.id}">📦 封存</button>`}</td></tr>`;
+          html += `<tr><td><code>${c.id}</code></td><td>${c.displayName || '—'}</td><td>${c.courseType || '—'}</td><td>${c.year || '—'}</td><td>${stateTag}</td><td style="color:#94a3b8;font-size:12px">${created}</td><td style="white-space:nowrap"><button class="btn btn-ghost" data-edit-class="${c.id}">✏️ 編輯</button>${isArchived ? `<button class="btn btn-ghost" data-unarchive="${c.id}">📂 恢復</button>` : `<button class="btn btn-orange" data-archive="${c.id}">📦 封存</button>`}</td></tr>`;
         });
         html += '</tbody></table>';
         listEl.innerHTML = html;
         listEl.querySelectorAll('button[data-archive]').forEach(b => b.addEventListener('click', () => archiveClass(b.dataset.archive)));
         listEl.querySelectorAll('button[data-unarchive]').forEach(b => b.addEventListener('click', () => unarchiveClass(b.dataset.unarchive)));
+        listEl.querySelectorAll('button[data-edit-class]').forEach(b => b.addEventListener('click', () => openClassModal(b.dataset.editClass)));
       } catch (e) { listEl.innerHTML = `<div class="err-msg">載入失敗: ${e.message}</div>`; }
+    }
+
+    let editingClassId = null;
+    async function openClassModal(id) {
+      editingClassId = id;
+      document.getElementById('class-modal-title').textContent = '✏️ 編輯班級';
+      const idEl = document.getElementById('class-id');
+      try {
+        const cDoc = await getDoc(doc(db, 'classes', id));
+        if (!cDoc.exists()) { alert('找不到班級'); return; }
+        const c = cDoc.data();
+        idEl.value = id; idEl.readOnly = true; idEl.style.opacity = '0.6';
+        document.getElementById('class-name').value = c.displayName || '';
+        document.getElementById('class-course-type').value = c.courseType || 'EMTP';
+        document.getElementById('class-year').value = c.year || new Date().getFullYear();
+        document.getElementById('class-description').value = c.description || '';
+        document.getElementById('class-modal-error').innerHTML = '';
+        document.getElementById('class-modal').classList.add('active');
+      } catch (e) { alert('❌ ' + e.message); }
     }
 
     async function archiveClass(classId) {
@@ -991,7 +1039,10 @@
     });
 
     document.getElementById('btn-add-class').addEventListener('click', () => {
-      document.getElementById('class-id').value = '';
+      editingClassId = null;
+      document.getElementById('class-modal-title').textContent = '➕ 新增班級';
+      const idEl = document.getElementById('class-id');
+      idEl.value = ''; idEl.readOnly = false; idEl.style.opacity = '1';
       document.getElementById('class-name').value = '';
       document.getElementById('class-course-type').value = 'EMTP';
       document.getElementById('class-year').value = new Date().getFullYear();
@@ -1013,16 +1064,27 @@
       const btn = document.getElementById('class-modal-save');
       btn.disabled = true; btn.textContent = '⏳ 儲存中...';
       try {
-        const existing = await getDoc(doc(db, 'classes', classId));
-        if (existing.exists()) { errEl.innerHTML = `<div class="err-msg">❌ 班級代碼「${classId}」已存在</div>`; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
-        await setDoc(doc(db, 'classes', classId), {
-          name: classId, displayName: name,
-          courseType: document.getElementById('class-course-type').value,
-          year: parseInt(document.getElementById('class-year').value),
-          description: document.getElementById('class-description').value.trim(),
-          isActive: true, archivedAt: null,
-          createdAt: serverTimestamp(), createdBy: currentUser.email
-        });
+        if (editingClassId) {
+          // 編輯：代碼不可改、只更新其他欄位
+          await updateDoc(doc(db, 'classes', editingClassId), {
+            displayName: name,
+            courseType: document.getElementById('class-course-type').value,
+            year: parseInt(document.getElementById('class-year').value),
+            description: document.getElementById('class-description').value.trim(),
+            updatedAt: serverTimestamp(), updatedBy: currentUser.email
+          });
+        } else {
+          const existing = await getDoc(doc(db, 'classes', classId));
+          if (existing.exists()) { errEl.innerHTML = `<div class="err-msg">❌ 班級代碼「${classId}」已存在</div>`; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+          await setDoc(doc(db, 'classes', classId), {
+            name: classId, displayName: name,
+            courseType: document.getElementById('class-course-type').value,
+            year: parseInt(document.getElementById('class-year').value),
+            description: document.getElementById('class-description').value.trim(),
+            isActive: true, archivedAt: null,
+            createdAt: serverTimestamp(), createdBy: currentUser.email
+          });
+        }
         document.getElementById('class-modal').classList.remove('active');
         loadClasses(); loadOverviewStats();
       } catch (e) { errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
@@ -1069,13 +1131,14 @@
           const accountCell = hasAccount
             ? '<span class="tag-pill">✅ 已建</span>'
             : (s.email ? `<button class="btn" data-create-auth="${s.id}">🔑 建帳號</button>` : '<span class="tag-pill gray">需先填 Email</span>');
-          html += `<tr><td class="num">${s.studentNo}</td><td>${s.name || '—'}</td><td style="color:#94a3b8;font-size:13px">${s.email || '—'}</td><td>${accountCell}</td><td>${stateTag}</td><td>${isArchived ? `<button class="btn btn-ghost" data-unarchive-s="${s.id}">📂 恢復</button>` : `<button class="btn btn-orange" data-archive-s="${s.id}">📦 封存</button>`}</td></tr>`;
+          html += `<tr><td class="num">${s.studentNo}</td><td>${s.name || '—'}</td><td style="color:#94a3b8;font-size:13px">${s.email || '—'}</td><td>${accountCell}</td><td>${stateTag}</td><td style="white-space:nowrap"><button class="btn btn-ghost" data-edit-s="${s.id}">✏️</button>${isArchived ? `<button class="btn btn-ghost" data-unarchive-s="${s.id}">📂 恢復</button>` : `<button class="btn btn-orange" data-archive-s="${s.id}">📦 封存</button>`}</td></tr>`;
         });
         html += '</tbody></table>';
         listEl.innerHTML = html;
         listEl.querySelectorAll('button[data-create-auth]').forEach(b => b.addEventListener('click', () => openCreateAuthModal(b.dataset.createAuth)));
         listEl.querySelectorAll('button[data-archive-s]').forEach(b => b.addEventListener('click', () => archiveStudent(b.dataset.archiveS)));
         listEl.querySelectorAll('button[data-unarchive-s]').forEach(b => b.addEventListener('click', () => unarchiveStudent(b.dataset.unarchiveS)));
+        listEl.querySelectorAll('button[data-edit-s]').forEach(b => b.addEventListener('click', () => openStudentEdit(b.dataset.editS)));
       } catch (e) { listEl.innerHTML = `<div class="err-msg">${e.message}</div>`; }
     }
 
@@ -1094,6 +1157,73 @@
       try { await updateDoc(doc(db, 'students', studentId), { isActive: true, archivedAt: null }); loadStudents(); loadOverviewStats(); }
       catch (e) { alert('❌ ' + e.message); }
     }
+
+    // ===== 編輯學員（姓名/Email + 重設登入密碼）=====
+    let editingStudent = null;
+    async function openStudentEdit(id) {
+      try {
+        const sDoc = await getDoc(doc(db, 'students', id));
+        if (!sDoc.exists()) { alert('找不到學員'); return; }
+        const s = { id, ...sDoc.data() };
+        editingStudent = s;
+        document.getElementById('se-edit-no').value = `${s.studentNo}（${s.classId}）`;
+        document.getElementById('se-edit-name').value = s.name || '';
+        document.getElementById('se-edit-email').value = s.email || '';
+        document.getElementById('se-edit-error').innerHTML = '';
+        const hasAcct = s.hasAuthAccount === true;
+        document.getElementById('se-edit-pw-noacct').style.display = hasAcct ? 'none' : 'block';
+        document.getElementById('se-edit-pw-hasacct').style.display = hasAcct ? 'block' : 'none';
+        document.getElementById('se-edit-id-new').value = s.idNumber || '';
+        document.getElementById('se-edit-id-old').value = '';
+        document.getElementById('se-edit-id-set').value = '';
+        document.getElementById('student-edit-modal').classList.add('active');
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+    document.getElementById('se-edit-close').addEventListener('click', () => document.getElementById('student-edit-modal').classList.remove('active'));
+    document.getElementById('se-edit-cancel').addEventListener('click', () => document.getElementById('student-edit-modal').classList.remove('active'));
+    document.getElementById('student-edit-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('student-edit-modal').classList.remove('active'); });
+
+    document.getElementById('se-edit-save').addEventListener('click', async () => {
+      if (!editingStudent) return;
+      const s = editingStudent;
+      const name = document.getElementById('se-edit-name').value.trim();
+      const email = document.getElementById('se-edit-email').value.trim();
+      const errEl = document.getElementById('se-edit-error');
+      errEl.innerHTML = '';
+      if (!name) { errEl.innerHTML = '<div class="err-msg">❌ 姓名必填</div>'; return; }
+      const btn = document.getElementById('se-edit-save'); btn.disabled = true; btn.textContent = '⏳';
+      try {
+        const hasAcct = s.hasAuthAccount === true;
+        const update = { name, email: email || null, updatedAt: serverTimestamp(), updatedBy: currentUser.email };
+        if (!hasAcct) {
+          const idn = document.getElementById('se-edit-id-new').value.trim().toUpperCase();
+          if (idn) update.idNumber = idn;
+        } else {
+          const oldId = document.getElementById('se-edit-id-old').value.trim().toUpperCase();
+          const newId = document.getElementById('se-edit-id-set').value.trim().toUpperCase();
+          if (oldId || newId) {
+            if (!/^[A-Z]\d{9}$/.test(oldId)) { errEl.innerHTML = '<div class="err-msg">❌ 請填正確「目前身分證」（舊密碼）來驗證身分</div>'; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+            if (!/^[A-Z]\d{9}$/.test(newId)) { errEl.innerHTML = '<div class="err-msg">❌ 新身分證格式錯誤（1 英文 + 9 數字）</div>'; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+            const fakeEmail = `${s.classId.toLowerCase()}-${s.studentNo}@emtp.local`;
+            try {
+              btn.textContent = '⏳ 重設密碼...';
+              const cred = await signInWithEmailAndPassword(secondaryAuth, fakeEmail, oldId);
+              await updatePassword(cred.user, newId);
+              await signOut(secondaryAuth);
+              update.idNumber = newId;
+            } catch (authErr) {
+              const m = (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/wrong-password') ? '「目前身分證」不正確（與現有登入密碼不符）' : authErr.message;
+              errEl.innerHTML = `<div class="err-msg">❌ 重設密碼失敗：${m}</div>`;
+              btn.disabled = false; btn.textContent = '💾 儲存'; return;
+            }
+          }
+        }
+        await updateDoc(doc(db, 'students', s.id), update);
+        document.getElementById('student-edit-modal').classList.remove('active');
+        loadStudents();
+      } catch (e) { errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
+    });
 
     // 單筆新增學員
     document.getElementById('btn-add-student').addEventListener('click', () => {
