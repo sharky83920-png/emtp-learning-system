@@ -135,12 +135,16 @@
       <section class="tab-content" id="tab-corrections">
         <div class="card">
           <h2>⚠️ 題目勘誤處理</h2>
-          <div class="placeholder">
-            <div class="icon">⚠️</div>
-            <h3>處理學員回報的題目勘誤</h3>
-            <p>看待處理勘誤、改題 / 隱藏 / 回覆學員（回覆會通知學員）。</p>
-            <div class="step-tag">F16 後續階段施工中</div>
+          <p style="color:#64748b;font-size:13px;margin-bottom:14px">💡 處理本班學員回報的題目勘誤。可改標答/選項/頁碼、隱藏題目、回覆學員（結案後學員會收到通知）。</p>
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+            <label style="font-size:13px;color:#475569">狀態</label>
+            <select id="corr-filter" style="padding:7px 12px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit">
+              <option value="pending">待處理</option>
+              <option value="all">全部</option>
+            </select>
+            <button id="corr-refresh" class="btn-logout">🔄 重新整理</button>
           </div>
+          <div id="corr-list"><div class="placeholder"><div class="icon">⏳</div><p>請選擇班級</p></div></div>
         </div>
       </section>
 
@@ -158,10 +162,45 @@
     </main>
   </div>
 
+  <!-- 勘誤處理 modal -->
+  <div id="corr-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:1200;justify-content:center;align-items:flex-start;padding:20px;overflow-y:auto">
+    <div style="background:white;border-radius:16px;max-width:620px;width:100%;margin-top:20px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden">
+      <div style="background:#f59e0b;color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center">
+        <h3 style="margin:0;font-size:17px">⚠️ 處理勘誤</h3>
+        <button id="corr-modal-close" style="background:rgba(255,255,255,0.25);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:22px;cursor:pointer;line-height:1">×</button>
+      </div>
+      <div style="padding:18px 20px;max-height:72vh;overflow-y:auto">
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:14px">
+          <div style="font-size:12px;color:#92400e;margin-bottom:4px">學員回報（<span id="corr-reporter">—</span>）</div>
+          <div id="corr-reason" style="font-size:14px;color:#78350f;white-space:pre-wrap">—</div>
+        </div>
+        <div style="font-size:12px;color:#64748b;font-family:monospace;margin-bottom:6px">題號 <span id="corr-qid">—</span></div>
+        <div class="form-group"><label>題目</label><textarea id="corr-qtext" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px"></textarea></div>
+        <div id="corr-options"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group"><label>正確答案</label>
+            <select id="corr-answer" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit">
+              <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
+            </select>
+          </div>
+          <div class="form-group"><label>頁碼</label><input id="corr-page" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit"></div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#991b1b;margin:6px 0 14px"><input type="checkbox" id="corr-hide" style="width:18px;height:18px"> 隱藏此題（保留編號、不再出現在題庫）</label>
+        <div class="form-group"><label>回覆學員（會出現在學員的通知中心）</label><textarea id="corr-reply" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px" placeholder="例：感謝回報、標答已更正為 B"></textarea></div>
+        <div id="corr-modal-msg"></div>
+      </div>
+      <div style="padding:14px 20px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">
+        <button id="corr-modal-cancel" style="background:#e2e8f0;color:#475569;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit">取消</button>
+        <button id="corr-resolve-reject" style="background:#94a3b8;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600">❌ 不成立並通知</button>
+        <button id="corr-resolve-fix" style="background:#10b981;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600">✅ 已修正並通知</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, query, where, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, query, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -199,11 +238,11 @@
       loadLoginClasses();
     }
 
-    // 身分切換：選學員 → 導去學員端
+    // 身分切換：選學員 → 直接前往學員端（共通入口、不彈窗、帶上已選單位）
     document.getElementById('login-role').addEventListener('change', (e) => {
       if (e.target.value === 'student') {
-        if (confirm('要前往學員端登入嗎？')) { window.location.href = 'student.html'; }
-        else { e.target.value = 'instructor'; }
+        const c = document.getElementById('login-class').value;
+        window.location.href = 'student.html' + (c ? ('?class=' + encodeURIComponent(c)) : '');
       }
     });
 
@@ -220,6 +259,9 @@
         classes.forEach(c => { html += `<option value="${c.id}">${c.displayName || c.id}</option>`; });
         sel.innerHTML = html;
         sel.disabled = false;
+        // 共通入口：URL 帶 ?class= 時自動帶入並載入姓名
+        const pre = new URLSearchParams(location.search).get('class');
+        if (pre) { sel.value = pre; if (sel.value === pre) sel.dispatchEvent(new Event('change')); }
       } catch (e) {
         sel.innerHTML = '<option value="">❌ 載入失敗</option>';
       }
@@ -334,7 +376,8 @@
 
     document.getElementById('class-select').addEventListener('change', (e) => {
       selectedClassId = e.target.value;
-      // 之後各 tab 會依 selectedClassId 重新載入
+      const active = document.querySelector('.tab-button.active')?.dataset.tab;
+      if (active === 'corrections') loadCorrections();
     });
 
     // ===== Tab 切換 =====
@@ -344,8 +387,145 @@
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        if (btn.dataset.tab === 'corrections') loadCorrections();
       });
     });
+
+    // ===== F16-B: 題目勘誤處理 =====
+    let corrReports = [];      // 目前班級的勘誤
+    let corrQuestions = {};    // questionId -> question data
+    let currentCorr = null;    // 正在處理的勘誤
+
+    async function createNotification(recipientId, type, title, content, relatedId = null) {
+      try {
+        await setDoc(doc(collection(db, 'notifications')), {
+          recipientId, type, title, content, relatedId,
+          isRead: false, createdAt: serverTimestamp(), readAt: null
+        });
+      } catch (e) { console.error('createNotification', e); }
+    }
+
+    async function loadCorrections() {
+      const el = document.getElementById('corr-list');
+      if (!selectedClassId) { el.innerHTML = '<div class="placeholder"><div class="icon">🏫</div><p>請先選擇班級</p></div>'; return; }
+      el.innerHTML = '<div class="placeholder"><div class="icon">⏳</div><p>載入中...</p></div>';
+      try {
+        const filter = document.getElementById('corr-filter').value;
+        const snap = await getDocs(query(collection(db, 'question_error_reports'), where('reportedByClassId', '==', selectedClassId)));
+        corrReports = [];
+        snap.forEach(d => corrReports.push({ id: d.id, ...d.data() }));
+        if (filter === 'pending') corrReports = corrReports.filter(r => (r.status || 'pending') === 'pending');
+        corrReports.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        if (corrReports.length === 0) {
+          el.innerHTML = '<div class="placeholder"><div class="icon">✅</div><h3>沒有勘誤</h3><p>目前沒有符合條件的回報</p></div>';
+          return;
+        }
+        // 抓題目內容
+        corrQuestions = {};
+        await Promise.all([...new Set(corrReports.map(r => r.questionId))].map(async qid => {
+          try { const qd = await getDoc(doc(db, 'questions', qid)); if (qd.exists()) corrQuestions[qid] = qd.data(); } catch (e) {}
+        }));
+        const statusTag = { pending: '<span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:10px;font-size:12px">待處理</span>', fixed: '<span style="background:#dcfce7;color:#065f46;padding:2px 10px;border-radius:10px;font-size:12px">已修正</span>', rejected: '<span style="background:#f1f5f9;color:#64748b;padding:2px 10px;border-radius:10px;font-size:12px">不成立</span>', hidden: '<span style="background:#fee2e2;color:#991b1b;padding:2px 10px;border-radius:10px;font-size:12px">已隱藏</span>' };
+        el.innerHTML = corrReports.map(r => {
+          const q = corrQuestions[r.questionId];
+          const qtext = q ? (q.questionText || '').slice(0, 60) : '（題目已不存在）';
+          const st = r.status || 'pending';
+          return `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
+              <span style="font-family:monospace;font-size:13px;color:#64748b">${r.questionId}</span>
+              ${statusTag[st] || ''}
+            </div>
+            <div style="font-size:14px;color:#1e293b;margin-bottom:6px">${qtext}${qtext.length >= 60 ? '…' : ''}</div>
+            <div style="background:#fffbeb;border-left:3px solid #f59e0b;padding:8px 12px;border-radius:0 8px 8px 0;font-size:13px;color:#78350f;margin-bottom:10px"><strong>${r.reportedByName || '學員'}：</strong>${r.reason || ''}</div>
+            ${st === 'pending'
+              ? `<button class="btn-primary" style="width:auto;padding:8px 18px" data-corr="${r.id}">處理</button>`
+              : `<div style="font-size:12px;color:#94a3b8">已由 ${r.reviewedByName || '—'} 處理${r.reviewerNote ? '：' + r.reviewerNote : ''}</div>`}
+          </div>`;
+        }).join('');
+        el.querySelectorAll('button[data-corr]').forEach(b => b.addEventListener('click', () => openCorrModal(b.dataset.corr)));
+      } catch (e) {
+        el.innerHTML = `<div class="placeholder"><div class="icon">❌</div><p>${e.message}</p></div>`;
+      }
+    }
+
+    document.getElementById('corr-filter').addEventListener('change', loadCorrections);
+    document.getElementById('corr-refresh').addEventListener('click', loadCorrections);
+
+    function openCorrModal(reportId) {
+      const r = corrReports.find(x => x.id === reportId);
+      if (!r) return;
+      currentCorr = r;
+      const q = corrQuestions[r.questionId] || {};
+      document.getElementById('corr-reporter').textContent = r.reportedByName || '學員';
+      document.getElementById('corr-reason').textContent = r.reason || '';
+      document.getElementById('corr-qid').textContent = r.questionId;
+      document.getElementById('corr-qtext').value = q.questionText || '';
+      document.getElementById('corr-answer').value = q.correctAnswer || 'A';
+      document.getElementById('corr-page').value = (q.source && q.source.page) || '';
+      document.getElementById('corr-hide').checked = q.isVisible === false;
+      document.getElementById('corr-reply').value = '';
+      document.getElementById('corr-modal-msg').innerHTML = '';
+      // 選項
+      const opts = q.options || {};
+      document.getElementById('corr-options').innerHTML = ['A','B','C','D'].map(k =>
+        `<div class="form-group" style="margin-bottom:8px"><label>選項 ${k}</label><input class="corr-opt" data-k="${k}" value="${(opts[k]?.text || '').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:9px;font-family:inherit;font-size:14px"></div>`
+      ).join('');
+      document.getElementById('corr-modal').style.display = 'flex';
+    }
+    function closeCorrModal() { document.getElementById('corr-modal').style.display = 'none'; currentCorr = null; }
+    document.getElementById('corr-modal-close').addEventListener('click', closeCorrModal);
+    document.getElementById('corr-modal-cancel').addEventListener('click', closeCorrModal);
+    document.getElementById('corr-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeCorrModal(); });
+    document.getElementById('corr-resolve-fix').addEventListener('click', () => resolveCorr('fixed'));
+    document.getElementById('corr-resolve-reject').addEventListener('click', () => resolveCorr('rejected'));
+
+    async function resolveCorr(resolution) {
+      if (!currentCorr) return;
+      const r = currentCorr;
+      const reply = document.getElementById('corr-reply').value.trim();
+      const msg = document.getElementById('corr-modal-msg');
+      if (!reply) { msg.innerHTML = '<div style="color:#ef4444;font-size:13px">請填回覆內容（學員會收到通知）</div>'; return; }
+      const fixBtn = document.getElementById('corr-resolve-fix');
+      const rejBtn = document.getElementById('corr-resolve-reject');
+      fixBtn.disabled = true; rejBtn.disabled = true;
+      try {
+        const hide = document.getElementById('corr-hide').checked;
+        // 1. 若選「已修正」：更新題目（標答/選項/頁碼）；隱藏不論結案皆套用
+        if (resolution === 'fixed') {
+          const opts = {};
+          document.querySelectorAll('.corr-opt').forEach(inp => { opts[inp.dataset.k] = { text: inp.value }; });
+          const qUpdate = {
+            questionText: document.getElementById('corr-qtext').value,
+            options: opts,
+            correctAnswer: document.getElementById('corr-answer').value,
+            'source.page': document.getElementById('corr-page').value,
+            isVisible: !hide,
+            updatedAt: serverTimestamp(),
+            lastEditedBy: currentInstructor.email
+          };
+          await updateDoc(doc(db, 'questions', r.questionId), qUpdate);
+        } else if (hide) {
+          await updateDoc(doc(db, 'questions', r.questionId), { isVisible: false, hiddenReason: '勘誤處理', hiddenBy: currentInstructor.email, hiddenAt: serverTimestamp() });
+        }
+        // 2. 更新勘誤狀態
+        await updateDoc(doc(db, 'question_error_reports', r.id), {
+          status: hide ? 'hidden' : resolution,
+          reviewedBy: currentInstructor.id,
+          reviewedByName: currentInstructor.name,
+          reviewedAt: serverTimestamp(),
+          reviewerNote: reply
+        });
+        // 3. 通知學員（閉合迴圈）
+        const title = resolution === 'fixed' ? '✅ 你回報的題目已修正' : '📩 你回報的題目已處理';
+        await createNotification(r.reportedBy, 'error_report_reply', title, reply, r.questionId);
+        closeCorrModal();
+        loadCorrections();
+      } catch (e) {
+        msg.innerHTML = `<div style="color:#ef4444;font-size:13px">❌ ${e.message}</div>`;
+      } finally {
+        fixBtn.disabled = false; rejBtn.disabled = false;
+      }
+    }
   </script>
 </body>
 </html>
