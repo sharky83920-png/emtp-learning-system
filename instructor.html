@@ -142,7 +142,7 @@
           <div id="rank-perf"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
         </div>
 
-        <div class="card">
+        <div class="card" id="classpower-card">
           <h2>📊 各班出題戰力</h2>
           <p style="color:#64748b;font-size:13px;margin-bottom:10px">各班學員累積出題數（現役題庫）。你的班高亮。</p>
           <div id="rank-questions"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
@@ -275,7 +275,7 @@
 
     <nav class="bottom-tabs">
       <button data-tab="schedule" class="active"><span class="bt-icon">📝</span><span>出題追蹤</span></button>
-      <button data-tab="signoff"><span class="bt-icon">✅</span><span>教官簽核</span></button>
+      <button data-tab="signoff" id="tabbtn-signoff"><span class="bt-icon">✅</span><span>教官簽核</span></button>
       <button data-tab="corrections" id="tabbtn-corrections"><span class="bt-icon">⚠️</span><span>題目勘誤</span></button>
       <button data-tab="other"><span class="bt-icon">⚙️</span><span>其他</span></button>
     </nav>
@@ -340,6 +340,8 @@
     // 權限標籤對照
     const PERM_LABELS = {
       canEditEnergyBar: '修改能量條',
+      canViewClassPower: '查看各班出題戰力',
+      canQRSignoff: '教官簽核（QR + 進度）',
       canToggleMistakeBook: '開關錯題本',
       canEditSourceAuth: '設定題庫權限',
       canEditChapterAuth: '設定章節權限',
@@ -457,9 +459,14 @@
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('dashboard').style.display = 'block';
 
-      // 權限閘門（不顯示權限清單給指導員、只決定 tab 顯示）
+      // 權限閘門（不顯示權限清單給指導員、只決定 tab / 卡片顯示）
       const perms = currentInstructor.permissions || {};
+      // 分頁層級：沒權限的整個分頁鈕藏掉（點不過去）
       document.getElementById('tabbtn-corrections').style.display = perms.canHandleCorrections ? '' : 'none';
+      document.getElementById('tabbtn-signoff').style.display = perms.canQRSignoff ? '' : 'none';
+      // 卡片層級：出題追蹤頁內的能量條 / 各班出題戰力
+      document.getElementById('energy-card').style.display = perms.canEditEnergyBar ? '' : 'none';
+      document.getElementById('classpower-card').style.display = perms.canViewClassPower ? '' : 'none';
 
       // 班級下拉（只有自己負責的班）
       loadOwnClasses();
@@ -667,9 +674,12 @@
 
     async function loadScheduleTab() {
       if (!selectedClassId) return;
-      await Promise.all([loadScheduleList(), loadEnergyBar()]);
-      loadPerfRanking();
-      loadQuestionPower();
+      const perms = currentInstructor.permissions || {};
+      const tasks = [loadScheduleList()];
+      if (perms.canEditEnergyBar) tasks.push(loadEnergyBar());   // 沒權限不載、卡片已隱藏
+      await Promise.all(tasks);
+      loadPerfRanking();                                          // 綜合績效排名維持顯示
+      if (perms.canViewClassPower) loadQuestionPower();           // 各班出題戰力（需權限）
     }
 
     // ===== F16: 戰力排行 =====
