@@ -131,7 +131,14 @@
 
         <div class="card">
           <h2>🏆 綜合測驗績效排名（本班）</h2>
-          <p style="color:#64748b;font-size:13px;margin-bottom:10px">依刷題數與正確率、套用 Master 設定的公式計算。只計綜合測驗（不含專項練習）。</p>
+          <p style="color:#64748b;font-size:13px;margin-bottom:10px">只計隨機綜合測驗（不含專項練習）。可選日期區間。全班依加權分數排名。</p>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+            <input type="date" id="perf-start" style="padding:7px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit;font-size:13px">
+            <span style="color:#94a3b8">~</span>
+            <input type="date" id="perf-end" style="padding:7px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit;font-size:13px">
+            <button id="perf-apply" class="btn-logout">查詢</button>
+            <button id="perf-clear" style="background:none;border:none;color:#3b82f6;cursor:pointer;font-size:13px">全部</button>
+          </div>
           <div id="rank-perf"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
         </div>
 
@@ -298,7 +305,7 @@
           <div class="form-group"><label>頁碼</label><input id="corr-page" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit"></div>
         </div>
         <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#991b1b;margin:6px 0 14px"><input type="checkbox" id="corr-hide" style="width:18px;height:18px"> 隱藏此題（保留編號、不再出現在題庫）</label>
-        <div class="form-group"><label>回覆學員（會出現在學員的通知中心）</label><textarea id="corr-reply" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px" placeholder="例：感謝回報、標答已更正為 B"></textarea></div>
+        <div class="form-group"><label>回覆學員（選填、會出現在學員的通知中心）</label><textarea id="corr-reply" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px" placeholder="例：感謝回報、標答已更正為 B"></textarea></div>
         <div id="corr-modal-msg"></div>
       </div>
       <div style="padding:14px 20px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">
@@ -599,9 +606,9 @@
     async function resolveCorr(resolution) {
       if (!currentCorr) return;
       const qid = currentCorr.qid;
-      const reply = document.getElementById('corr-reply').value.trim();
+      const replyRaw = document.getElementById('corr-reply').value.trim();
+      const reply = replyRaw || (resolution === 'fixed' ? '題目已更正' : '已審閱、此題維持原樣');  // 非必填、空白給預設
       const msg = document.getElementById('corr-modal-msg');
-      if (!reply) { msg.innerHTML = '<div style="color:#ef4444;font-size:13px">請填回覆內容（學員會收到通知）</div>'; return; }
       const fixBtn = document.getElementById('corr-resolve-fix');
       const rejBtn = document.getElementById('corr-resolve-reject');
       fixBtn.disabled = true; rejBtn.disabled = true;
@@ -674,29 +681,49 @@
       const el = document.getElementById('rank-perf');
       el.innerHTML = '<div class="placeholder" style="padding:12px"><div class="icon">⏳</div></div>';
       try {
+        // 日期區間
+        const startStr = document.getElementById('perf-start')?.value;
+        const endStr = document.getElementById('perf-end')?.value;
+        const startMs = startStr ? new Date(startStr + 'T00:00:00').getTime() : 0;
+        const endMs = endStr ? new Date(endStr + 'T23:59:59').getTime() : Infinity;
         // 公式
         let expr = 'Math.sqrt(attempts) * accuracy';
         try { const f = await getDoc(doc(db, 'formulas', 'weighted_score')); if (f.exists() && f.data().expression) expr = f.data().expression; } catch (e) {}
-        // 本班學員
+        // 本班全部學員
         const stuSnap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
         const students = {}; stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false) students[d.id] = { name: s.name, no: s.studentNo, attempts: 0, correct: 0 }; });
-        // 本班 scoring 作答（不含 practice、只算有作答）
+        // 本班 scoring 作答（不含 practice、只算有作答、依日期區間）
         const atSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', selectedClassId)));
-        atSnap.forEach(d => { const a = d.data(); if (a.examMode === 'practice') return; if (a.answered === false) return; const s = students[a.studentId]; if (!s) return; s.attempts++; if (a.isCorrect) s.correct++; });
+        atSnap.forEach(d => {
+          const a = d.data();
+          if (a.examMode === 'practice') return;
+          if (a.answered === false) return;
+          const t = a.attemptedAt?.seconds ? a.attemptedAt.seconds * 1000 : 0;
+          if (t < startMs || t > endMs) return;
+          const s = students[a.studentId]; if (!s) return;
+          s.attempts++; if (a.isCorrect) s.correct++;
+        });
+        // 全班都列、依加權分數排名（沒作答的排最後）
         const rows = Object.values(students).map(s => { const accuracy = s.attempts ? s.correct / s.attempts : 0; return { ...s, accuracy, score: safeEvalFormula(expr, s.attempts, accuracy) }; });
-        rows.sort((a, b) => b.score - a.score);
-        const ranked = rows.filter(r => r.attempts > 0);
-        if (ranked.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">本班尚無綜合測驗作答紀錄</div>'; return; }
+        rows.sort((a, b) => b.score - a.score || (b.attempts - a.attempts) || ((a.no || 0) - (b.no || 0)));
+        if (rows.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">此班沒有學員</div>'; return; }
         const medal = ['🥇', '🥈', '🥉'];
-        el.innerHTML = `<div style="font-size:11px;color:#94a3b8;margin-bottom:6px">公式：<code>${expr}</code></div>` + ranked.map((r, i) => `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid #f1f5f9;${i < 3 ? 'background:#fffbeb' : ''}">
-            <span style="width:30px;font-weight:700;color:#475569">${medal[i] || (i + 1)}</span>
+        const rangeLabel = (startStr || endStr) ? `${startStr || '起'} ~ ${endStr || '今'}` : '全部期間';
+        el.innerHTML = `<div style="font-size:11px;color:#94a3b8;margin-bottom:6px">期間：${rangeLabel}　公式：<code>${expr}</code></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:11px;color:#94a3b8;border-bottom:2px solid #e2e8f0">
+            <span style="width:30px">名次</span><span style="flex:1">姓名</span><span style="width:48px;text-align:right">刷題</span><span style="width:48px;text-align:right">答對率</span><span style="width:54px;text-align:right">加權分</span>
+          </div>` + rows.map((r, i) => `
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #f1f5f9;${i < 3 && r.attempts > 0 ? 'background:#fffbeb' : ''};${r.attempts === 0 ? 'opacity:0.5' : ''}">
+            <span style="width:30px;font-weight:700;color:#475569">${(i < 3 && r.attempts > 0) ? medal[i] : (i + 1)}</span>
             <span style="flex:1;font-size:14px">${r.no}. ${r.name}</span>
-            <span style="font-size:12px;color:#64748b">${r.attempts}題·${Math.round(r.accuracy * 100)}%</span>
-            <span style="font-weight:700;color:#3b82f6;min-width:54px;text-align:right">${r.score.toFixed(1)}</span>
+            <span style="width:48px;text-align:right;font-size:13px;color:#64748b">${r.attempts}</span>
+            <span style="width:48px;text-align:right;font-size:13px;color:#64748b">${Math.round(r.accuracy * 100)}%</span>
+            <span style="width:54px;text-align:right;font-weight:700;color:#3b82f6">${r.score.toFixed(1)}</span>
           </div>`).join('');
       } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
     }
+    document.getElementById('perf-apply').addEventListener('click', loadPerfRanking);
+    document.getElementById('perf-clear').addEventListener('click', () => { document.getElementById('perf-start').value = ''; document.getElementById('perf-end').value = ''; loadPerfRanking(); });
 
     async function loadQuestionPower() {
       const el = document.getElementById('rank-questions');

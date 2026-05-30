@@ -125,7 +125,7 @@
       <button class="tab-button" data-tab="exams">📊 成績管理</button>
       <button class="tab-button" data-tab="books">📚 書籍 / 章節</button>
       <button class="tab-button" data-tab="schedule">📅 出題排程</button>
-      <button class="tab-button" data-tab="questions">❓ 題庫管理</button>
+      <button class="tab-button" data-tab="questions">❓ 題庫管理 / 勘誤</button>
       <button class="tab-button" data-tab="skills">🛠️ 核心技術簽核</button>
       <button class="tab-button" data-tab="milestones">🎯 Milestone 主檔</button>
       <button class="tab-button" data-tab="announcements">📢 公告管理</button>
@@ -313,12 +313,16 @@
       </section>
 
       <section class="tab-content" id="tab-questions">
+        <div class="card" id="qm-corr-card" style="display:none;border:1px solid #f59e0b">
+          <h2><span>⚠️ 待處理勘誤</span></h2>
+          <div id="qm-corr-list"></div>
+        </div>
         <div class="card">
-          <h2><span>❓ 題庫管理</span>
+          <h2><span>❓ 題庫管理 / 勘誤</span>
             <button class="btn btn-ghost" id="btn-refresh-questions">🔄 重新整理</button>
           </h2>
           <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
-            💡 查看所有學員出的題目、可隱藏（不可真刪除、保留編號）、可處理勘誤回報。
+            💡 查看所有學員出的題目、可<strong>直接修改</strong>（✏️）、隱藏（不可真刪除、保留編號）、處理上方勘誤回報。
           </p>
           <div id="questions-content"><div class="loading">⏳ 載入中...</div></div>
         </div>
@@ -812,6 +816,34 @@
         <button class="btn btn-ghost" id="qm-bulk-cancel">取消</button>
         <button class="btn" id="btn-qm-bulk-preview">🔍 預覽</button>
         <button class="btn btn-green" id="btn-qm-bulk-commit" disabled>💾 寫入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 題目編輯 / 勘誤處理 modal -->
+  <div class="modal-overlay" id="qm-edit-modal">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:680px">
+      <div class="modal-header"><h3 id="qm-edit-title">✏️ 編輯題目</h3><button class="modal-close" id="qm-edit-close">×</button></div>
+      <div class="modal-body">
+        <div id="qm-edit-reporters" style="display:none;background:#78350f;border-radius:8px;padding:10px 14px;margin-bottom:14px">
+          <div style="font-size:12px;color:#fcd34d;margin-bottom:4px">學員回報</div>
+          <div id="qm-edit-reporters-list" style="font-size:13px;color:#fef3c7"></div>
+        </div>
+        <div style="font-size:12px;color:#64748b;font-family:monospace;margin-bottom:8px">題號 <span id="qm-edit-qid">—</span></div>
+        <div class="form-group"><label>題目</label><textarea id="qm-edit-qtext" rows="2"></textarea></div>
+        <div id="qm-edit-options"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group"><label>正確答案</label><select id="qm-edit-answer"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div>
+          <div class="form-group"><label>頁碼</label><input id="qm-edit-page"></div>
+        </div>
+        <div class="form-group"><label style="display:flex;align-items:center;gap:8px;color:#fca5a5"><input type="checkbox" id="qm-edit-hide" style="width:18px;height:18px"> 隱藏此題（保留編號、不再出現在題庫）</label></div>
+        <div class="form-group" id="qm-edit-reply-group" style="display:none"><label>回覆學員（選填、會通知回報者）</label><textarea id="qm-edit-reply" rows="2" placeholder="例：感謝回報、標答已更正為 B"></textarea></div>
+        <div id="qm-edit-msg"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="qm-edit-cancel">取消</button>
+        <button class="btn btn-red" id="qm-edit-reject" style="display:none">❌ 不成立並通知</button>
+        <button class="btn btn-green" id="qm-edit-save">💾 儲存</button>
       </div>
     </div>
   </div>
@@ -3578,6 +3610,7 @@
         qmChaptersCache = [];
         chSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) qmChaptersCache.push({ id: d.id, ...data }); });
         renderQuestionsPage();
+        loadAdminCorrections();
       } catch (e) { el.innerHTML = `<div class="err-msg">${e.message}</div>`; }
     }
     document.getElementById('btn-refresh-questions').addEventListener('click', loadQuestionsPage);
@@ -3644,6 +3677,7 @@
             <td style="font-size:13px">${text}${text.length === 40 ? '...' : ''}</td>
             <td>${state}</td>
             <td style="white-space:nowrap">
+              <button class="btn btn-ghost" data-qm-edit="${q.id}" title="修改題目">✏️</button>
               <button class="btn btn-ghost" data-qm-dl="${q.id}" title="下載原始版本">📥</button>
               ${q.isVisible === false
                 ? `<button class="btn btn-ghost" data-qm-show="${q.id}">👁️</button>`
@@ -3665,16 +3699,18 @@
       el.querySelectorAll('button[data-qm-hide]').forEach(b => b.addEventListener('click', () => toggleQuestionVis(b.dataset.qmHide, false)));
       el.querySelectorAll('button[data-qm-show]').forEach(b => b.addEventListener('click', () => toggleQuestionVis(b.dataset.qmShow, true)));
       el.querySelectorAll('button[data-qm-dl]').forEach(b => b.addEventListener('click', () => downloadOneOriginal(b.dataset.qmDl)));
+      el.querySelectorAll('button[data-qm-edit]').forEach(b => b.addEventListener('click', () => openQmEdit(b.dataset.qmEdit)));
     }
 
     // F13-I: 下載原始版本（含校正歷史）
     function downloadOneOriginal(id) {
       const q = qmCache.find(x => x.id === id);
       if (!q) return;
+      const reconstructedOrig = q.originalVersion || (q.editHistory && q.editHistory.length ? q.editHistory[0] : null) || { note: '此題從未被校正、現行版即原始版', sameAsCurrent: true };
       const out = {
         id: q.id,
-        original: q.originalVersion || { note: '此題目沒有原始版本快照（早於 F13-I）' },
-        editHistory: q.editHistory || [],   // 每次勘誤校正前的版本
+        original: reconstructedOrig,         // 原始版（或從 editHistory 還原）
+        editHistory: q.editHistory || [],    // 每次勘誤校正前的版本
         current: q
       };
       const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
@@ -3690,8 +3726,13 @@
       const header = ['題號', '出題日期', '出題者', '出題班級', '難度', '維度', '題目', 'A', 'B', 'C', 'D', '正解', '書', '章', '頁'];
       const lines = [header.map(esc).join(',')];
       qmCache.forEach(q => {
-        // 原始版：用 originalVersion；沒有就退回現行版
-        const src = mode === 'original' ? (q.originalVersion || q) : q;
+        // 原始版：優先 originalVersion；沒有就用 editHistory 最早一筆（校正前=原始）；再沒有才用現行
+        let src = q;
+        if (mode === 'original') {
+          if (q.originalVersion) src = q.originalVersion;
+          else if (q.editHistory && q.editHistory.length) src = q.editHistory[0];
+          else src = q;
+        }
         const o = src.options || {};
         const s = src.source || {};
         lines.push([
@@ -3707,6 +3748,115 @@
       const dateStr = new Date().toISOString().slice(0, 10);
       a.download = `題庫_${mode === 'original' ? '原始版' : '現行版'}_${dateStr}.csv`;
       a.click();
+    }
+
+    // ===== 題目編輯 / 勘誤處理（Master）=====
+    let qmEditCtx = null;  // { qid, qUpdatedAt, reports[] }
+
+    async function qmCreateNotification(recipientId, type, title, content, relatedId = null) {
+      try { await setDoc(doc(collection(db, 'notifications')), { recipientId, type, title, content, relatedId, isRead: false, createdAt: serverTimestamp(), readAt: null }); } catch (e) { console.error('notify', e); }
+    }
+
+    function openQmEdit(qid, reports = null) {
+      const q = qmCache.find(x => x.id === qid);
+      if (!q) return;
+      qmEditCtx = { qid, qUpdatedAt: q.updatedAt?.seconds || 0, reports: reports || [] };
+      document.getElementById('qm-edit-title').textContent = reports ? '⚠️ 處理勘誤' : '✏️ 編輯題目';
+      document.getElementById('qm-edit-qid').textContent = qid;
+      document.getElementById('qm-edit-qtext').value = q.questionText || '';
+      document.getElementById('qm-edit-answer').value = q.correctAnswer || 'A';
+      document.getElementById('qm-edit-page').value = (q.source && q.source.page) || '';
+      document.getElementById('qm-edit-hide').checked = q.isVisible === false;
+      document.getElementById('qm-edit-reply').value = '';
+      document.getElementById('qm-edit-msg').innerHTML = '';
+      const opts = q.options || {};
+      document.getElementById('qm-edit-options').innerHTML = ['A', 'B', 'C', 'D'].map(k =>
+        `<div class="form-group"><label>選項 ${k}</label><input class="qm-edit-opt" data-k="${k}" value="${(opts[k]?.text || '').replace(/"/g, '&quot;')}"></div>`).join('');
+      // 勘誤模式 → 顯示回報者 + 回覆 + 不成立鈕
+      const isCorr = reports && reports.length > 0;
+      document.getElementById('qm-edit-reporters').style.display = isCorr ? 'block' : 'none';
+      document.getElementById('qm-edit-reply-group').style.display = isCorr ? 'block' : 'none';
+      document.getElementById('qm-edit-reject').style.display = isCorr ? 'inline-flex' : 'none';
+      document.getElementById('qm-edit-save').textContent = isCorr ? '✅ 已修正並通知' : '💾 儲存';
+      if (isCorr) document.getElementById('qm-edit-reporters-list').innerHTML = reports.map(r => `• ${r.reportedByName || '學員'}（${r.reportedByClassId || '?'}）：${r.reason || ''}`).join('<br>');
+      document.getElementById('qm-edit-modal').classList.add('active');
+    }
+    document.getElementById('qm-edit-close').addEventListener('click', () => document.getElementById('qm-edit-modal').classList.remove('active'));
+    document.getElementById('qm-edit-cancel').addEventListener('click', () => document.getElementById('qm-edit-modal').classList.remove('active'));
+    document.getElementById('qm-edit-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('qm-edit-modal').classList.remove('active'); });
+    document.getElementById('qm-edit-save').addEventListener('click', () => qmSaveEdit('fixed'));
+    document.getElementById('qm-edit-reject').addEventListener('click', () => qmSaveEdit('rejected'));
+
+    async function qmSaveEdit(resolution) {
+      if (!qmEditCtx) return;
+      const { qid, qUpdatedAt, reports } = qmEditCtx;
+      const isCorr = reports && reports.length > 0;
+      const msg = document.getElementById('qm-edit-msg');
+      const saveBtn = document.getElementById('qm-edit-save');
+      const rejBtn = document.getElementById('qm-edit-reject');
+      saveBtn.disabled = true; rejBtn.disabled = true;
+      try {
+        const hide = document.getElementById('qm-edit-hide').checked;
+        const pre = qmCache.find(x => x.id === qid) || {};
+        // 並發控制（fixed 才檢查）
+        if (resolution === 'fixed') {
+          const fresh = await getDoc(doc(db, 'questions', qid));
+          const freshUpdated = fresh.exists() ? (fresh.data().updatedAt?.seconds || 0) : 0;
+          if (freshUpdated !== qUpdatedAt) { msg.innerHTML = '<div class="warn-msg">⚠️ 這題剛被改過、請關閉重整後再試</div>'; saveBtn.disabled = false; rejBtn.disabled = false; return; }
+          const opts = {};
+          document.querySelectorAll('.qm-edit-opt').forEach(inp => { opts[inp.dataset.k] = { text: inp.value }; });
+          await updateDoc(doc(db, 'questions', qid), {
+            questionText: document.getElementById('qm-edit-qtext').value,
+            options: opts,
+            correctAnswer: document.getElementById('qm-edit-answer').value,
+            'source.page': document.getElementById('qm-edit-page').value,
+            isVisible: !hide,
+            updatedAt: serverTimestamp(), lastEditedBy: currentUser.email,
+            editHistory: arrayUnion({ questionText: pre.questionText || '', options: pre.options || {}, correctAnswer: pre.correctAnswer || '', source: pre.source || {}, editedBy: 'Master', editedAt: Timestamp.now(), reason: isCorr ? ('勘誤校正：' + (document.getElementById('qm-edit-reply').value.trim() || '')) : 'Master 直接編輯' })
+          });
+        } else if (hide) {
+          await updateDoc(doc(db, 'questions', qid), { isVisible: false, hiddenReason: '勘誤處理', hiddenBy: currentUser.email, hiddenAt: serverTimestamp() });
+        }
+        // 勘誤模式 → 關閉所有班級對此題的待處理回報 + 通知
+        if (isCorr) {
+          const replyRaw = document.getElementById('qm-edit-reply').value.trim();
+          const reply = replyRaw || (resolution === 'fixed' ? '題目已更正' : '已審閱、此題維持原樣');
+          const allRep = await getDocs(query(collection(db, 'question_error_reports'), where('questionId', '==', qid)));
+          const toClose = []; allRep.forEach(d => { if ((d.data().status || 'pending') === 'pending') toClose.push({ id: d.id, ...d.data() }); });
+          const newStatus = hide ? 'hidden' : resolution;
+          await Promise.all(toClose.map(r => updateDoc(doc(db, 'question_error_reports', r.id), { status: newStatus, reviewedBy: 'master', reviewedByName: 'Master', reviewedAt: serverTimestamp(), reviewerNote: reply })));
+          const title = resolution === 'fixed' ? '✅ 你回報的題目已修正' : '📩 你回報的題目已處理';
+          await Promise.all(toClose.map(r => qmCreateNotification(r.reportedBy, 'error_report_reply', title, reply, qid)));
+        }
+        document.getElementById('qm-edit-modal').classList.remove('active');
+        loadQuestionsPage();
+      } catch (e) { msg.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { saveBtn.disabled = false; rejBtn.disabled = false; }
+    }
+
+    async function loadAdminCorrections() {
+      const card = document.getElementById('qm-corr-card');
+      const el = document.getElementById('qm-corr-list');
+      try {
+        const snap = await getDocs(query(collection(db, 'question_error_reports'), where('status', '==', 'pending')));
+        const reports = []; snap.forEach(d => reports.push({ id: d.id, ...d.data() }));
+        if (reports.length === 0) { card.style.display = 'none'; return; }
+        const groups = {};
+        reports.forEach(r => { (groups[r.questionId] = groups[r.questionId] || []).push(r); });
+        card.style.display = 'block';
+        el.innerHTML = Object.entries(groups).map(([qid, rs]) => {
+          const q = qmCache.find(x => x.id === qid);
+          const qtext = q ? (q.questionText || '').slice(0, 50) : '（題目不存在）';
+          const reportersHtml = rs.map(r => `<div style="font-size:12px;color:#fcd34d">• ${r.reportedByName || '學員'}（${r.reportedByClassId || '?'}）：${r.reason || ''}</div>`).join('');
+          return `<div style="background:#0f172a;border-radius:10px;padding:12px;margin-bottom:10px;border-left:3px solid #f59e0b">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-family:monospace;font-size:12px;color:#94a3b8">${qid}</span><span class="tag-pill yellow">${rs.length} 筆回報</span></div>
+            <div style="color:#e2e8f0;font-size:13px;margin-bottom:6px">${qtext}…</div>
+            ${reportersHtml}
+            <button class="btn btn-green" style="margin-top:8px" data-corr-qid="${qid}">處理（${rs.length} 筆一起結案）</button>
+          </div>`;
+        }).join('');
+        el.querySelectorAll('button[data-corr-qid]').forEach(b => b.addEventListener('click', () => openQmEdit(b.dataset.corrQid, Object.values(groups).flat().filter(r => r.questionId === b.dataset.corrQid))));
+      } catch (e) { card.style.display = 'none'; }
     }
 
     // F13-H: 範本 CSV
