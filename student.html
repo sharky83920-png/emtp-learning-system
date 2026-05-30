@@ -387,7 +387,7 @@
         <div style="background:white;border-radius:14px;max-width:680px;width:100%;margin:auto;overflow:hidden;display:flex;flex-direction:column">
           <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center">
             <div>
-              <div style="font-size:14px;opacity:0.9">🎲 隨機綜合測驗</div>
+              <div style="font-size:14px;opacity:0.9" id="quiz-mode-label">🎲 隨機綜合測驗</div>
               <div style="font-size:18px;font-weight:700" id="quiz-progress">第 — / — 題</div>
             </div>
             <button id="btn-quiz-close" style="background:rgba(255,255,255,0.2);border:none;color:white;width:34px;height:34px;border-radius:50%;font-size:20px;cursor:pointer;line-height:1">×</button>
@@ -446,6 +446,20 @@
           <button id="btn-start-quiz" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border:none;padding:14px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:15px;font-weight:700;box-shadow:0 4px 12px rgba(99,102,241,0.3)">🎲 隨機綜合測驗</button>
           <button id="btn-new-question" style="background:#10b981;color:white;border:none;padding:12px 16px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600">➕ 新增自創題庫</button>
           <button id="btn-my-progress" style="background:white;color:#3b82f6;border:2px solid #3b82f6;padding:10px 16px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600">📈 我的出題進度</button>
+        </div>
+      </div>
+
+      <!-- 專項練習（6 維度、不計分） -->
+      <div class="milestone-section" data-tab="academic">
+        <h3>🎯 專項練習（不計分）</h3>
+        <div style="color:#64748b;font-size:13px;margin-bottom:12px">針對單一維度抽題練習、不列入計分。</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px" id="practice-buttons">
+          <button class="practice-btn" data-dim="D1" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D1 緊急救護系統</button>
+          <button class="practice-btn" data-dim="D2" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D2 基礎醫學含評估</button>
+          <button class="practice-btn" data-dim="D3" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D3 創傷</button>
+          <button class="practice-btn" data-dim="D4" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D4 非創傷</button>
+          <button class="practice-btn" data-dim="D5" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D5 特殊族群</button>
+          <button class="practice-btn" data-dim="D6" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D6 災難及特殊情境</button>
         </div>
       </div>
 
@@ -744,8 +758,9 @@
             <div style="height:10px;background:#f1f5f9;border-radius:6px;margin-top:12px;overflow:hidden">
               <div id="eb-bar" style="height:100%;background:linear-gradient(90deg,#fbbf24,#f59e0b);width:0%;transition:width 0.5s"></div>
             </div>
-            <div style="color:#94a3b8;font-size:12px;margin-top:8px;text-align:center">💡 出題 / 答題 / EPA 評核都會累積能量</div>
+            <div style="color:#94a3b8;font-size:12px;margin-top:8px;text-align:center">💡 每完成一次測驗 = 1 趟（${periodName}重置）</div>
           `;
+          updateEnergyCount(eb.period, eb.target);
         } else {
           ebSec.classList.remove('empty-hide');
           ebContent.innerHTML = '<div class="empty-hint">⏳ 指導員尚未開啟能量條</div>';
@@ -2111,6 +2126,26 @@
 
     // ===== F13-E: 答題系統 =====
     let quizState = null; // { questions, currentIdx, answers, startedAt }
+    // ===== 能量條：本週期完成測驗場次 = 趟數 =====
+    function energyPeriodStart(period) {
+      const d = new Date(); d.setHours(0, 0, 0, 0);
+      if (period === 'monthly') { d.setDate(1); return d; }
+      const day = d.getDay(); // 0=日
+      d.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); // 回到本週一
+      return d;
+    }
+    async function updateEnergyCount(period, target) {
+      try {
+        const snap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', currentStudent.id)));
+        const start = energyPeriodStart(period).getTime();
+        const sessions = new Set();
+        snap.forEach(d => { const a = d.data(); const t = a.attemptedAt?.seconds ? a.attemptedAt.seconds * 1000 : 0; if (t >= start && a.examSessionId) sessions.add(a.examSessionId); });
+        const count = sessions.size;
+        const el = document.getElementById('eb-current'); if (el) el.textContent = count;
+        const bar = document.getElementById('eb-bar'); if (bar) bar.style.width = Math.min(100, target ? (count / target) * 100 : 0) + '%';
+      } catch (e) { console.warn('[energy]', e); }
+    }
+
     const QUIZ_SIZE = 10;
 
     document.getElementById('btn-start-quiz').addEventListener('click', startQuiz);
@@ -2127,35 +2162,48 @@
       try { await loadAcademicRadar(); } catch (e) {}
     });
 
+    function beginQuiz(questions, mode, label) {
+      if (!questions || questions.length === 0) { alert('⚠️ 此範圍目前沒有題目！'); return false; }
+      for (let i = questions.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [questions[i], questions[j]] = [questions[j], questions[i]]; }
+      const picked = questions.slice(0, Math.min(QUIZ_SIZE, questions.length));
+      quizState = { questions: picked, currentIdx: 0, answers: [], startedAt: Date.now(), mode, sessionId: 'sess_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) };
+      document.getElementById('quiz-mode-label').textContent = label;
+      document.getElementById('quiz-modal').style.display = 'flex';
+      renderQuizQuestion();
+      return true;
+    }
+
+    async function loadVisibleQuestions() {
+      const snap = await getDocs(collection(db, 'questions'));
+      const all = [];
+      snap.forEach(d => { const data = d.data(); if (data.isVisible !== false && data.isActive !== false) all.push({ id: d.id, ...data }); });
+      return all;
+    }
+
     async function startQuiz() {
       const btn = document.getElementById('btn-start-quiz');
       btn.disabled = true; btn.textContent = '⏳ 抽題中...';
       try {
-        // 抽題：取所有 visible & active
-        const snap = await getDocs(collection(db, 'questions'));
-        const all = [];
-        snap.forEach(d => {
-          const data = d.data();
-          if (data.isVisible !== false && data.isActive !== false) all.push({ id: d.id, ...data });
-        });
-        if (all.length === 0) {
-          alert('⚠️ 題庫目前沒有題目、請先讓學員出題！');
-          return;
-        }
-        // 洗牌
-        for (let i = all.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [all[i], all[j]] = [all[j], all[i]];
-        }
-        const picked = all.slice(0, Math.min(QUIZ_SIZE, all.length));
-        quizState = { questions: picked, currentIdx: 0, answers: [], startedAt: Date.now(), sessionId: 'sess_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) };
-        document.getElementById('quiz-modal').style.display = 'flex';
-        renderQuizQuestion();
-      } catch (e) {
-        alert('❌ 抽題失敗：' + e.message);
-      } finally {
-        btn.disabled = false; btn.textContent = '🎲 隨機綜合測驗';
-      }
+        const all = await loadVisibleQuestions();
+        if (all.length === 0) { alert('⚠️ 題庫目前沒有題目、請先讓學員出題！'); return; }
+        beginQuiz(all, 'scoring', '🎲 隨機綜合測驗');
+      } catch (e) { alert('❌ 抽題失敗：' + e.message); }
+      finally { btn.disabled = false; btn.textContent = '🎲 隨機綜合測驗'; }
+    }
+
+    // 專項練習（單一維度、不計分）
+    const DIM_NAMES = { D1: '緊急救護系統', D2: '基礎醫學含評估', D3: '創傷', D4: '非創傷', D5: '特殊族群', D6: '災難及特殊情境' };
+    document.querySelectorAll('.practice-btn').forEach(b => b.addEventListener('click', () => startPractice(b.dataset.dim)));
+    async function startPractice(dim) {
+      const btns = document.querySelectorAll('.practice-btn');
+      btns.forEach(b => b.disabled = true);
+      try {
+        const all = await loadVisibleQuestions();
+        const filtered = all.filter(q => q.derivedDimension === dim);
+        if (filtered.length === 0) { alert(`⚠️ 「${dim} ${DIM_NAMES[dim] || ''}」目前沒有題目`); return; }
+        beginQuiz(filtered, 'practice', `🎯 專項練習 · ${dim} ${DIM_NAMES[dim] || ''}（不計分）`);
+      } catch (e) { alert('❌ 抽題失敗：' + e.message); }
+      finally { btns.forEach(b => b.disabled = false); }
     }
 
     function renderQuizQuestion() {
@@ -2257,7 +2305,7 @@
             correctAnswer: a.correctAnswer,
             isCorrect: a.isCorrect,
             isFirstAttempt: true,
-            examMode: 'scoring',
+            examMode: quizState.mode === 'practice' ? 'practice' : 'scoring',
             examSessionId: quizState.sessionId,
             attemptedAt: serverTimestamp()
           }));
