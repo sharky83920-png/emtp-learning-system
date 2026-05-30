@@ -580,8 +580,15 @@
     function showLogin(errMsg) {
       document.getElementById('login-screen').style.display = 'flex';
       document.getElementById('dashboard').style.display = 'none';
+      // 重設登入按鈕（登出後可能還停在「登入中...」）
+      const lb = document.getElementById('btn-login');
+      if (lb) { lb.disabled = false; lb.textContent = '登入'; }
+      const idEl = document.getElementById('login-id');
+      if (idEl) idEl.value = '';
       if (errMsg) {
         document.getElementById('login-error').innerHTML = `<div class="err-msg">❌ ${errMsg}</div>`;
+      } else {
+        document.getElementById('login-error').innerHTML = '';
       }
       loadClasses();
     }
@@ -794,8 +801,8 @@
           _energyCfg = { period: eb.period, target: eb.target, enabled: true };
           updateEnergyCount(eb.period, eb.target);
         } else {
-          ebSec.classList.remove('empty-hide');
-          ebContent.innerHTML = '<div class="empty-hint">⏳ 指導員尚未開啟能量條</div>';
+          ebSec.classList.add('empty-hide');   // 能量條關閉 → 整張卡隱藏
+          ebContent.innerHTML = '';
         }
 
         // F11-A + F11-B + F11-F + F12-B: 載入 Milestone 雷達 + 核心技術簽核 + 6 角學科雷達 + 成績河流圖

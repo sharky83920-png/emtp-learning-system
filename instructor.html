@@ -366,7 +366,12 @@
     function showLogin(errMsg) {
       document.getElementById('login-screen').style.display = 'flex';
       document.getElementById('dashboard').style.display = 'none';
-      if (errMsg) document.getElementById('login-error').innerHTML = `<div class="err-msg">❌ ${errMsg}</div>`;
+      // 重設登入按鈕（登出後可能還停在「登入中...」）
+      const lb = document.getElementById('btn-login');
+      if (lb) { lb.disabled = false; lb.textContent = '➜ 登入系統'; }
+      const pwEl = document.getElementById('login-pw');
+      if (pwEl) pwEl.value = '';
+      document.getElementById('login-error').innerHTML = errMsg ? `<div class="err-msg">❌ ${errMsg}</div>` : '';
       loadLoginClasses();
     }
 
@@ -882,27 +887,28 @@
     }
 
     async function loadTrackResult() {
+      const stuFilter = document.getElementById('track-student').value;
+      // 指定單一學員 → 看他在「所有應出題日」的狀況（不需選日期）
+      if (stuFilter) { loadTrackByStudent(stuFilter); return; }
+      // 全部學員 → 看某一出題日的全班狀況
       const el = document.getElementById('track-result');
       const date = document.getElementById('track-date').value;
-      const stuFilter = document.getElementById('track-student').value;
-      if (!date) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">選出題日查看全班繳交狀況</div>'; return; }
+      if (!date) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">選出題日查看全班繳交狀況（或選學員看跨日期狀況）</div>'; return; }
       el.innerHTML = '<div class="placeholder" style="padding:12px"><div class="icon">⏳</div></div>';
       try {
         const sch = schedCache.find(s => s.scheduledDate === date);
         const need = (sch && sch.questionsPerStudent) || 1;
-        // 全班在籍學員
         const stuSnap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
         let students = [];
         stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false) students.push({ id: d.id, name: s.name, no: s.studentNo }); });
         students.sort((a, b) => (a.no || 0) - (b.no || 0));
-        if (stuFilter) students = students.filter(s => s.id === stuFilter);
-        // 該班繳交紀錄（單一 classId 查詢、日期 client 端過濾）
         const subSnap = await getDocs(query(collection(db, 'question_submissions'), where('classId', '==', selectedClassId)));
         const countByStu = {};
         subSnap.forEach(d => { const s = d.data(); if (s.scheduledDate === date) countByStu[s.studentId] = (countByStu[s.studentId] || 0) + 1; });
         const rows = students.map(s => ({ ...s, cnt: countByStu[s.id] || 0, done: (countByStu[s.id] || 0) >= need }));
         const total = rows.length, done = rows.filter(r => r.done).length, miss = total - done;
         el.innerHTML = `
+          <div style="font-size:13px;color:#475569;text-align:center;margin-bottom:8px">📅 ${date} · 全班繳交狀況</div>
           <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;flex-wrap:wrap;font-size:14px">
             <span style="background:#f1f5f9;color:#475569;padding:5px 14px;border-radius:18px">總數 <b>${total}</b></span>
             <span style="background:#dcfce7;color:#166534;padding:5px 14px;border-radius:18px">✅ 完成 <b>${done}</b></span>
@@ -913,6 +919,43 @@
           rows.map(r => `<div style="border-radius:10px;padding:8px 6px;text-align:center;font-size:13px;border:1px solid ${r.done ? '#86efac' : '#fca5a5'};background:${r.done ? '#f0fdf4' : '#fef2f2'};color:${r.done ? '#166534' : '#991b1b'}">${r.done ? '✅' : '❌'} ${r.name}${need > 1 ? `<div style="font-size:10px;opacity:0.8">${r.cnt}/${need}</div>` : ''}</div>`).join('') +
           '</div>' +
           (rows.length === 0 ? '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">無學員</div>' : '');
+      } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+    }
+
+    // 單一學員 → 跨所有應出題日的繳交狀況
+    async function loadTrackByStudent(stuId) {
+      const el = document.getElementById('track-result');
+      const stuSel = document.getElementById('track-student');
+      const stuName = stuSel.options[stuSel.selectedIndex] ? stuSel.options[stuSel.selectedIndex].text : '該學員';
+      if (schedCache.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">本班尚未設定應繳出題日</div>'; return; }
+      el.innerHTML = '<div class="placeholder" style="padding:12px"><div class="icon">⏳</div></div>';
+      try {
+        const subSnap = await getDocs(query(collection(db, 'question_submissions'), where('classId', '==', selectedClassId)));
+        const cntByDate = {};
+        subSnap.forEach(d => { const s = d.data(); if (s.studentId === stuId) cntByDate[s.scheduledDate] = (cntByDate[s.scheduledDate] || 0) + 1; });
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const dates = [...schedCache].sort((a, b) => (b.scheduledDate || '').localeCompare(a.scheduledDate || '')); // 新→舊
+        const rows = dates.map(s => {
+          const need = s.questionsPerStudent || 1;
+          const cnt = cntByDate[s.scheduledDate] || 0;
+          const arrived = new Date(s.scheduledDate) <= today;
+          return { date: s.scheduledDate, need, cnt, arrived, done: cnt >= need };
+        });
+        const due = rows.filter(r => r.arrived);
+        const done = due.filter(r => r.done).length;
+        el.innerHTML = `
+          <div style="font-size:13px;color:#475569;text-align:center;margin-bottom:8px">👤 ${stuName} · 跨日期繳交狀況</div>
+          <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;flex-wrap:wrap;font-size:14px">
+            <span style="background:#f1f5f9;color:#475569;padding:5px 14px;border-radius:18px">應交 <b>${due.length}</b> 天</span>
+            <span style="background:#dcfce7;color:#166534;padding:5px 14px;border-radius:18px">✅ 完成 <b>${done}</b></span>
+            <span style="background:#fee2e2;color:#991b1b;padding:5px 14px;border-radius:18px">❌ 未交 <b>${due.length - done}</b></span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">` +
+          rows.map(r => {
+            if (!r.arrived) return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:8px;background:#f8fafc;color:#94a3b8;font-size:13px"><span>${r.date}</span><span>⏳ 尚未到期</span></div>`;
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:8px;border:1px solid ${r.done ? '#86efac' : '#fca5a5'};background:${r.done ? '#f0fdf4' : '#fef2f2'};color:${r.done ? '#166534' : '#991b1b'};font-size:13px"><span>${r.date}</span><span>${r.done ? '✅ 已交' : '❌ 未交'}${r.need > 1 ? `（${r.cnt}/${r.need}）` : ''}</span></div>`;
+          }).join('') +
+          '</div>';
       } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
     }
     document.getElementById('track-date').addEventListener('change', loadTrackResult);
