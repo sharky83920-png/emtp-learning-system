@@ -123,13 +123,12 @@
       <button class="tab-button" data-tab="classes">🏫 班級管理</button>
       <button class="tab-button" data-tab="students">👥 學員管理</button>
       <button class="tab-button" data-tab="instructors">👨‍🏫 指導員管理</button>
-      <button class="tab-button" data-tab="milestones">🎯 Milestone 主檔</button>
-      <button class="tab-button" data-tab="skills">🛠️ 核心技術簽核</button>
-      <button class="tab-button" data-tab="books">📚 書籍 / 章節</button>
       <button class="tab-button" data-tab="exams">📊 成績管理</button>
+      <button class="tab-button" data-tab="books">📚 書籍 / 章節</button>
       <button class="tab-button" data-tab="schedule">📅 出題排程</button>
       <button class="tab-button" data-tab="questions">❓ 題庫管理</button>
-      <button class="tab-button" data-tab="qr">📱 QR 簽核</button>
+      <button class="tab-button" data-tab="skills">🛠️ 核心技術簽核</button>
+      <button class="tab-button" data-tab="milestones">🎯 Milestone 主檔</button>
       <button class="tab-button" data-tab="announcements">📢 公告管理</button>
       <button class="tab-button" data-tab="settings">⚙️ 系統設定</button>
     </nav>
@@ -203,7 +202,7 @@
         </div>
 
         <div class="card">
-          <h2><span>📊 Milestone EPA 計分配置（每班獨立）</span></h2>
+          <h2><span>📊 Milestone計分配置（每班獨立）</span></h2>
           <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
             💡 選班級後、勾選要<strong>排除計分</strong>的身分 / 單位 / 評核者 / Milestone（勾起來＝不列入該班雷達與評分明細的平均）。<br>
             ⚠️ 被排除的評核<strong>仍會</strong>顯示在學員的 Milestone 詳細視窗（灰色標示「不列入計分」、質性回饋照看）。
@@ -225,6 +224,49 @@
             💡 額外指定給學員的「核心技術考試項目」、跟 Milestone 系統獨立。學員端用「綠方塊」進度條呈現。每項目可設定目標完成次數。
           </p>
           <div id="skills-content"><div class="loading">⏳ 載入中...</div></div>
+        </div>
+
+        <div class="card">
+          <h2><span>📱 核心技術 QR Code 現場簽核</span></h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
+            💡 選擇班級 + 技術項目、產生 5 分鐘時效 QR Code。學員掃碼後系統自動為該學員的該技術項目 +1 次簽核（同學員不能掃同一 QR 兩次）。
+          </p>
+
+          <div id="qr-setup">
+            <div class="qr-setup-grid">
+              <div class="form-group">
+                <label>選擇班級</label>
+                <select id="qr-class"><option value="">請選班級...</option></select>
+              </div>
+              <div class="form-group">
+                <label>選擇技術項目</label>
+                <select id="qr-skill"><option value="">請選項目...</option></select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>教官姓名（顯示在簽核紀錄）</label>
+              <input type="text" id="qr-instructor-name" placeholder="例：張教官" value="">
+            </div>
+            <button class="btn btn-green" id="btn-start-qr" style="width:100%;padding:14px;font-size:15px">📱 產生 QR Code（5 分鐘）</button>
+            <div id="qr-setup-error"></div>
+          </div>
+
+          <div id="qr-active" style="display:none">
+            <div class="qr-active-box">
+              <div style="color:#94a3b8;font-size:13px;margin-bottom:4px">⏰ 剩餘時間</div>
+              <div class="qr-countdown" id="qr-countdown">5:00</div>
+              <div style="margin-top:14px;color:#cbd5e1;font-size:14px">
+                <strong id="qr-skill-name">—</strong> · <span id="qr-class-name">—</span>
+              </div>
+              <div class="qr-canvas-wrap">
+                <img id="qr-img" style="display:block;width:280px;height:280px" alt="QR Code">
+              </div>
+              <div style="color:#94a3b8;font-size:12px;font-family:monospace;word-break:break-all;padding:8px 14px;background:#0f172a;border-radius:6px;margin-bottom:12px" id="qr-url">—</div>
+              <div style="color:#cbd5e1;font-size:14px;margin-top:8px">已掃描學員：<strong style="color:#10b981" id="qr-scanned-count">0</strong> 位</div>
+              <div class="qr-scanned-list" id="qr-scanned-list"><div style="color:#64748b;text-align:center">尚未有學員掃描</div></div>
+              <button class="btn btn-red" id="btn-end-qr" style="margin-top:14px;width:100%;padding:12px">⏹ 結束 Session（提早結束）</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -283,50 +325,6 @@
         </div>
       </section>
 
-      <section class="tab-content" id="tab-qr">
-        <div class="card">
-          <h2><span>📱 核心技術 QR Code 簽核</span></h2>
-          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
-            💡 選擇班級 + 技術項目、產生 5 分鐘時效 QR Code。學員掃碼後系統自動為該學員的該技術項目 +1 次簽核（同學員不能掃同一 QR 兩次）。
-          </p>
-
-          <div id="qr-setup">
-            <div class="qr-setup-grid">
-              <div class="form-group">
-                <label>選擇班級</label>
-                <select id="qr-class"><option value="">請選班級...</option></select>
-              </div>
-              <div class="form-group">
-                <label>選擇技術項目</label>
-                <select id="qr-skill"><option value="">請選項目...</option></select>
-              </div>
-            </div>
-            <div class="form-group">
-              <label>教官姓名（顯示在簽核紀錄）</label>
-              <input type="text" id="qr-instructor-name" placeholder="例：張教官" value="">
-            </div>
-            <button class="btn btn-green" id="btn-start-qr" style="width:100%;padding:14px;font-size:15px">📱 產生 QR Code（5 分鐘）</button>
-            <div id="qr-setup-error"></div>
-          </div>
-
-          <div id="qr-active" style="display:none">
-            <div class="qr-active-box">
-              <div style="color:#94a3b8;font-size:13px;margin-bottom:4px">⏰ 剩餘時間</div>
-              <div class="qr-countdown" id="qr-countdown">5:00</div>
-              <div style="margin-top:14px;color:#cbd5e1;font-size:14px">
-                <strong id="qr-skill-name">—</strong> · <span id="qr-class-name">—</span>
-              </div>
-              <div class="qr-canvas-wrap">
-                <img id="qr-img" style="display:block;width:280px;height:280px" alt="QR Code">
-              </div>
-              <div style="color:#94a3b8;font-size:12px;font-family:monospace;word-break:break-all;padding:8px 14px;background:#0f172a;border-radius:6px;margin-bottom:12px" id="qr-url">—</div>
-              <div style="color:#cbd5e1;font-size:14px;margin-top:8px">已掃描學員：<strong style="color:#10b981" id="qr-scanned-count">0</strong> 位</div>
-              <div class="qr-scanned-list" id="qr-scanned-list"><div style="color:#64748b;text-align:center">尚未有學員掃描</div></div>
-              <button class="btn btn-red" id="btn-end-qr" style="margin-top:14px;width:100%;padding:12px">⏹ 結束 Session（提早結束）</button>
-            </div>
-          </div>
-        </div>
-      </section>
 
       <section class="tab-content" id="tab-announcements">
         <div class="card">
@@ -886,12 +884,11 @@
         if (btn.dataset.tab === 'students') loadClassDropdown();
         if (btn.dataset.tab === 'instructors') loadInstructors();
         if (btn.dataset.tab === 'milestones') loadMilestonesPage();
-        if (btn.dataset.tab === 'skills') loadSkillsPage();
+        if (btn.dataset.tab === 'skills') { loadSkillsPage(); loadQrPage(); }
         if (btn.dataset.tab === 'books') loadBooksPage();
         if (btn.dataset.tab === 'exams') loadExamsPage();
         if (btn.dataset.tab === 'schedule') loadSchedulePage();
         if (btn.dataset.tab === 'questions') loadQuestionsPage();
-        if (btn.dataset.tab === 'qr') loadQrPage();
         if (btn.dataset.tab === 'announcements') loadAnnouncementsPage();
         if (btn.dataset.tab === 'settings') loadSettings();
       });
