@@ -94,7 +94,6 @@
     .qr-student-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #334155; color: #cbd5e1; font-size: 13px; }
     .qr-student-row:last-child { border-bottom: none; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -4072,21 +4071,10 @@
         document.getElementById('qr-skill-name').textContent = skillName;
         document.getElementById('qr-class-name').textContent = classDisplay;
 
-        // 生成 URL + QR（用 toDataURL + img、最穩定）
+        // 生成 URL + QR（用 QR 圖片 API、不依賴 JS 函式庫、最穩定）
         const url = `${location.origin}${location.pathname.replace(/admin\.html$/, 'student.html')}?qr=${sessionId}`;
         document.getElementById('qr-url').textContent = url;
-        const qrImg = document.getElementById('qr-img');
-        if (typeof QRCode === 'undefined') {
-          alert('⚠️ QRCode 函式庫尚未載入、請重整頁面再試');
-        } else {
-          try {
-            const dataUrl = await QRCode.toDataURL(url, { width: 320, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } });
-            qrImg.src = dataUrl;
-          } catch (qrErr) {
-            console.error('QR generate fail:', qrErr);
-            alert('⚠️ QR Code 產生失敗：' + qrErr.message);
-          }
-        }
+        document.getElementById('qr-img').src = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=10&data=' + encodeURIComponent(url);
 
         // 倒數計時
         startQrCountdown();

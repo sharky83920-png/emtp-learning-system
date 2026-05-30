@@ -59,7 +59,6 @@
     .qr-student-row:last-child { border-bottom: none; }
     .pri-select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 14px; background: white; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -184,11 +183,41 @@
 
       <section class="tab-content" id="tab-other">
         <div class="card">
-          <h2>⚙️ 其他</h2>
+          <h2>📢 班級公告</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:12px">發布公告給目前班級、學員登入會跳出。到期自動移除。</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">分類</label>
+              <select id="ann-category" class="pri-select">
+                <option value="課程通知">📘 課程通知</option>
+                <option value="重大活動">🎯 重大活動</option>
+                <option value="重要提醒">⚠️ 重要提醒</option>
+                <option value="其他">📌 其他</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">下架日期</label>
+              <input type="date" id="ann-expire" class="pri-select">
+            </div>
+          </div>
+          <input type="text" id="ann-title" class="pri-select" placeholder="標題" style="margin-bottom:10px">
+          <textarea id="ann-content" class="pri-select" rows="3" placeholder="內容（可換行）" style="margin-bottom:10px"></textarea>
+          <button id="ann-publish" style="width:100%;background:#10b981;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700">📢 發布公告</button>
+          <div id="ann-msg"></div>
+          <div id="ann-list" style="margin-top:14px"></div>
+        </div>
+
+        <div class="card" id="mb-card">
+          <h2>📓 錯題本開關</h2>
+          <div id="mb-body"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
+        </div>
+
+        <div class="card">
+          <h2>📊 成績上傳</h2>
           <div class="build-box">
             <div class="icon">🚧</div>
-            <h3>新功能建置中</h3>
-            <p>成績上傳 / 公告 / 班級設定<br>等功能將陸續放這裡。</p>
+            <h3>建置中</h3>
+            <p>批次上傳 / 個別修正自己班的考試成績<br>下一階段開放。</p>
           </div>
         </div>
       </section>
@@ -411,6 +440,7 @@
       const active = document.querySelector('.bottom-tabs button.active')?.dataset.tab;
       if (active === 'corrections') loadCorrections();
       if (active === 'schedule') loadScheduleTab();
+      if (active === 'other') loadOtherTab();
       if (active === 'signoff') { const pl = document.getElementById('prog-list'); if (pl) pl.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">選技術項目查看全班達標狀況</div>'; const ps = document.getElementById('prog-skill'); if (ps) ps.value = ''; }
     });
 
@@ -424,6 +454,7 @@
         if (btn.dataset.tab === 'corrections') loadCorrections();
         if (btn.dataset.tab === 'schedule') loadScheduleTab();
         if (btn.dataset.tab === 'signoff') loadSignoffTab();
+        if (btn.dataset.tab === 'other') loadOtherTab();
         window.scrollTo(0, 0);
       });
     });
@@ -730,10 +761,9 @@
         document.getElementById('qr-active').style.display = 'block';
         document.getElementById('qr-skill-name').textContent = `${skillName} · ${classDisplay}`;
         const url = `${location.origin}${location.pathname.replace(/instructor\.html$/, 'student.html')}?qr=${sessionId}`;
-        if (typeof QRCode !== 'undefined') {
-          try { document.getElementById('qr-img').src = await QRCode.toDataURL(url, { width: 320, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } }); }
-          catch (qe) { alert('QR 產生失敗：' + qe.message); }
-        }
+        document.getElementById('qr-url-text') && (document.getElementById('qr-url-text').textContent = url);
+        // 用 QR 圖片 API、不依賴 JS 函式庫（最穩定）
+        document.getElementById('qr-img').src = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=10&data=' + encodeURIComponent(url);
         startQrCountdown();
         qrSnapshotUnsub = onSnapshot(doc(db, 'qr_signoff_sessions', sessionId), (snap) => {
           if (!snap.exists()) return;
@@ -814,6 +844,102 @@
       } catch (e) {
         el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`;
       }
+    }
+
+    // ===== F16-E: 其他（公告 + 錯題本開關）=====
+    async function loadOtherTab() {
+      if (!selectedClassId) return;
+      // 預設下架日 +7
+      const d = document.getElementById('ann-expire');
+      if (d && !d.value) { const t = new Date(); t.setDate(t.getDate() + 7); d.value = t.toISOString().slice(0, 10); }
+      loadInstructorAnnouncements();
+      loadMistakeBookToggle();
+    }
+
+    document.getElementById('ann-publish').addEventListener('click', async () => {
+      const title = document.getElementById('ann-title').value.trim();
+      const content = document.getElementById('ann-content').value.trim();
+      const category = document.getElementById('ann-category').value;
+      const expStr = document.getElementById('ann-expire').value;
+      const msg = document.getElementById('ann-msg');
+      msg.innerHTML = '';
+      if (!selectedClassId) { msg.innerHTML = '<div class="err-msg">❌ 請先選班級</div>'; return; }
+      if (!title) { msg.innerHTML = '<div class="err-msg">❌ 請填標題</div>'; return; }
+      if (!content) { msg.innerHTML = '<div class="err-msg">❌ 請填內容</div>'; return; }
+      if (!expStr) { msg.innerHTML = '<div class="err-msg">❌ 請選下架日期</div>'; return; }
+      const expiresAt = new Date(expStr + 'T23:59:59');
+      if (expiresAt.getTime() < Date.now()) { msg.innerHTML = '<div class="err-msg">❌ 下架日不能早於今天</div>'; return; }
+      const btn = document.getElementById('ann-publish');
+      btn.disabled = true; btn.textContent = '⏳ 發布中...';
+      try {
+        await setDoc(doc(collection(db, 'announcements')), {
+          classIds: [selectedClassId], category, title, content,
+          publishedBy: currentInstructor.id, publishedByName: currentInstructor.name,
+          publishedAt: serverTimestamp(), expiresAt: Timestamp.fromDate(expiresAt),
+          isPublished: true, readBy: []
+        });
+        msg.innerHTML = '<div class="ok-msg">✅ 已發布</div>';
+        document.getElementById('ann-title').value = '';
+        document.getElementById('ann-content').value = '';
+        loadInstructorAnnouncements();
+        setTimeout(() => { msg.innerHTML = ''; }, 3000);
+      } catch (e) { msg.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '📢 發布公告'; }
+    });
+
+    async function loadInstructorAnnouncements() {
+      const el = document.getElementById('ann-list');
+      el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:10px">⏳ 載入中...</div>';
+      try {
+        const snap = await getDocs(query(collection(db, 'announcements'), where('classIds', 'array-contains', selectedClassId)));
+        const now = Date.now();
+        const items = [];
+        snap.forEach(d => { const data = d.data(); const exp = data.expiresAt?.seconds ? data.expiresAt.seconds * 1000 : 0; if (!(exp && exp < now)) items.push({ id: d.id, ...data }); });
+        items.sort((a, b) => (b.publishedAt?.seconds || 0) - (a.publishedAt?.seconds || 0));
+        if (items.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:10px">目前沒有公告</div>'; return; }
+        const emo = { '課程通知': '📘', '重大活動': '🎯', '重要提醒': '⚠️', '其他': '📌' };
+        el.innerHTML = items.map(a => `
+          <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <span style="font-size:12px;color:#6366f1;font-weight:600">${emo[a.category] || '📌'} ${a.category || ''}</span>
+              <button data-del-ann="${a.id}" style="background:#fef2f2;color:#dc2626;border:none;padding:3px 10px;border-radius:8px;cursor:pointer;font-size:12px">下架</button>
+            </div>
+            <div style="font-weight:700;color:#1e293b;font-size:15px">${a.title}</div>
+            <div style="font-size:13px;color:#475569;white-space:pre-wrap;margin-top:2px">${a.content}</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:6px">👁 已讀 ${(a.readBy || []).length} 人</div>
+          </div>`).join('');
+        el.querySelectorAll('button[data-del-ann]').forEach(b => b.addEventListener('click', async () => {
+          if (!confirm('下架這則公告？')) return;
+          try { await deleteDoc(doc(db, 'announcements', b.dataset.delAnn)); loadInstructorAnnouncements(); } catch (e) { alert('❌ ' + e.message); }
+        }));
+      } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+    }
+
+    async function loadMistakeBookToggle() {
+      const el = document.getElementById('mb-body');
+      const canEdit = !!(currentInstructor.permissions || {}).canToggleMistakeBook;
+      try {
+        const cDoc = await getDoc(doc(db, 'classes', selectedClassId));
+        const enabled = !!(cDoc.exists() && cDoc.data().settings && cDoc.data().settings.mistakeBook && cDoc.data().settings.mistakeBook.enabled);
+        el.innerHTML = `
+          ${canEdit ? '' : '<div style="background:#fff7ed;color:#9a3412;font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px">🔒 你沒有「開關錯題本」權限、僅供檢視</div>'}
+          <label style="display:flex;justify-content:space-between;align-items:center;font-size:14px">
+            <span>開放學員使用錯題本</span>
+            <input type="checkbox" id="mb-enabled" ${enabled ? 'checked' : ''} ${canEdit ? '' : 'disabled'} style="width:42px;height:24px;cursor:pointer">
+          </label>
+          ${canEdit ? '<button id="mb-save" style="width:100%;margin-top:14px;background:#3b82f6;color:white;border:none;padding:11px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:600">💾 儲存</button><div id="mb-msg"></div>' : ''}
+        `;
+        if (canEdit) document.getElementById('mb-save').addEventListener('click', async () => {
+          const btn = document.getElementById('mb-save'); const m = document.getElementById('mb-msg');
+          btn.disabled = true; btn.textContent = '⏳';
+          try {
+            await updateDoc(doc(db, 'classes', selectedClassId), { 'settings.mistakeBook': { enabled: document.getElementById('mb-enabled').checked }, settingsUpdatedAt: serverTimestamp(), settingsUpdatedBy: currentInstructor.name });
+            m.innerHTML = '<div style="color:#10b981;font-size:13px;margin-top:8px">✅ 已儲存</div>';
+            setTimeout(() => { m.innerHTML = ''; }, 3000);
+          } catch (e) { m.innerHTML = `<div style="color:#ef4444;font-size:13px;margin-top:8px">❌ ${e.message}</div>`; }
+          finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
+        });
+      } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
     }
   </script>
 </body>
