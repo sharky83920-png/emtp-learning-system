@@ -24,29 +24,31 @@
     .err-msg { background: #fef2f2; color: #991b1b; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 12px; }
     .ok-msg { background: #f0fdf4; color: #065f46; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 12px; }
     .info-msg { background: #eff6ff; color: #1e40af; padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-top: 14px; }
-    /* 後台 */
-    .dashboard { display: none; }
-    .header { background: white; padding: 14px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; position: sticky; top: 0; z-index: 50; }
-    .header h1 { font-size: 18px; }
-    .user-info { display: flex; align-items: center; gap: 12px; color: #64748b; font-size: 13px; }
-    .btn-logout { background: #e2e8f0; color: #475569; padding: 6px 14px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-family: inherit; }
-    .tab-bar { display: flex; background: white; border-bottom: 1px solid #e2e8f0; overflow-x: auto; padding: 0 10px; gap: 4px; position: sticky; top: 53px; z-index: 49; }
-    .tab-button { background: none; border: none; color: #64748b; padding: 13px 16px; font-size: 14px; cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; font-family: inherit; }
-    .tab-button:hover { color: #1e293b; }
-    .tab-button.active { color: #6366f1; border-bottom-color: #6366f1; font-weight: 700; }
-    main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+    /* 後台（手機 App 版型）*/
+    .dashboard { display: none; padding-bottom: 78px; }
+    .header { background: linear-gradient(135deg,#e11d48,#be123c); color: white; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 50; box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
+    .header h1 { font-size: 17px; font-weight: 700; }
+    .header-right { display: flex; align-items: center; gap: 8px; }
+    .header-right select { background: rgba(255,255,255,0.18); color: white; border: 1px solid rgba(255,255,255,0.4); border-radius: 8px; padding: 6px 10px; font-family: inherit; font-size: 14px; font-weight: 600; max-width: 150px; }
+    .header-right select option { color: #1e293b; }
+    .btn-logout { background: rgba(255,255,255,0.22); color: white; padding: 6px 12px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-family: inherit; white-space: nowrap; }
+    main { padding: 16px; max-width: 760px; margin: 0 auto; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
-    .card { background: white; border-radius: 14px; padding: 22px; margin-bottom: 18px; box-shadow: 0 2px 10px rgba(0,0,0,0.04); }
-    .card h2 { font-size: 17px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
-    .class-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
-    .class-bar select { padding: 9px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 14px; min-width: 180px; background: white; }
-    .placeholder { text-align: center; padding: 50px 20px; color: #94a3b8; }
-    .placeholder .icon { font-size: 56px; margin-bottom: 12px; }
-    .placeholder h3 { color: #475569; margin-bottom: 6px; font-size: 18px; }
-    .step-tag { display: inline-block; background: #eef2ff; color: #6366f1; padding: 4px 12px; border-radius: 12px; font-size: 12px; margin-top: 12px; font-weight: 600; }
-    .perm-pill { display:inline-block; background:#f0fdf4; color:#065f46; padding:2px 10px; border-radius:10px; font-size:12px; margin:2px; }
-    .perm-pill.off { background:#f1f5f9; color:#94a3b8; }
+    .card { background: white; border-radius: 14px; padding: 18px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    .card h2 { font-size: 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .placeholder { text-align: center; padding: 40px 20px; color: #94a3b8; }
+    .placeholder .icon { font-size: 50px; margin-bottom: 12px; }
+    .placeholder h3 { color: #475569; margin-bottom: 6px; font-size: 17px; }
+    .step-tag { display: inline-block; background: #fef2f2; color: #e11d48; padding: 4px 12px; border-radius: 12px; font-size: 12px; margin-top: 12px; font-weight: 600; }
+    .build-box { border: 2px dashed #cbd5e1; border-radius: 14px; padding: 34px 20px; text-align: center; color: #94a3b8; }
+    .build-box .icon { font-size: 42px; margin-bottom: 10px; }
+    .build-box h3 { color: #64748b; font-size: 16px; margin-bottom: 6px; }
+    /* 底部固定 tab（像學員端）*/
+    .bottom-tabs { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e2e8f0; display: flex; padding: 6px 4px; box-shadow: 0 -4px 20px rgba(0,0,0,0.06); z-index: 90; }
+    .bottom-tabs button { flex: 1; background: transparent; border: none; padding: 8px 4px; color: #94a3b8; font-size: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; font-family: inherit; border-radius: 8px; }
+    .bottom-tabs button .bt-icon { font-size: 21px; }
+    .bottom-tabs button.active { color: #e11d48; background: #fff1f2; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -87,35 +89,21 @@
   <!-- ===== 後台 ===== -->
   <div class="dashboard" id="dashboard">
     <header class="header">
-      <h1>🧑‍🏫 指導員後台</h1>
-      <div class="user-info">
-        <span id="user-name">—</span>
+      <h1>🧑‍🏫 指導員儀表板</h1>
+      <div class="header-right">
+        <select id="class-select"><option value="">載入中...</option></select>
         <button class="btn-logout" id="btn-logout">登出</button>
       </div>
     </header>
 
-    <nav class="tab-bar">
-      <button class="tab-button active" data-tab="schedule">📝 出題追蹤</button>
-      <button class="tab-button" data-tab="signoff">✅ 教官簽核</button>
-      <button class="tab-button" data-tab="corrections" id="tabbtn-corrections">⚠️ 題目勘誤</button>
-      <button class="tab-button" data-tab="scores" id="tabbtn-scores">📊 成績管理</button>
-    </nav>
-
     <main>
-      <div class="class-bar">
-        <span style="color:#64748b;font-size:13px">目前班級：</span>
-        <select id="class-select"><option value="">載入中...</option></select>
-        <span id="perm-summary" style="margin-left:auto;font-size:12px"></span>
-      </div>
-
       <section class="tab-content active" id="tab-schedule">
         <div class="card">
-          <h2>📝 出題追蹤</h2>
-          <div class="placeholder">
-            <div class="icon">📝</div>
-            <h3>出題排程 / 繳交追蹤 / 能量條</h3>
-            <p>看班級應繳出題日、學員繳交狀況、設定能量條目標。</p>
-            <div class="step-tag">F16 後續階段施工中</div>
+          <h2>📋 班級管理總覽</h2>
+          <div class="build-box">
+            <div class="icon">🚧</div>
+            <h3>新功能建置中</h3>
+            <p>出題排程 / 繳交追蹤 / 能量條設定<br>正在搬遷中、敬請期待。</p>
           </div>
         </div>
       </section>
@@ -123,11 +111,10 @@
       <section class="tab-content" id="tab-signoff">
         <div class="card">
           <h2>✅ 教官簽核</h2>
-          <div class="placeholder">
-            <div class="icon">✅</div>
-            <h3>QR 簽核 / Milestone 評量查詢 / 簽核進度</h3>
-            <p>產生 QR Code 現場簽核、查學員 Milestone、看全班簽核達標。</p>
-            <div class="step-tag">F16 後續階段施工中</div>
+          <div class="build-box">
+            <div class="icon">🚧</div>
+            <h3>新功能建置中</h3>
+            <p>QR 簽核 / Milestone 評量查詢 / 簽核進度</p>
           </div>
         </div>
       </section>
@@ -148,18 +135,24 @@
         </div>
       </section>
 
-      <section class="tab-content" id="tab-scores">
+      <section class="tab-content" id="tab-other">
         <div class="card">
-          <h2>📊 成績管理</h2>
-          <div class="placeholder">
-            <div class="icon">📊</div>
-            <h3>上傳 / 修正自己班的考試成績</h3>
-            <p>批次上傳成績、個別成績修正。</p>
-            <div class="step-tag">F16 後續階段施工中</div>
+          <h2>⚙️ 其他</h2>
+          <div class="build-box">
+            <div class="icon">🚧</div>
+            <h3>新功能建置中</h3>
+            <p>成績上傳 / 公告 / 班級設定<br>等功能將陸續放這裡。</p>
           </div>
         </div>
       </section>
     </main>
+
+    <nav class="bottom-tabs">
+      <button data-tab="schedule" class="active"><span class="bt-icon">📝</span><span>出題追蹤</span></button>
+      <button data-tab="signoff"><span class="bt-icon">✅</span><span>教官簽核</span></button>
+      <button data-tab="corrections" id="tabbtn-corrections"><span class="bt-icon">⚠️</span><span>題目勘誤</span></button>
+      <button data-tab="other"><span class="bt-icon">⚙️</span><span>其他</span></button>
+    </nav>
   </div>
 
   <!-- 勘誤處理 modal -->
@@ -336,19 +329,10 @@
     function enterDashboard() {
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('dashboard').style.display = 'block';
-      const classCount = (currentInstructor.managedClassIds || []).length;
-      document.getElementById('user-name').textContent = `${currentInstructor.name}（負責 ${classCount} 班）`;
 
-      // 權限閘門：題目勘誤 / 成績
+      // 權限閘門（不顯示權限清單給指導員、只決定 tab 顯示）
       const perms = currentInstructor.permissions || {};
       document.getElementById('tabbtn-corrections').style.display = perms.canHandleCorrections ? '' : 'none';
-      document.getElementById('tabbtn-scores').style.display = (perms.canUploadScores || perms.canEditScores) ? '' : 'none';
-
-      // 權限摘要
-      const pills = Object.keys(PERM_LABELS).map(k =>
-        `<span class="perm-pill${perms[k] ? '' : ' off'}">${perms[k] ? '✓' : '✕'} ${PERM_LABELS[k]}</span>`
-      ).join('');
-      document.getElementById('perm-summary').innerHTML = pills;
 
       // 班級下拉（只有自己負責的班）
       loadOwnClasses();
@@ -376,18 +360,19 @@
 
     document.getElementById('class-select').addEventListener('change', (e) => {
       selectedClassId = e.target.value;
-      const active = document.querySelector('.tab-button.active')?.dataset.tab;
+      const active = document.querySelector('.bottom-tabs button.active')?.dataset.tab;
       if (active === 'corrections') loadCorrections();
     });
 
-    // ===== Tab 切換 =====
-    document.querySelectorAll('.tab-button').forEach(btn => {
+    // ===== 底部 Tab 切換 =====
+    document.querySelectorAll('.bottom-tabs button').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.bottom-tabs button').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
         if (btn.dataset.tab === 'corrections') loadCorrections();
+        window.scrollTo(0, 0);
       });
     });
 
