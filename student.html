@@ -48,6 +48,11 @@
     .milestone-section { background: white; padding: 24px; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
     .milestone-section h3 { color: #1e293b; font-size: 18px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
     .radar-container { max-width: 380px; margin: 0 auto; position: relative; padding: 10px; }
+    .radar-toggle { display: flex; justify-content: center; margin-bottom: 8px; }
+    .radar-tab { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; padding: 7px 16px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; }
+    .radar-tab:first-child { border-radius: 8px 0 0 8px; }
+    .radar-tab:last-child { border-radius: 0 8px 8px 0; border-left: none; }
+    .radar-tab.active { background: #3b82f6; color: white; border-color: #3b82f6; }
     .radar-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; justify-content: center; }
     .btn-eval { background: #14b8a6; color: white; border: none; padding: 11px 22px; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
     .btn-eval:hover { background: #0d9488; }
@@ -127,6 +132,20 @@
       </div>
     </header>
 
+    <!-- 操作標準 PDF 彈窗 -->
+    <div id="skill-pdf-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1500;justify-content:center;align-items:center;padding:12px">
+      <div style="background:white;border-radius:14px;width:100%;max-width:760px;height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.4)">
+        <div style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:white;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div style="font-size:15px;font-weight:700;display:flex;align-items:center;gap:6px">📄 <span id="skill-pdf-title">操作標準</span></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <a id="skill-pdf-open" href="#" target="_blank" style="color:white;font-size:12px;text-decoration:underline">開新分頁</a>
+            <button id="skill-pdf-close" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer;line-height:1">×</button>
+          </div>
+        </div>
+        <iframe id="skill-pdf-iframe" src="about:blank" style="flex:1;border:none;background:#f1f5f9"></iframe>
+      </div>
+    </div>
+
     <!-- F14: 通知中心 modal（公告 + 通知） -->
     <div id="notice-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:1200;justify-content:center;align-items:flex-start;padding:20px;overflow-y:auto">
       <div style="background:white;border-radius:16px;max-width:520px;width:100%;margin-top:20px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden">
@@ -169,13 +188,18 @@
         <div class="class-info">🏫 班級：<span id="student-class">—</span> ・ 學號：<span id="student-no">—</span></div>
       </div>
 
-      <!-- F11-F: 6 角學科雷達（D1-D6） -->
+      <!-- F11-F: 6 角學科雷達（D1-D6、首刷/考試切換） -->
       <div class="milestone-section" data-tab="academic">
         <h3>📊 學科綜合雷達（國考範圍）</h3>
+        <div class="radar-toggle" id="radar-toggle" style="display:none">
+          <button class="radar-tab active" id="radar-tab-first" data-mode="first">✏️ 首刷雷達</button>
+          <button class="radar-tab" id="radar-tab-exam" data-mode="exam">📊 考試雷達</button>
+        </div>
+        <div id="radar-source-note" style="text-align:center;font-size:12px;color:#94a3b8;margin-bottom:4px">✏️ 來自刷題首刷</div>
         <div class="radar-container">
           <canvas id="academic-radar"></canvas>
         </div>
-        <div class="empty-hint" id="academic-radar-empty-hint">⏳ 尚無考試成績、上傳考試後雷達會自動更新</div>
+        <div class="empty-hint" id="academic-radar-empty-hint">⏳ 尚無資料、開始刷題或上傳考試成績後雷達會自動更新</div>
       </div>
 
       <!-- F12-B: 歷次考試成績落點趨勢河流圖 -->
@@ -457,12 +481,12 @@
         <h3>🎯 專項練習（不計分）</h3>
         <div style="color:#64748b;font-size:13px;margin-bottom:12px">針對單一維度抽題練習、不列入計分。</div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px" id="practice-buttons">
-          <button class="practice-btn" data-dim="D1" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D1 緊急救護系統</button>
-          <button class="practice-btn" data-dim="D2" style="background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D2 基礎醫學含評估</button>
-          <button class="practice-btn" data-dim="D3" style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D3 創傷</button>
-          <button class="practice-btn" data-dim="D4" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D4 非創傷</button>
-          <button class="practice-btn" data-dim="D5" style="background:#faf5ff;color:#7e22ce;border:1px solid #e9d5ff;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D5 特殊族群</button>
-          <button class="practice-btn" data-dim="D6" style="background:#f0fdfa;color:#0f766e;border:1px solid #99f6e4;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:left">D6 災難及特殊情境</button>
+          <button class="practice-btn" data-dim="D1" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:center">D1 緊急救護系統</button>
+          <button class="practice-btn" data-dim="D2" style="background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:center">D2 基礎醫學含評估</button>
+          <button class="practice-btn" data-dim="D3" style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:center">D3 創傷</button>
+          <button class="practice-btn" data-dim="D4" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:center">D4 非創傷</button>
+          <button class="practice-btn" data-dim="D5" style="background:#faf5ff;color:#7e22ce;border:1px solid #e9d5ff;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:center">D5 特殊族群</button>
+          <button class="practice-btn" data-dim="D6" style="background:#f0fdfa;color:#0f766e;border:1px solid #99f6e4;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;text-align:center">D6 災難及特殊情境</button>
         </div>
       </div>
 
@@ -1118,99 +1142,103 @@
       }
     }
 
-    // ===== F11-F: 6 角學科雷達（D1-D6） =====
+    // ===== F11-F: 6 角學科雷達（首刷雷達默認、考試雷達解鎖後可切換） =====
     let academicRadarChart = null;
+    const ACAD_DIMS = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'];
+    const ACAD_DIM_NAMES = ['緊急救護系統', '基礎醫學含評估', '創傷', '非創傷', '特殊族群', '災難及特殊情境'];
+    let _radarData = { first: { my: [], cls: [] }, exam: { my: [], cls: [] }, hasExam: false };
+    let _radarMode = 'first';
+
+    function dimAccuracy10(records) {
+      // records: [{dim, isCorrect}] → 各維度答對率 *10
+      const sums = {}; ACAD_DIMS.forEach(d => sums[d] = { c: 0, t: 0 });
+      records.forEach(r => { if (sums[r.dim]) { sums[r.dim].t++; if (r.isCorrect) sums[r.dim].c++; } });
+      return ACAD_DIMS.map(d => sums[d].t === 0 ? 0 : (sums[d].c / sums[d].t) * 10);
+    }
+
     async function loadAcademicRadar() {
       try {
         const ctx = document.getElementById('academic-radar');
         if (!ctx || !window.Chart) return;
-        const dims = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'];
-        const dimNames = ['緊急救護系統', '基礎醫學含評估', '創傷', '非創傷', '特殊族群', '災難及特殊情境'];
 
-        // 1. 讀此學員的考試成績（A1）
-        const myExamQuery = query(collection(db, 'exam_scores_radar'), where('studentId', '==', currentStudent.id));
-        const myExamSnap = await getDocs(myExamQuery);
-        const myExams = [];
-        myExamSnap.forEach(d => myExams.push(d.data()));
+        // === 首刷雷達（默認）：每題取最早一次作答 ===
+        const mySnap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', currentStudent.id)));
+        const myFirst = {};
+        mySnap.forEach(d => { const a = d.data(); if (!a.questionId || !a.dimension) return; const t = a.attemptedAt?.seconds || 0; if (!myFirst[a.questionId] || t < myFirst[a.questionId].t) myFirst[a.questionId] = { dim: a.dimension, isCorrect: a.isCorrect, t }; });
+        const myFirstScores = dimAccuracy10(Object.values(myFirst));
 
-        // 2. 讀同班所有學員的考試成績（算班級平均）
-        const classExamQuery = query(collection(db, 'exam_scores_radar'), where('classId', '==', currentStudent.classId));
-        const classExamSnap = await getDocs(classExamQuery);
-        const classExams = [];
-        classExamSnap.forEach(d => classExams.push(d.data()));
+        const clsSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', currentStudent.classId)));
+        const clsFirst = {};
+        clsSnap.forEach(d => { const a = d.data(); if (!a.questionId || !a.dimension) return; const k = a.studentId + '|' + a.questionId; const t = a.attemptedAt?.seconds || 0; if (!clsFirst[k] || t < clsFirst[k].t) clsFirst[k] = { dim: a.dimension, isCorrect: a.isCorrect, t }; });
+        const clsFirstScores = dimAccuracy10(Object.values(clsFirst));
 
-        // 3. 計算 6 維度平均（換算 0-10 分）
-        function calcDimScores(exams) {
-          const sums = {};
-          dims.forEach(d => sums[d] = { correct: 0, total: 0 });
-          exams.forEach(e => {
-            if (!e.dimensions) return;
-            dims.forEach(d => {
-              const s = e.dimensions[d];
-              if (s) { sums[d].correct += s.correct || 0; sums[d].total += s.total || 0; }
-            });
-          });
-          return dims.map(d => sums[d].total === 0 ? 0 : (sums[d].correct / sums[d].total) * 10);
+        // === 考試雷達：exam_scores_radar ===
+        const myExamSnap = await getDocs(query(collection(db, 'exam_scores_radar'), where('studentId', '==', currentStudent.id)));
+        const myExams = []; myExamSnap.forEach(d => myExams.push(d.data()));
+        const classExamSnap = await getDocs(query(collection(db, 'exam_scores_radar'), where('classId', '==', currentStudent.classId)));
+        const classExams = []; classExamSnap.forEach(d => classExams.push(d.data()));
+        function calcExamDimScores(exams) {
+          const sums = {}; ACAD_DIMS.forEach(d => sums[d] = { c: 0, t: 0 });
+          exams.forEach(e => { if (!e.dimensions) return; ACAD_DIMS.forEach(d => { const s = e.dimensions[d]; if (s) { sums[d].c += s.correct || 0; sums[d].t += s.total || 0; } }); });
+          return ACAD_DIMS.map(d => sums[d].t === 0 ? 0 : (sums[d].c / sums[d].t) * 10);
         }
-        const myScores = calcDimScores(myExams);
-        const classScores = calcDimScores(classExams);
+        const hasExam = classExams.length > 0;   // 班級已上傳 → 解鎖切換
 
-        // 4. 畫雷達
-        if (academicRadarChart) academicRadarChart.destroy();
-        academicRadarChart = new Chart(ctx, {
-          type: 'radar',
-          data: {
-            labels: dimNames,
-            datasets: [
-              {
-                label: '你的得分',
-                data: myScores,
-                backgroundColor: 'rgba(59, 130, 246, 0.25)',
-                borderColor: 'rgba(59, 130, 246, 1)',
-                pointBackgroundColor: 'rgba(59, 130, 246, 1)',
-                pointBorderColor: '#fff',
-                borderWidth: 2
-              },
-              {
-                label: '班級平均',
-                data: classScores,
-                backgroundColor: 'rgba(239, 68, 68, 0)',
-                borderColor: 'rgba(239, 68, 68, 0.7)',
-                borderDash: [6, 4],
-                pointBackgroundColor: 'rgba(239, 68, 68, 0.7)',
-                pointRadius: 3,
-                borderWidth: 1.5
-              }
-            ]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            scales: {
-              r: {
-                min: 0,
-                max: 10,
-                ticks: { stepSize: 2, color: '#94a3b8', backdropColor: 'transparent' },
-                pointLabels: { font: { size: 12, weight: '600' }, color: '#1e293b' },
-                grid: { color: 'rgba(148, 163, 184, 0.25)' },
-                angleLines: { color: 'rgba(148, 163, 184, 0.3)' }
-              }
-            },
-            plugins: {
-              legend: { position: 'bottom', labels: { padding: 12, font: { size: 12 } } }
-            }
-          }
-        });
+        _radarData = {
+          first: { my: myFirstScores, cls: clsFirstScores },
+          exam: { my: calcExamDimScores(myExams), cls: calcExamDimScores(classExams) },
+          hasExam
+        };
 
-        // 5. 顯示提示（如果都是 0）
-        const hint = document.getElementById('academic-radar-empty-hint');
-        if (hint) hint.style.display = myScores.every(s => s === 0) ? 'block' : 'none';
+        // 解鎖切換鈕
+        const toggle = document.getElementById('radar-toggle');
+        if (toggle) toggle.style.display = hasExam ? 'flex' : 'none';
+        if (!hasExam) _radarMode = 'first';   // 沒解鎖 → 強制首刷
+
+        drawAcademicRadar();
       } catch (e) {
         console.error('[F11-F] loadAcademicRadar error:', e);
         const hint = document.getElementById('academic-radar-empty-hint');
         if (hint) hint.innerHTML = `❌ 載入失敗：${e.message}`;
       }
     }
+
+    function drawAcademicRadar() {
+      const ctx = document.getElementById('academic-radar');
+      if (!ctx || !window.Chart) return;
+      const src = _radarMode === 'exam' ? _radarData.exam : _radarData.first;
+      const myScores = src.my, classScores = src.cls;
+
+      // 來源標示 + toggle active
+      const note = document.getElementById('radar-source-note');
+      if (note) note.textContent = _radarMode === 'exam' ? '📊 來自考試成績' : '✏️ 來自刷題首刷';
+      document.getElementById('radar-tab-first')?.classList.toggle('active', _radarMode === 'first');
+      document.getElementById('radar-tab-exam')?.classList.toggle('active', _radarMode === 'exam');
+
+      if (academicRadarChart) academicRadarChart.destroy();
+      academicRadarChart = new Chart(ctx, {
+        type: 'radar',
+        data: {
+          labels: ACAD_DIM_NAMES,
+          datasets: [
+            { label: '你的得分', data: myScores, backgroundColor: 'rgba(59,130,246,0.25)', borderColor: 'rgba(59,130,246,1)', pointBackgroundColor: 'rgba(59,130,246,1)', pointBorderColor: '#fff', borderWidth: 2 },
+            { label: '班級平均', data: classScores, backgroundColor: 'rgba(239,68,68,0)', borderColor: 'rgba(239,68,68,0.7)', borderDash: [6, 4], pointBackgroundColor: 'rgba(239,68,68,0.7)', pointRadius: 3, borderWidth: 1.5 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: true,
+          scales: { r: { min: 0, max: 10, ticks: { stepSize: 2, color: '#94a3b8', backdropColor: 'transparent' }, pointLabels: { font: { size: 12, weight: '600' }, color: '#1e293b' }, grid: { color: 'rgba(148,163,184,0.25)' }, angleLines: { color: 'rgba(148,163,184,0.3)' } } },
+          plugins: { legend: { position: 'bottom', labels: { padding: 12, font: { size: 12 } } } }
+        }
+      });
+
+      const hint = document.getElementById('academic-radar-empty-hint');
+      if (hint) hint.style.display = myScores.every(s => s === 0) ? 'block' : 'none';
+    }
+
+    // 雷達切換鈕（首刷 ⇄ 考試）
+    document.getElementById('radar-tab-first').addEventListener('click', () => { _radarMode = 'first'; drawAcademicRadar(); });
+    document.getElementById('radar-tab-exam').addEventListener('click', () => { _radarMode = 'exam'; drawAcademicRadar(); });
 
     // ===== F11-A + F11-C 共用：Milestone 資料 cache =====
     let radarChart = null;
@@ -1465,6 +1493,20 @@
     // 全域函式給 onclick 用
     window._openRiver = openMilestoneRiverModal;
 
+    // 操作標準 PDF 彈窗
+    window._openSkillPdf = function (url, name) {
+      document.getElementById('skill-pdf-title').textContent = name || '操作標準';
+      document.getElementById('skill-pdf-iframe').src = url;
+      document.getElementById('skill-pdf-open').href = url;
+      document.getElementById('skill-pdf-modal').style.display = 'flex';
+    };
+    function closeSkillPdf() {
+      document.getElementById('skill-pdf-modal').style.display = 'none';
+      document.getElementById('skill-pdf-iframe').src = 'about:blank';
+    }
+    document.getElementById('skill-pdf-close').addEventListener('click', closeSkillPdf);
+    document.getElementById('skill-pdf-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeSkillPdf(); });
+
     // F15+: 維度明細彈窗關閉
     document.getElementById('ms-detail-close').addEventListener('click', closeMsDetailModal);
     document.getElementById('ms-detail-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeMsDetailModal(); });
@@ -1629,9 +1671,12 @@
           const overflow = done > target ? done - target : 0;
           const pct = Math.min(100, (displayDone / target) * 100);
           const doneIcon = isDone ? '✅' : '';
+          const pdfBtn = skill.testStandardUrl
+            ? `<button onclick="window._openSkillPdf('${skill.testStandardUrl}','${(skill.name || '').replace(/'/g, "\\'")}')" style="background:#eff6ff;color:#2563eb;border:none;padding:3px 9px;border-radius:8px;cursor:pointer;font-size:11px;margin-left:6px;white-space:nowrap">📄 操作標準</button>`
+            : '';
           return `<div class="skill-item${isDone ? ' done' : ''}" style="display:block">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px">
-              <div class="skill-name">${skill.name} ${doneIcon}</div>
+              <div class="skill-name">${skill.name} ${doneIcon}${pdfBtn}</div>
               <div class="skill-progress" style="font-size:12px;color:#64748b;white-space:nowrap">完成 ${done} / ${target} 次${overflow > 0 ? ` <span style="color:#10b981;font-weight:700">+${overflow}</span>` : ''}</div>
             </div>
             <div class="rainbow-track">

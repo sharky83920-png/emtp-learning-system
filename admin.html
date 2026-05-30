@@ -718,7 +718,12 @@
         <div class="form-group"><label>ID（前綴 CS + 流水、如 CS001）</label><input type="text" id="ms-skill-id" maxlength="8" style="font-family:monospace;text-transform:uppercase;font-size:16px" placeholder="CS001"></div>
         <div class="form-group"><label>項目名稱</label><input type="text" id="ms-skill-name" placeholder="非外傷初評"></div>
         <div class="form-group"><label>目標完成次數（學員端綠方塊數）</label><input type="number" id="ms-skill-target" value="3" min="1" max="99"></div>
-        <div class="form-group"><label>考試標準（選填、多行、學員看得到）</label><textarea id="ms-skill-standard" rows="4" placeholder="例：須能在 5 分鐘內完成 SAMPLE、OPQRST、生命徵象..."></textarea></div>
+        <div class="form-group"><label>考試標準文字（選填、多行、學員看得到）</label><textarea id="ms-skill-standard" rows="3" placeholder="例：須能在 5 分鐘內完成 SAMPLE、OPQRST、生命徵象..."></textarea></div>
+        <div class="form-group">
+          <label>操作標準 PDF（選填、學員可點開看）</label>
+          <input type="file" id="ms-skill-pdf" accept="application/pdf">
+          <div id="ms-skill-pdf-status" style="font-size:12px;margin-top:6px"></div>
+        </div>
         <div class="form-group"><label>排序</label><input type="number" id="ms-skill-order" value="1" min="1"></div>
         <div class="form-group"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ms-skill-active" checked style="width:18px;height:18px"> 啟用</label></div>
         <div id="ms-skill-error"></div>
@@ -815,6 +820,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
     import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, where, writeBatch, onSnapshot, Timestamp, arrayUnion, increment, runTransaction } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -829,6 +835,7 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+    const storage = getStorage(app);
     const MASTER_EMAILS = ['sharky83920@gmail.com'];
    // 次要 Auth 實例：用來建學員帳號、不會把 Master 踢出
     const secondaryApp = initializeApp(firebaseConfig, 'secondary');
@@ -2503,6 +2510,8 @@
       skillEditingId = id;
       document.getElementById('ms-skill-modal-title').textContent = id ? '✏️ 編輯核心技術項目' : '➕ 新增核心技術項目';
       document.getElementById('ms-skill-error').innerHTML = '';
+      document.getElementById('ms-skill-pdf').value = '';
+      const pdfStatus = document.getElementById('ms-skill-pdf-status');
       if (id) {
         const s = skillsCache.find(x => x.id === id);
         document.getElementById('ms-skill-id').value = s.id;
@@ -2512,7 +2521,11 @@
         document.getElementById('ms-skill-standard').value = s.testStandard || '';
         document.getElementById('ms-skill-order').value = s.displayOrder || 1;
         document.getElementById('ms-skill-active').checked = s.isActive !== false;
+        pdfStatus.innerHTML = s.testStandardUrl
+          ? `<span style="color:#6ee7b7">✅ 已有 PDF</span> · <a href="${s.testStandardUrl}" target="_blank" style="color:#60a5fa">開啟</a>（上傳新檔會取代）`
+          : '<span style="color:#94a3b8">尚未上傳 PDF</span>';
       } else {
+        pdfStatus.innerHTML = '';
         const nextId = 'CS' + String(skillsCache.length + 1).padStart(3, '0');
         document.getElementById('ms-skill-id').value = nextId;
         document.getElementById('ms-skill-id').readOnly = false;
@@ -2546,9 +2559,19 @@
           const ex = await getDoc(doc(db, 'core_skills', id));
           if (ex.exists()) { errEl.innerHTML = `<div class="err-msg">❌ ID「${id}」已存在</div>`; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
         }
+        // 上傳操作標準 PDF（若有選檔）
+        const pdfFile = document.getElementById('ms-skill-pdf').files[0];
+        const extra = {};
+        if (pdfFile) {
+          if (pdfFile.type !== 'application/pdf') { errEl.innerHTML = '<div class="err-msg">❌ 檔案必須是 PDF</div>'; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+          btn.textContent = '⏳ 上傳 PDF...';
+          const r = storageRef(storage, `core_skill_standards/${id}.pdf`);
+          await uploadBytes(r, pdfFile, { contentType: 'application/pdf' });
+          extra.testStandardUrl = await getDownloadURL(r);
+        }
         await setDoc(doc(db, 'core_skills', id), {
           name, targetCount: target, testStandard: standard,
-          displayOrder: order, isActive: active,
+          displayOrder: order, isActive: active, ...extra,
           updatedAt: serverTimestamp(), updatedBy: currentUser.email,
           ...(skillEditingId ? {} : { createdAt: serverTimestamp(), createdBy: currentUser.email })
         }, { merge: true });
