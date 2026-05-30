@@ -534,6 +534,11 @@
         <div class="form-group"><label>Email（指導員登入用）</label><input type="email" id="instructor-email" placeholder="instructor@example.com"></div>
         <div class="form-group"><label>姓名</label><input type="text" id="instructor-name" placeholder="某教官"></div>
         <div class="form-group">
+          <label>身分證字號（當登入密碼、10 碼）</label>
+          <input type="text" id="instructor-idnumber" maxlength="10" style="font-family:monospace;text-transform:uppercase;font-size:16px" placeholder="A123456789">
+          <div id="instructor-auth-status" style="font-size:12px;margin-top:6px"></div>
+        </div>
+        <div class="form-group">
           <label>能管哪些班級（可多選）</label>
           <div id="instructor-classes-checkboxes" style="background:#0f172a;border:1px solid #334155;border-radius:6px;padding:12px;display:flex;flex-wrap:wrap;gap:8px;"></div>
         </div>
@@ -1301,6 +1306,10 @@
       });
       document.getElementById('instructor-permissions').innerHTML = permHtml;
 
+      const idEl = document.getElementById('instructor-idnumber');
+      const authStatusEl = document.getElementById('instructor-auth-status');
+      idEl.value = '';
+      authStatusEl.innerHTML = '';
       if (instructorId) {
         const insDoc = await getDoc(doc(db, 'instructors', instructorId));
         if (insDoc.exists()) {
@@ -1308,14 +1317,23 @@
           document.getElementById('instructor-email').value = ins.email || '';
           document.getElementById('instructor-email').readOnly = true;
           document.getElementById('instructor-name').value = ins.name || '';
+          idEl.value = ins.idNumber || '';
           (ins.managedClassIds || []).forEach(cid => { const cb = document.querySelector(`.instructor-class-cb[value="${cid}"]`); if (cb) cb.checked = true; });
           const perms = ins.permissions || {};
           Object.keys(perms).forEach(k => { const cb = document.querySelector(`.instructor-perm-cb[value="${k}"]`); if (cb && perms[k]) cb.checked = true; });
+          if (ins.hasAuthAccount) {
+            idEl.readOnly = true; idEl.style.opacity = '0.6';
+            authStatusEl.innerHTML = '<span style="color:#6ee7b7">✅ 已建立登入帳號</span>';
+          } else {
+            idEl.readOnly = false; idEl.style.opacity = '1';
+            authStatusEl.innerHTML = '<span style="color:#fcd34d">⚠️ 尚未建立登入帳號、填身分證後儲存即建立</span>';
+          }
         }
       } else {
         document.getElementById('instructor-email').value = '';
         document.getElementById('instructor-email').readOnly = false;
         document.getElementById('instructor-name').value = '';
+        idEl.readOnly = false; idEl.style.opacity = '1';
       }
       document.getElementById('instructor-modal-error').innerHTML = '';
       document.getElementById('instructor-modal').classList.add('active');
@@ -1329,6 +1347,7 @@
     document.getElementById('instructor-modal-save').addEventListener('click', async () => {
       const email = document.getElementById('instructor-email').value.trim().toLowerCase();
       const name = document.getElementById('instructor-name').value.trim();
+      const idNumber = document.getElementById('instructor-idnumber').value.trim().toUpperCase();
       const errEl = document.getElementById('instructor-modal-error');
       errEl.innerHTML = '';
       if (!email || !email.includes('@')) { errEl.innerHTML = '<div class="err-msg">❌ Email 格式錯誤</div>'; return; }
@@ -1341,21 +1360,48 @@
       const btn = document.getElementById('instructor-modal-save');
       btn.disabled = true; btn.textContent = '⏳';
       try {
+        let targetRef, existingData = {};
         if (currentEditingInstructor) {
-          await updateDoc(doc(db, 'instructors', currentEditingInstructor), {
+          targetRef = doc(db, 'instructors', currentEditingInstructor);
+          const snap = await getDoc(targetRef);
+          existingData = snap.exists() ? snap.data() : {};
+          await updateDoc(targetRef, {
             name, managedClassIds, permissions,
+            ...(idNumber ? { idNumber } : {}),
             updatedAt: serverTimestamp(), updatedBy: currentUser.email
           });
         } else {
           const q = query(collection(db, 'instructors'), where('email', '==', email));
           const existing = await getDocs(q);
           if (!existing.empty) { errEl.innerHTML = '<div class="err-msg">❌ 此 Email 已有指導員資料</div>'; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
-          const newRef = doc(collection(db, 'instructors'));
-          await setDoc(newRef, {
-            email, name, managedClassIds, permissions,
-            isActive: true, archivedAt: null,
+          targetRef = doc(collection(db, 'instructors'));
+          await setDoc(targetRef, {
+            email, name, managedClassIds, permissions, idNumber: idNumber || null,
+            isActive: true, archivedAt: null, hasAuthAccount: false,
             createdAt: serverTimestamp(), createdBy: currentUser.email
           });
+        }
+
+        // 建立登入帳號（尚未建立 + 有填身分證）
+        if (!existingData.hasAuthAccount && idNumber) {
+          if (!/^[A-Z]\d{9}$/.test(idNumber)) {
+            errEl.innerHTML = '<div class="warn-msg">⚠️ 資料已存、但身分證格式錯誤、未建立登入帳號（應為 1 英文 + 9 數字）</div>';
+          } else {
+            try {
+              const cred = await createUserWithEmailAndPassword(secondaryAuth, email, idNumber);
+              await updateDoc(targetRef, { hasAuthAccount: true, authUid: cred.user.uid, authAccountCreatedAt: serverTimestamp(), authAccountCreatedBy: currentUser.email });
+              await signOut(secondaryAuth);
+              alert(`✅ 指導員 + 登入帳號建立成功！\n\n姓名：${name}\nEmail：${email}\n初始密碼：${idNumber}\n\n指導員登入：\nhttps://sharky83920-png.github.io/emtp-learning-system/instructor.html`);
+            } catch (authErr) {
+              let m = authErr.message;
+              if (authErr.code === 'auth/email-already-in-use') m = '此 Email 已有 Firebase 帳號（可能之前建過）';
+              else if (authErr.code === 'auth/weak-password') m = '密碼太短（至少 6 字元）';
+              errEl.innerHTML = `<div class="warn-msg">⚠️ 資料已存、但登入帳號建立失敗：${m}</div>`;
+              btn.disabled = false; btn.textContent = '💾 儲存';
+              loadInstructors();
+              return;
+            }
+          }
         }
         document.getElementById('instructor-modal').classList.remove('active');
         loadInstructors(); loadOverviewStats();

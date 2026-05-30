@@ -9,7 +9,8 @@
     html, body { font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; background: #f1f5f9; color: #1e293b; min-height: 100vh; line-height: 1.6; }
     .login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
     .login-card { background: white; padding: 36px; border-radius: 16px; width: 100%; max-width: 440px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
-    .login-card h1 { color: #1e293b; font-size: 24px; margin-bottom: 8px; text-align: center; }
+    .login-logo { text-align: center; font-size: 46px; color: #3b82f6; line-height: 1; margin-bottom: 8px; font-weight: bold; }
+    .login-card h1 { color: #1e293b; font-size: 23px; margin-bottom: 6px; text-align: center; }
     .login-card .subtitle { color: #64748b; font-size: 13px; margin-bottom: 24px; text-align: center; }
     .form-group { margin-bottom: 14px; }
     .form-group label { display: block; color: #475569; font-size: 13px; margin-bottom: 6px; font-weight: 500; }
@@ -83,24 +84,33 @@
 
   <div class="login-screen" id="login-screen">
     <div class="login-card">
-      <h1>📚 EMTP 學員系統</h1>
-      <p class="subtitle">選班級 + 姓名、輸入身分證登入</p>
+      <h1>EMTP 學習歷程</h1>
+      <p class="subtitle">請登入您的專屬帳號</p>
 
-      <div class="form-group">
-        <label>1. 班級</label>
-        <select id="login-class" disabled><option value="">⏳ 載入中...</option></select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>所屬單位</label>
+          <select id="login-class" disabled><option value="">⏳ 載入中...</option></select>
+        </div>
+        <div class="form-group">
+          <label>身分</label>
+          <select id="login-role">
+            <option value="student" selected>🎓 學員</option>
+            <option value="instructor">🧑‍🏫 指導員/教官</option>
+          </select>
+        </div>
       </div>
       <div class="form-group">
-        <label>2. 姓名</label>
-        <select id="login-name" disabled><option value="">請先選班級</option></select>
+        <label>姓名</label>
+        <select id="login-name" disabled><option value="">請先選所屬單位</option></select>
       </div>
       <div class="form-group">
-        <label>3. 身分證字號</label>
-        <input type="text" id="login-id" maxlength="10" placeholder="A123456789" style="text-transform:uppercase;font-family:monospace">
+        <label>登入密碼</label>
+        <input type="password" id="login-id" maxlength="10" placeholder="請輸入密碼" style="text-transform:uppercase;font-family:monospace">
       </div>
-      <button class="btn-primary" id="btn-login">登入</button>
+      <button class="btn-primary" id="btn-login">➜ 登入系統</button>
       <div id="login-error"></div>
-      <div class="info-msg">💡 第一次使用：密碼 = 身分證字號</div>
+      <div class="info-msg">💡 初始密碼 = 身分證字號</div>
     </div>
   </div>
 
@@ -555,6 +565,14 @@
         sel.innerHTML = `<option value="">❌ 載入失敗</option>`;
       }
     }
+
+    // 身分切換：選指導員/教官 → 前往指導員端
+    document.getElementById('login-role').addEventListener('change', (e) => {
+      if (e.target.value === 'instructor') {
+        if (confirm('要前往指導員/教官端登入嗎？')) { window.location.href = 'instructor.html'; }
+        else { e.target.value = 'student'; }
+      }
+    });
 
     document.getElementById('login-class').addEventListener('change', async () => {
       const classId = document.getElementById('login-class').value;

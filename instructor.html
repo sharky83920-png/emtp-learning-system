@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🧑‍🏫 EMTP 指導員後台</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; background: #f1f5f9; color: #1e293b; min-height: 100vh; line-height: 1.6; }
+    /* 登入 */
+    .login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+    .login-screen { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .login-card { background: white; padding: 36px 32px; border-radius: 16px; width: 100%; max-width: 440px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+    .login-logo { text-align: center; font-size: 46px; color: #3b82f6; line-height: 1; margin-bottom: 8px; font-weight: bold; }
+    .login-card h1 { font-size: 23px; margin-bottom: 6px; text-align: center; }
+    .login-card .subtitle { color: #64748b; font-size: 13px; margin-bottom: 24px; text-align: center; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; color: #475569; font-size: 13px; margin-bottom: 6px; font-weight: 600; }
+    .form-group input, .form-group select { width: 100%; padding: 11px 14px; background: #f8fafc; border: 1px solid #cbd5e1; color: #1e293b; border-radius: 8px; font-family: inherit; font-size: 15px; }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: #6366f1; background: white; }
+    .form-group select:disabled { background: #e2e8f0; color: #94a3b8; }
+    .btn-primary { width: 100%; padding: 13px; font-size: 15px; font-weight: 700; background: linear-gradient(135deg,#6366f1,#8b5cf6); color: white; border: none; border-radius: 10px; cursor: pointer; }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .err-msg { background: #fef2f2; color: #991b1b; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 12px; }
+    .ok-msg { background: #f0fdf4; color: #065f46; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 12px; }
+    .info-msg { background: #eff6ff; color: #1e40af; padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-top: 14px; }
+    /* 後台 */
+    .dashboard { display: none; }
+    .header { background: white; padding: 14px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; position: sticky; top: 0; z-index: 50; }
+    .header h1 { font-size: 18px; }
+    .user-info { display: flex; align-items: center; gap: 12px; color: #64748b; font-size: 13px; }
+    .btn-logout { background: #e2e8f0; color: #475569; padding: 6px 14px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-family: inherit; }
+    .tab-bar { display: flex; background: white; border-bottom: 1px solid #e2e8f0; overflow-x: auto; padding: 0 10px; gap: 4px; position: sticky; top: 53px; z-index: 49; }
+    .tab-button { background: none; border: none; color: #64748b; padding: 13px 16px; font-size: 14px; cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; font-family: inherit; }
+    .tab-button:hover { color: #1e293b; }
+    .tab-button.active { color: #6366f1; border-bottom-color: #6366f1; font-weight: 700; }
+    main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .card { background: white; border-radius: 14px; padding: 22px; margin-bottom: 18px; box-shadow: 0 2px 10px rgba(0,0,0,0.04); }
+    .card h2 { font-size: 17px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
+    .class-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+    .class-bar select { padding: 9px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 14px; min-width: 180px; background: white; }
+    .placeholder { text-align: center; padding: 50px 20px; color: #94a3b8; }
+    .placeholder .icon { font-size: 56px; margin-bottom: 12px; }
+    .placeholder h3 { color: #475569; margin-bottom: 6px; font-size: 18px; }
+    .step-tag { display: inline-block; background: #eef2ff; color: #6366f1; padding: 4px 12px; border-radius: 12px; font-size: 12px; margin-top: 12px; font-weight: 600; }
+    .perm-pill { display:inline-block; background:#f0fdf4; color:#065f46; padding:2px 10px; border-radius:10px; font-size:12px; margin:2px; }
+    .perm-pill.off { background:#f1f5f9; color:#94a3b8; }
+  </style>
+</head>
+<body>
+
+  <!-- ===== 登入 ===== -->
+  <div class="login-screen" id="login-screen">
+    <div class="login-card">
+      <h1>EMTP 學習歷程</h1>
+      <p class="subtitle">請登入您的專屬帳號</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>所屬單位</label>
+          <select id="login-class" disabled><option value="">⏳ 載入中...</option></select>
+        </div>
+        <div class="form-group">
+          <label>身分</label>
+          <select id="login-role">
+            <option value="instructor" selected>🧑‍🏫 指導員/教官</option>
+            <option value="student">🎓 學員</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>姓名</label>
+        <select id="login-name" disabled><option value="">請先選所屬單位</option></select>
+      </div>
+      <div class="form-group">
+        <label>登入密碼</label>
+        <input type="password" id="login-pw" placeholder="請輸入密碼" style="font-family:monospace">
+      </div>
+      <button class="btn-primary" id="btn-login">➜ 登入系統</button>
+      <div id="login-error"></div>
+      <div class="info-msg">💡 初始密碼 = 身分證字號（由管理員建立帳號）</div>
+    </div>
+  </div>
+
+  <!-- ===== 後台 ===== -->
+  <div class="dashboard" id="dashboard">
+    <header class="header">
+      <h1>🧑‍🏫 指導員後台</h1>
+      <div class="user-info">
+        <span id="user-name">—</span>
+        <button class="btn-logout" id="btn-logout">登出</button>
+      </div>
+    </header>
+
+    <nav class="tab-bar">
+      <button class="tab-button active" data-tab="schedule">📝 出題追蹤</button>
+      <button class="tab-button" data-tab="signoff">✅ 教官簽核</button>
+      <button class="tab-button" data-tab="corrections" id="tabbtn-corrections">⚠️ 題目勘誤</button>
+      <button class="tab-button" data-tab="scores" id="tabbtn-scores">📊 成績管理</button>
+    </nav>
+
+    <main>
+      <div class="class-bar">
+        <span style="color:#64748b;font-size:13px">目前班級：</span>
+        <select id="class-select"><option value="">載入中...</option></select>
+        <span id="perm-summary" style="margin-left:auto;font-size:12px"></span>
+      </div>
+
+      <section class="tab-content active" id="tab-schedule">
+        <div class="card">
+          <h2>📝 出題追蹤</h2>
+          <div class="placeholder">
+            <div class="icon">📝</div>
+            <h3>出題排程 / 繳交追蹤 / 能量條</h3>
+            <p>看班級應繳出題日、學員繳交狀況、設定能量條目標。</p>
+            <div class="step-tag">F16 後續階段施工中</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-signoff">
+        <div class="card">
+          <h2>✅ 教官簽核</h2>
+          <div class="placeholder">
+            <div class="icon">✅</div>
+            <h3>QR 簽核 / Milestone 評量查詢 / 簽核進度</h3>
+            <p>產生 QR Code 現場簽核、查學員 Milestone、看全班簽核達標。</p>
+            <div class="step-tag">F16 後續階段施工中</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-corrections">
+        <div class="card">
+          <h2>⚠️ 題目勘誤處理</h2>
+          <div class="placeholder">
+            <div class="icon">⚠️</div>
+            <h3>處理學員回報的題目勘誤</h3>
+            <p>看待處理勘誤、改題 / 隱藏 / 回覆學員（回覆會通知學員）。</p>
+            <div class="step-tag">F16 後續階段施工中</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-scores">
+        <div class="card">
+          <h2>📊 成績管理</h2>
+          <div class="placeholder">
+            <div class="icon">📊</div>
+            <h3>上傳 / 修正自己班的考試成績</h3>
+            <p>批次上傳成績、個別成績修正。</p>
+            <div class="step-tag">F16 後續階段施工中</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+    import { getFirestore, collection, query, where, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
+      authDomain: "emtp-learning-system.firebaseapp.com",
+      projectId: "emtp-learning-system",
+      storageBucket: "emtp-learning-system.firebasestorage.app",
+      messagingSenderId: "1057617665185",
+      appId: "1:1057617665185:web:2d1902083fa21af0e7a4e0",
+      measurementId: "G-HQRYX3NJ78"
+    };
+    const app = initializeApp(firebaseConfig, 'instructor-app');
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    let currentInstructor = null;   // { id, email, name, managedClassIds, permissions }
+    let selectedClassId = null;
+
+    // 權限標籤對照
+    const PERM_LABELS = {
+      canEditEnergyBar: '修改能量條',
+      canToggleMistakeBook: '開關錯題本',
+      canEditSourceAuth: '設定題庫權限',
+      canEditChapterAuth: '設定章節權限',
+      canHandleCorrections: '處理勘誤',
+      canUploadScores: '上傳成績',
+      canEditScores: '個人成績修正',
+      canViewMistakeBook: '查看錯題本'
+    };
+
+    // ===== 登入 UI =====
+    function showLogin(errMsg) {
+      document.getElementById('login-screen').style.display = 'flex';
+      document.getElementById('dashboard').style.display = 'none';
+      if (errMsg) document.getElementById('login-error').innerHTML = `<div class="err-msg">❌ ${errMsg}</div>`;
+      loadLoginClasses();
+    }
+
+    // 身分切換：選學員 → 導去學員端
+    document.getElementById('login-role').addEventListener('change', (e) => {
+      if (e.target.value === 'student') {
+        if (confirm('要前往學員端登入嗎？')) { window.location.href = 'student.html'; }
+        else { e.target.value = 'instructor'; }
+      }
+    });
+
+    async function loadLoginClasses() {
+      const sel = document.getElementById('login-class');
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">⏳ 載入中...</option>';
+      try {
+        const snap = await getDocs(collection(db, 'classes'));
+        const classes = [];
+        snap.forEach(d => { const data = d.data(); if (data.isActive !== false) classes.push({ id: d.id, ...data }); });
+        classes.sort((a, b) => (b.year || 0) - (a.year || 0));
+        let html = '<option value="">請選班級...</option>';
+        classes.forEach(c => { html += `<option value="${c.id}">${c.displayName || c.id}</option>`; });
+        sel.innerHTML = html;
+        sel.disabled = false;
+      } catch (e) {
+        sel.innerHTML = '<option value="">❌ 載入失敗</option>';
+      }
+    }
+
+    // 選班級 → 載入該班指導員（managedClassIds 含此班、且有登入帳號）
+    document.getElementById('login-class').addEventListener('change', async () => {
+      const classId = document.getElementById('login-class').value;
+      const sel = document.getElementById('login-name');
+      if (!classId) { sel.innerHTML = '<option value="">請先選班級</option>'; sel.disabled = true; return; }
+      sel.innerHTML = '<option value="">⏳ 載入指導員...</option>';
+      sel.disabled = true;
+      try {
+        const q = query(collection(db, 'instructors'), where('managedClassIds', 'array-contains', classId));
+        const snap = await getDocs(q);
+        const list = [];
+        snap.forEach(d => { const data = d.data(); if (data.isActive !== false && data.hasAuthAccount) list.push({ id: d.id, ...data }); });
+        list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        if (list.length === 0) { sel.innerHTML = '<option value="">⚠️ 此班沒有可登入的指導員</option>'; return; }
+        let html = '<option value="">請選姓名...</option>';
+        list.forEach(i => { html += `<option value="${i.email}">${i.name}</option>`; });
+        sel.innerHTML = html;
+        sel.disabled = false;
+      } catch (e) {
+        sel.innerHTML = `<option value="">❌ ${e.message}</option>`;
+      }
+    });
+
+    document.getElementById('btn-login').addEventListener('click', doLogin);
+    document.getElementById('login-pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+
+    async function doLogin() {
+      const email = document.getElementById('login-name').value;
+      const pw = document.getElementById('login-pw').value.trim().toUpperCase();
+      const errEl = document.getElementById('login-error');
+      errEl.innerHTML = '';
+      if (!document.getElementById('login-class').value) { errEl.innerHTML = '<div class="err-msg">❌ 請選班級</div>'; return; }
+      if (!email) { errEl.innerHTML = '<div class="err-msg">❌ 請選姓名</div>'; return; }
+      if (!pw) { errEl.innerHTML = '<div class="err-msg">❌ 請輸入密碼</div>'; return; }
+      const btn = document.getElementById('btn-login');
+      btn.disabled = true; btn.textContent = '⏳ 登入中...';
+      try {
+        await signInWithEmailAndPassword(auth, email, pw);
+        // onAuthStateChanged 接手
+      } catch (e) {
+        let msg = e.code === 'auth/invalid-credential' ? '帳號或密碼錯誤' : e.message;
+        errEl.innerHTML = `<div class="err-msg">❌ ${msg}</div>`;
+        btn.disabled = false; btn.textContent = '登入';
+      }
+    }
+
+    // ===== Auth 狀態 =====
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) { currentInstructor = null; showLogin(); return; }
+      try {
+        const q = query(collection(db, 'instructors'), where('email', '==', user.email));
+        const snap = await getDocs(q);
+        if (snap.empty) { await signOut(auth); showLogin('此帳號不是指導員'); return; }
+        const d = snap.docs[0];
+        const data = d.data();
+        if (data.isActive === false) { await signOut(auth); showLogin('此指導員帳號已停用'); return; }
+        currentInstructor = { id: d.id, ...data };
+        enterDashboard();
+      } catch (e) {
+        await signOut(auth); showLogin('驗證失敗：' + e.message);
+      }
+    });
+
+    document.getElementById('btn-logout').addEventListener('click', () => { if (confirm('確定登出？')) signOut(auth); });
+
+    // ===== 進入後台 =====
+    function enterDashboard() {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+      const classCount = (currentInstructor.managedClassIds || []).length;
+      document.getElementById('user-name').textContent = `${currentInstructor.name}（負責 ${classCount} 班）`;
+
+      // 權限閘門：題目勘誤 / 成績
+      const perms = currentInstructor.permissions || {};
+      document.getElementById('tabbtn-corrections').style.display = perms.canHandleCorrections ? '' : 'none';
+      document.getElementById('tabbtn-scores').style.display = (perms.canUploadScores || perms.canEditScores) ? '' : 'none';
+
+      // 權限摘要
+      const pills = Object.keys(PERM_LABELS).map(k =>
+        `<span class="perm-pill${perms[k] ? '' : ' off'}">${perms[k] ? '✓' : '✕'} ${PERM_LABELS[k]}</span>`
+      ).join('');
+      document.getElementById('perm-summary').innerHTML = pills;
+
+      // 班級下拉（只有自己負責的班）
+      loadOwnClasses();
+    }
+
+    async function loadOwnClasses() {
+      const sel = document.getElementById('class-select');
+      const ids = currentInstructor.managedClassIds || [];
+      if (ids.length === 0) { sel.innerHTML = '<option value="">（未指派班級）</option>'; return; }
+      try {
+        const items = [];
+        for (const cid of ids) {
+          const cDoc = await getDoc(doc(db, 'classes', cid));
+          if (cDoc.exists()) items.push({ id: cid, ...cDoc.data() });
+          else items.push({ id: cid, displayName: cid });
+        }
+        items.sort((a, b) => (b.year || 0) - (a.year || 0));
+        sel.innerHTML = items.map(c => `<option value="${c.id}">${c.displayName || c.id}</option>`).join('');
+        selectedClassId = items[0].id;
+        sel.value = selectedClassId;
+      } catch (e) {
+        sel.innerHTML = '<option value="">❌ 載入失敗</option>';
+      }
+    }
+
+    document.getElementById('class-select').addEventListener('change', (e) => {
+      selectedClassId = e.target.value;
+      // 之後各 tab 會依 selectedClassId 重新載入
+    });
+
+    // ===== Tab 切換 =====
+    document.querySelectorAll('.tab-button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>
