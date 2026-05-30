@@ -3665,15 +3665,20 @@
       el.querySelectorAll('button[data-qm-dl]').forEach(b => b.addEventListener('click', () => downloadOneOriginal(b.dataset.qmDl)));
     }
 
-    // F13-I: 下載原始版本
+    // F13-I: 下載原始版本（含校正歷史）
     function downloadOneOriginal(id) {
       const q = qmCache.find(x => x.id === id);
       if (!q) return;
-      const orig = q.originalVersion || { note: '此題目沒有原始版本快照（早於 F13-I 上傳）', currentSnapshot: q };
-      const blob = new Blob([JSON.stringify(orig, null, 2)], { type: 'application/json' });
+      const out = {
+        id: q.id,
+        original: q.originalVersion || { note: '此題目沒有原始版本快照（早於 F13-I）' },
+        editHistory: q.editHistory || [],   // 每次勘誤校正前的版本
+        current: q
+      };
+      const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `${id}_original.json`;
+      a.download = `${id}_原始與校正歷史.json`;
       a.click();
     }
     function exportAllQuestions() {
@@ -3681,13 +3686,14 @@
       const exportData = qmCache.map(q => ({
         id: q.id,
         original: q.originalVersion || null,
+        editHistory: q.editHistory || [],   // 每次勘誤校正前的版本
         current: q
       }));
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       const dateStr = new Date().toISOString().slice(0, 10);
-      a.download = `questions_full_export_${dateStr}.json`;
+      a.download = `題庫_原始與校正歷史_${dateStr}.json`;
       a.click();
     }
 

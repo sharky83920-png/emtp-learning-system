@@ -300,7 +300,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, query, where, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp, onSnapshot, Timestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, query, where, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp, onSnapshot, Timestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -593,6 +593,8 @@
         if (resolution === 'fixed') {
           const opts = {};
           document.querySelectorAll('.corr-opt').forEach(inp => { opts[inp.dataset.k] = { text: inp.value }; });
+          // 校正前先把舊版存進 editHistory（保留每次變更）
+          const pre = corrQuestions[r.questionId] || {};
           const qUpdate = {
             questionText: document.getElementById('corr-qtext').value,
             options: opts,
@@ -600,7 +602,16 @@
             'source.page': document.getElementById('corr-page').value,
             isVisible: !hide,
             updatedAt: serverTimestamp(),
-            lastEditedBy: currentInstructor.email
+            lastEditedBy: currentInstructor.email,
+            editHistory: arrayUnion({
+              questionText: pre.questionText || '',
+              options: pre.options || {},
+              correctAnswer: pre.correctAnswer || '',
+              source: pre.source || {},
+              editedBy: currentInstructor.name,
+              editedAt: Timestamp.now(),
+              reason: '勘誤校正：' + (reply || '')
+            })
           };
           await updateDoc(doc(db, 'questions', r.questionId), qUpdate);
         } else if (hide) {
