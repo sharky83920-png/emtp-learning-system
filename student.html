@@ -203,7 +203,7 @@
       </div>
 
       <!-- F12-B: 歷次考試成績落點趨勢河流圖 -->
-      <div class="milestone-section" data-tab="academic">
+      <div class="milestone-section" data-tab="academic" data-feat="scoreriver">
         <h3>🌊 歷次考試成績落點趨勢</h3>
         <div style="position:relative;height:280px">
           <canvas id="score-river-chart"></canvas>
@@ -2183,6 +2183,7 @@
       setHide('coreskill', off('coreSkill'));
       setHide('quiz', off('quiz'));
       setHide('internship', off('internship'));
+      setHide('scoreriver', off('scoreRiver'));
       // 底部分頁：技術簽核（Milestone＋核心技術都關才整個藏）
       const skillsBtn = document.querySelector('.bottom-tabs button[data-bottom-tab="skills"]');
       if (skillsBtn) skillsBtn.style.display = (off('milestone') && off('coreSkill')) ? 'none' : '';
