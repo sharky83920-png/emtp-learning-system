@@ -212,13 +212,9 @@
           <div id="mb-body"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
         </div>
 
-        <div class="card">
+        <div class="card" id="score-card">
           <h2>📊 成績上傳</h2>
-          <div class="build-box">
-            <div class="icon">🚧</div>
-            <h3>建置中</h3>
-            <p>批次上傳 / 個別修正自己班的考試成績<br>下一階段開放。</p>
-          </div>
+          <div id="score-body"></div>
         </div>
       </section>
     </main>
@@ -847,13 +843,22 @@
     }
 
     // ===== F16-E: 其他（公告 + 錯題本開關）=====
+    let editingAnnId = null;
+    let instructorAnnCache = [];
+
     async function loadOtherTab() {
       if (!selectedClassId) return;
+      const perms = currentInstructor.permissions || {};
       // 預設下架日 +7
       const d = document.getElementById('ann-expire');
       if (d && !d.value) { const t = new Date(); t.setDate(t.getDate() + 7); d.value = t.toISOString().slice(0, 10); }
       loadInstructorAnnouncements();
-      loadMistakeBookToggle();
+      // 沒「開關錯題本」權限 → 整張卡隱藏
+      const mbCard = document.getElementById('mb-card');
+      if (perms.canToggleMistakeBook) { mbCard.style.display = ''; loadMistakeBookToggle(); }
+      else { mbCard.style.display = 'none'; }
+      // 成績上傳（依權限）
+      loadScoreUpload(perms);
     }
 
     document.getElementById('ann-publish').addEventListener('click', async () => {
@@ -870,22 +875,52 @@
       const expiresAt = new Date(expStr + 'T23:59:59');
       if (expiresAt.getTime() < Date.now()) { msg.innerHTML = '<div class="err-msg">❌ 下架日不能早於今天</div>'; return; }
       const btn = document.getElementById('ann-publish');
-      btn.disabled = true; btn.textContent = '⏳ 發布中...';
+      btn.disabled = true; btn.textContent = '⏳ 處理中...';
       try {
-        await setDoc(doc(collection(db, 'announcements')), {
-          classIds: [selectedClassId], category, title, content,
-          publishedBy: currentInstructor.id, publishedByName: currentInstructor.name,
-          publishedAt: serverTimestamp(), expiresAt: Timestamp.fromDate(expiresAt),
-          isPublished: true, readBy: []
-        });
-        msg.innerHTML = '<div class="ok-msg">✅ 已發布</div>';
-        document.getElementById('ann-title').value = '';
-        document.getElementById('ann-content').value = '';
+        if (editingAnnId) {
+          // 修改：清空 readBy → 學員重新看到（登入會再彈出）
+          await updateDoc(doc(db, 'announcements', editingAnnId), {
+            category, title, content, expiresAt: Timestamp.fromDate(expiresAt),
+            readBy: [], isPublished: true,
+            updatedAt: serverTimestamp(), updatedByName: currentInstructor.name
+          });
+          msg.innerHTML = '<div class="ok-msg">✅ 已更新（學員會重新收到通知）</div>';
+        } else {
+          await setDoc(doc(collection(db, 'announcements')), {
+            classIds: [selectedClassId], category, title, content,
+            publishedBy: currentInstructor.id, publishedByName: currentInstructor.name,
+            publishedAt: serverTimestamp(), expiresAt: Timestamp.fromDate(expiresAt),
+            isPublished: true, readBy: []
+          });
+          msg.innerHTML = '<div class="ok-msg">✅ 已發布</div>';
+        }
+        resetAnnForm();
         loadInstructorAnnouncements();
-        setTimeout(() => { msg.innerHTML = ''; }, 3000);
+        setTimeout(() => { const m = document.getElementById('ann-msg'); if (m && m.querySelector('.ok-msg')) m.innerHTML = ''; }, 3000);
       } catch (e) { msg.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
-      finally { btn.disabled = false; btn.textContent = '📢 發布公告'; }
+      finally { btn.disabled = false; btn.textContent = editingAnnId ? '💾 更新公告' : '📢 發布公告'; }
     });
+
+    function resetAnnForm() {
+      editingAnnId = null;
+      document.getElementById('ann-title').value = '';
+      document.getElementById('ann-content').value = '';
+      document.getElementById('ann-publish').textContent = '📢 發布公告';
+    }
+
+    function editAnnouncement(id) {
+      const a = instructorAnnCache.find(x => x.id === id);
+      if (!a) return;
+      editingAnnId = id;
+      document.getElementById('ann-category').value = a.category || '其他';
+      document.getElementById('ann-title').value = a.title || '';
+      document.getElementById('ann-content').value = a.content || '';
+      if (a.expiresAt?.seconds) document.getElementById('ann-expire').value = new Date(a.expiresAt.seconds * 1000).toISOString().slice(0, 10);
+      document.getElementById('ann-publish').textContent = '💾 更新公告';
+      document.getElementById('ann-msg').innerHTML = '<div style="background:#eff6ff;color:#1e40af;padding:8px 12px;border-radius:8px;font-size:12px;margin-top:8px">✏️ 編輯中、更新後學員會重新收到通知　<a href="#" id="ann-cancel-edit" style="color:#dc2626">取消</a></div>';
+      document.getElementById('ann-cancel-edit').addEventListener('click', (e) => { e.preventDefault(); resetAnnForm(); document.getElementById('ann-msg').innerHTML = ''; });
+      document.getElementById('ann-title').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
 
     async function loadInstructorAnnouncements() {
       const el = document.getElementById('ann-list');
@@ -896,13 +931,17 @@
         const items = [];
         snap.forEach(d => { const data = d.data(); const exp = data.expiresAt?.seconds ? data.expiresAt.seconds * 1000 : 0; if (!(exp && exp < now)) items.push({ id: d.id, ...data }); });
         items.sort((a, b) => (b.publishedAt?.seconds || 0) - (a.publishedAt?.seconds || 0));
+        instructorAnnCache = items;
         if (items.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:10px">目前沒有公告</div>'; return; }
         const emo = { '課程通知': '📘', '重大活動': '🎯', '重要提醒': '⚠️', '其他': '📌' };
         el.innerHTML = items.map(a => `
           <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:6px">
               <span style="font-size:12px;color:#6366f1;font-weight:600">${emo[a.category] || '📌'} ${a.category || ''}</span>
-              <button data-del-ann="${a.id}" style="background:#fef2f2;color:#dc2626;border:none;padding:3px 10px;border-radius:8px;cursor:pointer;font-size:12px">下架</button>
+              <span style="display:flex;gap:6px">
+                <button data-edit-ann="${a.id}" style="background:#eff6ff;color:#2563eb;border:none;padding:3px 10px;border-radius:8px;cursor:pointer;font-size:12px">修改</button>
+                <button data-del-ann="${a.id}" style="background:#fef2f2;color:#dc2626;border:none;padding:3px 10px;border-radius:8px;cursor:pointer;font-size:12px">下架</button>
+              </span>
             </div>
             <div style="font-weight:700;color:#1e293b;font-size:15px">${a.title}</div>
             <div style="font-size:13px;color:#475569;white-space:pre-wrap;margin-top:2px">${a.content}</div>
@@ -912,6 +951,7 @@
           if (!confirm('下架這則公告？')) return;
           try { await deleteDoc(doc(db, 'announcements', b.dataset.delAnn)); loadInstructorAnnouncements(); } catch (e) { alert('❌ ' + e.message); }
         }));
+        el.querySelectorAll('button[data-edit-ann]').forEach(b => b.addEventListener('click', () => editAnnouncement(b.dataset.editAnn)));
       } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
     }
 
@@ -940,6 +980,109 @@
           finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
         });
       } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+    }
+
+    // ===== F16-F: 成績上傳（總分/雷達、各自 gated）=====
+    let scPreview = null;
+
+    function scMode() { return document.querySelector('input[name="sc-mode"]:checked')?.value || 'total'; }
+    function updateScoreHint() {
+      const el = document.getElementById('sc-hint');
+      if (el) el.textContent = scMode() === 'total'
+        ? '每行：學號,分數（或 請假/缺考/免修）　例：1,85'
+        : '每行：學號,D1對,D1總,D2對,D2總,…,D6對,D6總';
+    }
+
+    function loadScoreUpload(perms) {
+      const canTotal = !!perms.canUploadScores;
+      const canRadar = !!perms.canUploadRadar;
+      const card = document.getElementById('score-card');
+      if (!canTotal && !canRadar) { card.style.display = 'none'; return; }
+      card.style.display = '';
+      const modeOpts = [];
+      if (canTotal) modeOpts.push('<label style="margin-right:16px"><input type="radio" name="sc-mode" value="total" checked> 總分（河流）</label>');
+      if (canRadar) modeOpts.push(`<label><input type="radio" name="sc-mode" value="radar" ${canTotal ? '' : 'checked'}> 雷達（6 維度）</label>`);
+      document.getElementById('score-body').innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <input id="sc-name" class="pri-select" placeholder="考試名稱">
+          <input type="date" id="sc-date" class="pri-select">
+        </div>
+        <select id="sc-type" class="pri-select" style="margin-bottom:10px">
+          <option value="小考">小考</option><option value="期中考">期中考</option><option value="期末考">期末考</option><option value="模擬考">模擬考</option>
+        </select>
+        <div style="margin-bottom:8px;font-size:13px;color:#475569">${modeOpts.join('')}</div>
+        <div id="sc-hint" style="font-size:12px;color:#94a3b8;margin-bottom:6px"></div>
+        <textarea id="sc-data" class="pri-select" rows="5" placeholder="貼上資料（可從 Excel 複製）" style="font-family:monospace;margin-bottom:10px"></textarea>
+        <button id="sc-preview" style="width:100%;background:#6366f1;color:white;border:none;padding:11px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:600">🔍 預覽</button>
+        <div id="sc-preview-box" style="margin-top:10px"></div>
+        <div id="sc-msg"></div>
+      `;
+      updateScoreHint();
+      document.querySelectorAll('input[name="sc-mode"]').forEach(r => r.addEventListener('change', updateScoreHint));
+      document.getElementById('sc-preview').addEventListener('click', previewScore);
+    }
+
+    async function previewScore() {
+      const name = document.getElementById('sc-name').value.trim();
+      const date = document.getElementById('sc-date').value;
+      const type = document.getElementById('sc-type').value;
+      const mode = scMode();
+      const raw = document.getElementById('sc-data').value;
+      const box = document.getElementById('sc-preview-box');
+      const msg = document.getElementById('sc-msg'); msg.innerHTML = '';
+      if (!name) { msg.innerHTML = '<div class="err-msg">❌ 請填考試名稱</div>'; return; }
+      if (!date) { msg.innerHTML = '<div class="err-msg">❌ 請選日期</div>'; return; }
+      const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l && !/學號|D\d總/.test(l));
+      if (lines.length === 0) { msg.innerHTML = '<div class="err-msg">❌ 無資料</div>'; return; }
+      try {
+        const stuSnap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
+        const byNo = {}; stuSnap.forEach(d => { const s = d.data(); byNo[String(s.studentNo)] = { id: d.id, ...s }; });
+        const rows = [];
+        lines.forEach(line => {
+          const p = line.split(/[\t,]/).map(s => s.trim());
+          const no = p[0]; const stu = byNo[no];
+          if (!stu) { rows.push({ no, err: `找不到學號 ${no}` }); return; }
+          if (mode === 'total') {
+            const v = p[1] || '';
+            if (['請假', '缺考', '免修'].includes(v)) rows.push({ no, name: stu.name, sid: stu.id, studentNo: stu.studentNo, status: 'absent_excused', ok: true, disp: v });
+            else { const s = parseFloat(v); if (isNaN(s) || s < 0 || s > 100) { rows.push({ no, name: stu.name, err: `分數錯誤 "${v}"` }); return; } rows.push({ no, name: stu.name, sid: stu.id, studentNo: stu.studentNo, totalScore: s, status: 'scored', ok: true, disp: s + ' 分' }); }
+          } else {
+            if (p.length < 13) { rows.push({ no, name: stu.name, err: '欄位不足（需 13 欄）' }); return; }
+            const dims = {}; let valid = true;
+            for (let i = 1; i <= 6; i++) { const c = parseInt(p[1 + (i - 1) * 2]); const t = parseInt(p[2 + (i - 1) * 2]); if (isNaN(c) || isNaN(t) || t === 0 || c > t) { valid = false; break; } dims['D' + i] = { correct: c, total: t }; }
+            if (!valid) { rows.push({ no, name: stu.name, err: '維度數字錯誤' }); return; }
+            rows.push({ no, name: stu.name, sid: stu.id, studentNo: stu.studentNo, dimensions: dims, ok: true, disp: Object.entries(dims).map(([d, v]) => `${d}:${v.correct}/${v.total}`).join(' ') });
+          }
+        });
+        const okc = rows.filter(r => r.ok).length, errc = rows.filter(r => r.err).length;
+        box.innerHTML = `<div style="font-size:13px;margin-bottom:8px">有效 <strong style="color:#10b981">${okc}</strong>${errc ? ` ・ <strong style="color:#ef4444">錯誤 ${errc}</strong>` : ''}</div>` +
+          rows.map(r => `<div style="font-size:13px;padding:5px 0;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;gap:8px"><span>${r.no}. ${r.name || '—'}</span><span style="text-align:right">${r.err ? `<span style="color:#ef4444">❌ ${r.err}</span>` : `<span style="color:#475569">${r.disp}</span>`}</span></div>`).join('') +
+          (okc > 0 ? `<button id="sc-commit" style="width:100%;margin-top:12px;background:#10b981;color:white;border:none;padding:11px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700">💾 寫入 ${okc} 筆</button>` : '');
+        scPreview = { name, date, type, mode, rows: rows.filter(r => r.ok) };
+        if (okc > 0) document.getElementById('sc-commit').addEventListener('click', commitScore);
+      } catch (e) { msg.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+    }
+
+    async function commitScore() {
+      if (!scPreview) return;
+      const { name, date, type, mode, rows } = scPreview;
+      if (!confirm(`寫入 ${rows.length} 筆「${name}」（${mode === 'total' ? '總分' : '雷達'}）？`)) return;
+      const btn = document.getElementById('sc-commit'); btn.disabled = true; btn.textContent = '⏳ 寫入中...';
+      try {
+        const batchRef = doc(collection(db, 'upload_batches'));
+        const coll = mode === 'total' ? 'exam_scores_total' : 'exam_scores_radar';
+        await setDoc(batchRef, { type: mode === 'total' ? 'exam_total' : 'exam_radar', examName: name, classId: selectedClassId, recordCount: rows.length, uploadedBy: currentInstructor.name, uploadedAt: serverTimestamp(), isReverted: false });
+        await Promise.all(rows.map(r => {
+          const base = { studentId: r.sid, classId: selectedClassId, studentNo: String(r.studentNo), examName: name, examDate: date, examType: type, uploadBatchId: batchRef.id, uploadedBy: currentInstructor.name, uploadedAt: serverTimestamp() };
+          if (mode === 'total') return setDoc(doc(collection(db, coll)), { ...base, totalScore: r.totalScore ?? null, status: r.status });
+          return setDoc(doc(collection(db, coll)), { ...base, dimensions: r.dimensions });
+        }));
+        document.getElementById('sc-msg').innerHTML = '<div class="ok-msg">✅ 已寫入（學員端下次載入可見）</div>';
+        document.getElementById('sc-data').value = '';
+        document.getElementById('sc-preview-box').innerHTML = '';
+        scPreview = null;
+      } catch (e) { document.getElementById('sc-msg').innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '💾 寫入'; }
     }
   </script>
 </body>
