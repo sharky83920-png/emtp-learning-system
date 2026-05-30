@@ -3620,7 +3620,8 @@
           <div style="flex:1"></div>
           <button class="btn btn-ghost" id="btn-qm-bulk-tpl">📥 範本 CSV</button>
           <button class="btn btn-green" id="btn-qm-bulk-import">📤 批次匯入</button>
-          <button class="btn" id="btn-qm-export">📦 全部下載原始</button>
+          <button class="btn btn-ghost" id="btn-qm-export-orig">📦 下載原始版</button>
+          <button class="btn" id="btn-qm-export-cur">📥 下載現行版</button>
           <div style="color:#94a3b8;font-size:13px;margin-left:8px;width:100%;text-align:right">符合 ${filtered.length} / 共 ${qmCache.length} 題</div>
         </div>
       `;
@@ -3659,7 +3660,8 @@
       document.getElementById('qm-f-vis').addEventListener('change', (e) => { qmFilters.visibility = e.target.value; renderQuestionsPage(); });
       document.getElementById('btn-qm-bulk-tpl').addEventListener('click', downloadQuestionsTpl);
       document.getElementById('btn-qm-bulk-import').addEventListener('click', () => document.getElementById('qm-bulk-modal').classList.add('active'));
-      document.getElementById('btn-qm-export').addEventListener('click', exportAllQuestions);
+      document.getElementById('btn-qm-export-orig').addEventListener('click', () => exportQuestionsCSV('original'));
+      document.getElementById('btn-qm-export-cur').addEventListener('click', () => exportQuestionsCSV('current'));
       el.querySelectorAll('button[data-qm-hide]').forEach(b => b.addEventListener('click', () => toggleQuestionVis(b.dataset.qmHide, false)));
       el.querySelectorAll('button[data-qm-show]').forEach(b => b.addEventListener('click', () => toggleQuestionVis(b.dataset.qmShow, true)));
       el.querySelectorAll('button[data-qm-dl]').forEach(b => b.addEventListener('click', () => downloadOneOriginal(b.dataset.qmDl)));
@@ -3681,19 +3683,29 @@
       a.download = `${id}_原始與校正歷史.json`;
       a.click();
     }
-    function exportAllQuestions() {
+    // 下載 CSV：mode='original'（學員原版）/ 'current'（校正後或沒改的最新版）
+    function exportQuestionsCSV(mode) {
       if (qmCache.length === 0) { alert('沒有題目可匯出'); return; }
-      const exportData = qmCache.map(q => ({
-        id: q.id,
-        original: q.originalVersion || null,
-        editHistory: q.editHistory || [],   // 每次勘誤校正前的版本
-        current: q
-      }));
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const esc = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+      const header = ['題號', '出題日期', '出題者', '出題班級', '難度', '維度', '題目', 'A', 'B', 'C', 'D', '正解', '書', '章', '頁'];
+      const lines = [header.map(esc).join(',')];
+      qmCache.forEach(q => {
+        // 原始版：用 originalVersion；沒有就退回現行版
+        const src = mode === 'original' ? (q.originalVersion || q) : q;
+        const o = src.options || {};
+        const s = src.source || {};
+        lines.push([
+          q.id, src.scheduledDate || '', src.createdByName || q.createdByName || '', src.createdByClassId || q.createdByClassId || '',
+          src.difficulty || '', src.derivedDimension || '', src.questionText || '',
+          o.A?.text || '', o.B?.text || '', o.C?.text || '', o.D?.text || '', src.correctAnswer || '',
+          s.bookId || '', s.chapterNumber || '', s.page || ''
+        ].map(esc).join(','));
+      });
+      const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       const dateStr = new Date().toISOString().slice(0, 10);
-      a.download = `題庫_原始與校正歷史_${dateStr}.json`;
+      a.download = `題庫_${mode === 'original' ? '原始版' : '現行版'}_${dateStr}.csv`;
       a.click();
     }
 

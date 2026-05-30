@@ -504,8 +504,9 @@
 
     // ===== F16-B: 題目勘誤處理 =====
     let corrReports = [];      // 目前班級的勘誤
+    let corrGroups = [];       // 依題號分組
     let corrQuestions = {};    // questionId -> question data
-    let currentCorr = null;    // 正在處理的勘誤
+    let currentCorr = null;    // 正在處理的（依題號）
 
     async function createNotification(recipientId, type, title, content, relatedId = null) {
       try {
@@ -536,24 +537,29 @@
         await Promise.all([...new Set(corrReports.map(r => r.questionId))].map(async qid => {
           try { const qd = await getDoc(doc(db, 'questions', qid)); if (qd.exists()) corrQuestions[qid] = qd.data(); } catch (e) {}
         }));
-        const statusTag = { pending: '<span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:10px;font-size:12px">待處理</span>', fixed: '<span style="background:#dcfce7;color:#065f46;padding:2px 10px;border-radius:10px;font-size:12px">已修正</span>', rejected: '<span style="background:#f1f5f9;color:#64748b;padding:2px 10px;border-radius:10px;font-size:12px">不成立</span>', hidden: '<span style="background:#fee2e2;color:#991b1b;padding:2px 10px;border-radius:10px;font-size:12px">已隱藏</span>' };
-        el.innerHTML = corrReports.map(r => {
-          const q = corrQuestions[r.questionId];
+        // 依題號分組（同一題多人回報 → 顯示在一起、一次處理）
+        const groups = {};
+        corrReports.forEach(r => { (groups[r.questionId] = groups[r.questionId] || []).push(r); });
+        corrGroups = Object.entries(groups).map(([qid, rs]) => ({ qid, reports: rs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)) }));
+        corrGroups.sort((a, b) => (b.reports[0]?.createdAt?.seconds || 0) - (a.reports[0]?.createdAt?.seconds || 0));
+        el.innerHTML = corrGroups.map(g => {
+          const q = corrQuestions[g.qid];
           const qtext = q ? (q.questionText || '').slice(0, 60) : '（題目已不存在）';
-          const st = r.status || 'pending';
+          const anyPending = g.reports.some(r => (r.status || 'pending') === 'pending');
+          const reportersHtml = g.reports.map(r => `<div style="font-size:13px;color:#78350f;margin-bottom:3px"><strong>${r.reportedByName || '學員'}：</strong>${r.reason || ''}${(r.status && r.status !== 'pending') ? ' <span style="color:#94a3b8">(已處理)</span>' : ''}</div>`).join('');
           return `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
-              <span style="font-family:monospace;font-size:13px;color:#64748b">${r.questionId}</span>
-              ${statusTag[st] || ''}
+              <span style="font-family:monospace;font-size:13px;color:#64748b">${g.qid}</span>
+              <span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:10px;font-size:12px">${g.reports.length} 筆回報</span>
             </div>
-            <div style="font-size:14px;color:#1e293b;margin-bottom:6px">${qtext}${qtext.length >= 60 ? '…' : ''}</div>
-            <div style="background:#fffbeb;border-left:3px solid #f59e0b;padding:8px 12px;border-radius:0 8px 8px 0;font-size:13px;color:#78350f;margin-bottom:10px"><strong>${r.reportedByName || '學員'}：</strong>${r.reason || ''}</div>
-            ${st === 'pending'
-              ? `<button class="btn-primary" style="width:auto;padding:8px 18px" data-corr="${r.id}">處理</button>`
-              : `<div style="font-size:12px;color:#94a3b8">已由 ${r.reviewedByName || '—'} 處理${r.reviewerNote ? '：' + r.reviewerNote : ''}</div>`}
+            <div style="font-size:14px;color:#1e293b;margin-bottom:8px">${qtext}${qtext.length >= 60 ? '…' : ''}</div>
+            <div style="background:#fffbeb;border-left:3px solid #f59e0b;padding:8px 12px;border-radius:0 8px 8px 0;margin-bottom:10px">${reportersHtml}</div>
+            ${anyPending
+              ? `<button class="btn-primary" style="width:auto;padding:8px 18px" data-corr-qid="${g.qid}">處理（${g.reports.length} 筆一起結案）</button>`
+              : `<div style="font-size:12px;color:#94a3b8">已處理</div>`}
           </div>`;
         }).join('');
-        el.querySelectorAll('button[data-corr]').forEach(b => b.addEventListener('click', () => openCorrModal(b.dataset.corr)));
+        el.querySelectorAll('button[data-corr-qid]').forEach(b => b.addEventListener('click', () => openCorrModal(b.dataset.corrQid)));
       } catch (e) {
         el.innerHTML = `<div class="placeholder"><div class="icon">❌</div><p>${e.message}</p></div>`;
       }
@@ -562,14 +568,14 @@
     document.getElementById('corr-filter').addEventListener('change', loadCorrections);
     document.getElementById('corr-refresh').addEventListener('click', loadCorrections);
 
-    function openCorrModal(reportId) {
-      const r = corrReports.find(x => x.id === reportId);
-      if (!r) return;
-      currentCorr = r;
-      const q = corrQuestions[r.questionId] || {};
-      document.getElementById('corr-reporter').textContent = r.reportedByName || '學員';
-      document.getElementById('corr-reason').textContent = r.reason || '';
-      document.getElementById('corr-qid').textContent = r.questionId;
+    function openCorrModal(qid) {
+      const g = corrGroups.find(x => x.qid === qid);
+      if (!g) return;
+      const q = corrQuestions[qid] || {};
+      currentCorr = { qid, reports: g.reports, qUpdatedAt: q.updatedAt?.seconds || 0 };  // qUpdatedAt 用於並發控制
+      document.getElementById('corr-reporter').textContent = `${g.reports.length} 筆回報`;
+      document.getElementById('corr-reason').innerHTML = g.reports.map(r => `• ${r.reportedByName || '學員'}：${r.reason || ''}`).join('<br>');
+      document.getElementById('corr-qid').textContent = qid;
       document.getElementById('corr-qtext').value = q.questionText || '';
       document.getElementById('corr-answer').value = q.correctAnswer || 'A';
       document.getElementById('corr-page').value = (q.source && q.source.page) || '';
@@ -592,7 +598,7 @@
 
     async function resolveCorr(resolution) {
       if (!currentCorr) return;
-      const r = currentCorr;
+      const qid = currentCorr.qid;
       const reply = document.getElementById('corr-reply').value.trim();
       const msg = document.getElementById('corr-modal-msg');
       if (!reply) { msg.innerHTML = '<div style="color:#ef4444;font-size:13px">請填回覆內容（學員會收到通知）</div>'; return; }
@@ -601,13 +607,20 @@
       fixBtn.disabled = true; rejBtn.disabled = true;
       try {
         const hide = document.getElementById('corr-hide').checked;
-        // 1. 若選「已修正」：更新題目（標答/選項/頁碼）；隱藏不論結案皆套用
+        // 並發控制：重讀題目、比對版本（先按出的先贏）
+        const fresh = await getDoc(doc(db, 'questions', qid));
+        const freshUpdated = fresh.exists() ? (fresh.data().updatedAt?.seconds || 0) : 0;
+        if (resolution === 'fixed' && freshUpdated !== currentCorr.qUpdatedAt) {
+          msg.innerHTML = '<div style="color:#ef4444;font-size:13px">⚠️ 這題剛剛已被其他教官修改過了！請關閉、重新整理後再確認（避免覆蓋別人的修正）。</div>';
+          fixBtn.disabled = false; rejBtn.disabled = false;
+          return;
+        }
+        // 1. 修正題目（fixed）+ editHistory；隱藏不論結案皆套用
         if (resolution === 'fixed') {
           const opts = {};
           document.querySelectorAll('.corr-opt').forEach(inp => { opts[inp.dataset.k] = { text: inp.value }; });
-          // 校正前先把舊版存進 editHistory（保留每次變更）
-          const pre = corrQuestions[r.questionId] || {};
-          const qUpdate = {
+          const pre = corrQuestions[qid] || {};
+          await updateDoc(doc(db, 'questions', qid), {
             questionText: document.getElementById('corr-qtext').value,
             options: opts,
             correctAnswer: document.getElementById('corr-answer').value,
@@ -616,30 +629,22 @@
             updatedAt: serverTimestamp(),
             lastEditedBy: currentInstructor.email,
             editHistory: arrayUnion({
-              questionText: pre.questionText || '',
-              options: pre.options || {},
-              correctAnswer: pre.correctAnswer || '',
-              source: pre.source || {},
-              editedBy: currentInstructor.name,
-              editedAt: Timestamp.now(),
-              reason: '勘誤校正：' + (reply || '')
+              questionText: pre.questionText || '', options: pre.options || {}, correctAnswer: pre.correctAnswer || '', source: pre.source || {},
+              editedBy: currentInstructor.name, editedAt: Timestamp.now(), reason: '勘誤校正：' + (reply || '')
             })
-          };
-          await updateDoc(doc(db, 'questions', r.questionId), qUpdate);
+          });
         } else if (hide) {
-          await updateDoc(doc(db, 'questions', r.questionId), { isVisible: false, hiddenReason: '勘誤處理', hiddenBy: currentInstructor.email, hiddenAt: serverTimestamp() });
+          await updateDoc(doc(db, 'questions', qid), { isVisible: false, hiddenReason: '勘誤處理', hiddenBy: currentInstructor.email, hiddenAt: serverTimestamp() });
         }
-        // 2. 更新勘誤狀態
-        await updateDoc(doc(db, 'question_error_reports', r.id), {
-          status: hide ? 'hidden' : resolution,
-          reviewedBy: currentInstructor.id,
-          reviewedByName: currentInstructor.name,
-          reviewedAt: serverTimestamp(),
-          reviewerNote: reply
-        });
-        // 3. 通知學員（閉合迴圈）
+        // 2. 關閉「所有班級」對這題的待處理回報（避免重複改）+ 通知每位回報者
+        const allRep = await getDocs(query(collection(db, 'question_error_reports'), where('questionId', '==', qid)));
+        const toClose = []; allRep.forEach(d => { if ((d.data().status || 'pending') === 'pending') toClose.push({ id: d.id, ...d.data() }); });
+        const newStatus = hide ? 'hidden' : resolution;
+        await Promise.all(toClose.map(rep => updateDoc(doc(db, 'question_error_reports', rep.id), {
+          status: newStatus, reviewedBy: currentInstructor.id, reviewedByName: currentInstructor.name, reviewedAt: serverTimestamp(), reviewerNote: reply
+        })));
         const title = resolution === 'fixed' ? '✅ 你回報的題目已修正' : '📩 你回報的題目已處理';
-        await createNotification(r.reportedBy, 'error_report_reply', title, reply, r.questionId);
+        await Promise.all(toClose.map(rep => createNotification(rep.reportedBy, 'error_report_reply', title, reply, qid)));
         closeCorrModal();
         loadCorrections();
       } catch (e) {
