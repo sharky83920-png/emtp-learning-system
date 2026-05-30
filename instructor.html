@@ -217,11 +217,39 @@
           <div id="score-body"></div>
         </div>
 
+        <div class="card" id="scoremanage-card">
+          <h2>📋 成績查詢 / 管理</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:10px">本班所有考試。可查看明細、或整場刪除（清掉錯誤上傳）。</p>
+          <div id="sm-list"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
+        </div>
+
         <div class="card" id="scoreedit-card">
           <h2>✏️ 個人成績修正（總分）</h2>
           <p style="color:#64748b;font-size:13px;margin-bottom:10px">選考試 → 改個別學員的總分。輸入分數或「請假/缺考/免修」。</p>
           <select id="se-exam" class="pri-select" style="margin-bottom:10px"><option value="">載入中...</option></select>
           <div id="se-list"></div>
+        </div>
+
+        <div class="card" id="qdl-card">
+          <h2>📥 題庫下載</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:10px">下載本班學員出的、目前仍可被抽取的題庫（已含勘誤校正、隱藏題不含）。可篩選後下載 CSV。</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">出題日期</label>
+              <select id="qdl-date" class="pri-select"><option value="">全部</option></select>
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">出題學員</label>
+              <select id="qdl-student" class="pri-select"><option value="">全部</option></select>
+            </div>
+          </div>
+          <div style="margin-bottom:10px">
+            <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">出處（書/章）</label>
+            <select id="qdl-source" class="pri-select"><option value="">全部</option></select>
+          </div>
+          <div id="qdl-count" style="font-size:13px;color:#475569;margin-bottom:10px">—</div>
+          <button id="qdl-download" style="width:100%;background:#10b981;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700">📥 下載 CSV</button>
+          <div id="qdl-msg"></div>
         </div>
       </section>
     </main>
@@ -866,10 +894,19 @@
       else { mbCard.style.display = 'none'; }
       // 成績上傳（依權限）
       loadScoreUpload(perms);
+      // 成績查詢/管理（能碰成績的人都可看）
+      const smCard = document.getElementById('scoremanage-card');
+      const canTouchScore = perms.canUploadScores || perms.canUploadRadar || perms.canEditScores;
+      if (canTouchScore) { smCard.style.display = ''; loadScoreManage(); }
+      else { smCard.style.display = 'none'; }
       // 個人成績修正（gated canEditScores）
       const seCard = document.getElementById('scoreedit-card');
       if (perms.canEditScores) { seCard.style.display = ''; loadScoreEdit(); }
       else { seCard.style.display = 'none'; }
+      // 題庫下載（gated canDownloadQuestions）
+      const qdCard = document.getElementById('qdl-card');
+      if (perms.canDownloadQuestions) { qdCard.style.display = ''; loadQuestionDownload(); }
+      else { qdCard.style.display = 'none'; }
     }
 
     document.getElementById('ann-publish').addEventListener('click', async () => {
@@ -1115,13 +1152,18 @@
       try {
         const batchRef = doc(collection(db, 'upload_batches'));
         const coll = mode === 'total' ? 'exam_scores_total' : 'exam_scores_radar';
+        // upsert：同場同人已存在就更新（最新覆蓋）、避免重複
+        const existSnap = await getDocs(query(collection(db, coll), where('classId', '==', selectedClassId), where('examName', '==', name)));
+        const existMap = {}; existSnap.forEach(d => { existMap[d.data().studentId] = d.id; });
+        let updated = 0, created = 0;
         await setDoc(batchRef, { type: mode === 'total' ? 'exam_total' : 'exam_radar', examName: name, classId: selectedClassId, recordCount: rows.length, uploadedBy: currentInstructor.name, uploadedAt: serverTimestamp(), isReverted: false });
         await Promise.all(rows.map(r => {
           const base = { studentId: r.sid, classId: selectedClassId, studentNo: String(r.studentNo), examName: name, examDate: date, examType: type, uploadBatchId: batchRef.id, uploadedBy: currentInstructor.name, uploadedAt: serverTimestamp() };
-          if (mode === 'total') return setDoc(doc(collection(db, coll)), { ...base, totalScore: r.totalScore ?? null, status: r.status });
-          return setDoc(doc(collection(db, coll)), { ...base, dimensions: r.dimensions });
+          const payload = mode === 'total' ? { ...base, totalScore: r.totalScore ?? null, status: r.status } : { ...base, dimensions: r.dimensions };
+          if (existMap[r.sid]) { updated++; return updateDoc(doc(db, coll, existMap[r.sid]), payload); }
+          created++; return setDoc(doc(collection(db, coll)), payload);
         }));
-        document.getElementById('sc-msg').innerHTML = '<div class="ok-msg">✅ 已寫入（學員端下次載入可見）</div>';
+        document.getElementById('sc-msg').innerHTML = `<div class="ok-msg">✅ 已寫入（更新 ${updated}、新增 ${created}、不會重複）</div>`;
         document.getElementById('sc-data').value = '';
         document.getElementById('sc-preview-box').innerHTML = '';
         scPreview = null;
@@ -1195,6 +1237,105 @@
         btn.textContent = '✅'; setTimeout(() => { btn.textContent = '存'; btn.disabled = false; }, 1200);
       } catch (e) { alert('❌ ' + e.message); btn.disabled = false; btn.textContent = '存'; }
     }
+
+    // ===== F16-G: 成績查詢 / 管理（列考試 + 刪除整場）=====
+    async function loadScoreManage() {
+      const el = document.getElementById('sm-list');
+      el.innerHTML = '<div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div>';
+      try {
+        const [tSnap, rSnap] = await Promise.all([
+          getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', selectedClassId))),
+          getDocs(query(collection(db, 'exam_scores_radar'), where('classId', '==', selectedClassId)))
+        ]);
+        const exams = {};
+        const acc = (snap, key) => snap.forEach(d => { const x = d.data(); const k = x.examName; if (!exams[k]) exams[k] = { name: k, date: x.examDate || '', type: x.examType || '', total: 0, radar: 0 }; exams[k][key]++; if (x.examDate) exams[k].date = x.examDate; if (x.examType) exams[k].type = x.examType; });
+        acc(tSnap, 'total'); acc(rSnap, 'radar');
+        const list = Object.values(exams).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        if (list.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">此班尚無成績</div>'; return; }
+        el.innerHTML = list.map(e => `
+          <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+              <div>
+                <div style="font-weight:700;color:#1e293b">${e.name}</div>
+                <div style="font-size:12px;color:#94a3b8">${e.date || ''} ${e.type ? '· ' + e.type : ''} · 總分 ${e.total} 筆 · 雷達 ${e.radar} 筆</div>
+              </div>
+              <button data-del-exam="${e.name.replace(/"/g, '&quot;')}" style="background:#fef2f2;color:#dc2626;border:none;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px">🗑 刪除整場</button>
+            </div>
+          </div>`).join('');
+        el.querySelectorAll('button[data-del-exam]').forEach(b => b.addEventListener('click', () => deleteExam(b.dataset.delExam)));
+      } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+    }
+
+    async function deleteExam(examName) {
+      if (!confirm(`⚠️ 確定刪除「${examName}」整場成績？\n（總分 + 雷達全部、僅限本班、不可復原）`)) return;
+      if (!confirm('再次確認：此操作無法復原，確定刪除？')) return;
+      try {
+        for (const coll of ['exam_scores_total', 'exam_scores_radar']) {
+          const snap = await getDocs(query(collection(db, coll), where('classId', '==', selectedClassId), where('examName', '==', examName)));
+          await Promise.all(snap.docs.map(d => deleteDoc(doc(db, coll, d.id))));
+        }
+        loadScoreManage();
+        if (document.getElementById('scoreedit-card').style.display !== 'none') loadScoreEdit();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+
+    // ===== F16-G: 題庫下載（校正後現役題庫、可篩選）=====
+    let qdlQuestions = [];
+
+    async function loadQuestionDownload() {
+      const countEl = document.getElementById('qdl-count');
+      countEl.textContent = '載入中...';
+      try {
+        const snap = await getDocs(query(collection(db, 'questions'), where('createdByClassId', '==', selectedClassId)));
+        qdlQuestions = [];
+        snap.forEach(d => { const q = d.data(); if (q.isVisible !== false && q.isActive !== false) qdlQuestions.push({ id: d.id, ...q }); });
+        // 篩選選項
+        const dates = [...new Set(qdlQuestions.map(q => q.scheduledDate).filter(Boolean))].sort();
+        const studs = [...new Set(qdlQuestions.map(q => q.createdByName || q.createdBy).filter(Boolean))].sort();
+        const srcs = [...new Set(qdlQuestions.map(q => q.source ? `${q.source.bookId || ''}${q.source.chapterNumber ? ' Ch' + q.source.chapterNumber : ''}`.trim() : '').filter(Boolean))].sort();
+        document.getElementById('qdl-date').innerHTML = '<option value="">全部</option>' + dates.map(d => `<option value="${d}">${d}</option>`).join('');
+        document.getElementById('qdl-student').innerHTML = '<option value="">全部</option>' + studs.map(s => `<option value="${s}">${s}</option>`).join('');
+        document.getElementById('qdl-source').innerHTML = '<option value="">全部</option>' + srcs.map(s => `<option value="${s}">${s}</option>`).join('');
+        ['qdl-date', 'qdl-student', 'qdl-source'].forEach(id => { const e = document.getElementById(id); if (!e._bound) { e.addEventListener('change', updateQdlCount); e._bound = true; } });
+        updateQdlCount();
+      } catch (e) { countEl.textContent = '❌ ' + e.message; }
+    }
+
+    function filterQdl() {
+      const fd = document.getElementById('qdl-date').value;
+      const fs = document.getElementById('qdl-student').value;
+      const fsrc = document.getElementById('qdl-source').value;
+      return qdlQuestions.filter(q => {
+        if (fd && q.scheduledDate !== fd) return false;
+        if (fs && (q.createdByName || q.createdBy) !== fs) return false;
+        if (fsrc) { const s = q.source ? `${q.source.bookId || ''}${q.source.chapterNumber ? ' Ch' + q.source.chapterNumber : ''}`.trim() : ''; if (s !== fsrc) return false; }
+        return true;
+      });
+    }
+    function updateQdlCount() {
+      document.getElementById('qdl-count').textContent = `符合 ${filterQdl().length} 題（共 ${qdlQuestions.length} 題現役）`;
+    }
+
+    document.getElementById('qdl-download').addEventListener('click', () => {
+      const list = filterQdl();
+      const msg = document.getElementById('qdl-msg');
+      if (list.length === 0) { msg.innerHTML = '<div class="err-msg">沒有符合條件的題目</div>'; return; }
+      const esc = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+      const header = ['題號', '出題日期', '出題學員', '難度', '維度', '題目', 'A', 'B', 'C', 'D', '正解', '書', '章', '頁'];
+      const lines = [header.map(esc).join(',')];
+      list.forEach(q => {
+        const o = q.options || {};
+        const s = q.source || {};
+        lines.push([q.id, q.scheduledDate || '', q.createdByName || q.createdBy || '', q.difficulty || '', q.derivedDimension || '', q.questionText || '', o.A?.text || '', o.B?.text || '', o.C?.text || '', o.D?.text || '', q.correctAnswer || '', s.bookId || '', s.chapterNumber || '', s.page || ''].map(esc).join(','));
+      });
+      const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `題庫_${selectedClassId}_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      msg.innerHTML = `<div class="ok-msg">✅ 已下載 ${list.length} 題</div>`;
+      setTimeout(() => { msg.innerHTML = ''; }, 3000);
+    });
   </script>
 </body>
 </html>
