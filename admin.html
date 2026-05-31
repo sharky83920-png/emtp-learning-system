@@ -647,6 +647,12 @@ TP18,新北 TP18,2026"></textarea>
           <input type="text" id="instructor-idnumber" maxlength="20" style="font-family:monospace;text-transform:uppercase;font-size:16px" placeholder="A123456789 或自訂密碼">
           <div id="instructor-auth-status" style="font-size:12px;margin-top:6px"></div>
         </div>
+        <div class="form-group" id="instructor-pw-reset" style="display:none;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px">
+          <h4 style="color:#60a5fa;font-size:13px;margin-bottom:8px">🔑 重設登入密碼</h4>
+          <p style="color:#94a3b8;font-size:12px;margin-bottom:8px">⚠️ 已建帳號。要改密碼需輸入「目前密碼」驗證、再設新的。兩欄都留空＝不改密碼。</p>
+          <div class="form-group"><label>目前密碼（舊密碼）</label><input type="text" id="instructor-pw-old" maxlength="20" style="font-family:monospace;text-transform:uppercase" placeholder="留空＝不改密碼"></div>
+          <div class="form-group" style="margin-bottom:0"><label>新密碼（至少 6 碼）</label><input type="text" id="instructor-pw-new" maxlength="20" style="font-family:monospace;text-transform:uppercase" placeholder="留空＝不改密碼"></div>
+        </div>
         <div class="form-group">
           <label>能管哪些班級（可多選）</label>
           <div id="instructor-classes-checkboxes" style="background:#0f172a;border:1px solid #334155;border-radius:6px;padding:12px;display:flex;flex-wrap:wrap;gap:8px;"></div>
@@ -1785,19 +1791,28 @@ TP18,新北 TP18,2026"></textarea>
         if (insDoc.exists()) {
           const ins = insDoc.data();
           document.getElementById('instructor-name').value = ins.name || '';
-          idEl.value = ins.idNumber || '';
           (ins.managedClassIds || []).forEach(cid => { const cb = document.querySelector(`.instructor-class-cb[value="${cid}"]`); if (cb) cb.checked = true; });
+          // 重設密碼欄位歸零
+          document.getElementById('instructor-pw-old').value = '';
+          document.getElementById('instructor-pw-new').value = '';
           if (ins.hasAuthAccount) {
+            // 顯示「目前密碼」（重設過用 loginPassword、否則用身分證 idNumber）；欄位唯讀，改密碼走下方重設區
+            idEl.value = ins.loginPassword || ins.idNumber || '';
             idEl.readOnly = true; idEl.style.opacity = '0.6';
-            authStatusEl.innerHTML = '<span style="color:#6ee7b7">✅ 已建立登入帳號</span>';
+            authStatusEl.innerHTML = '<span style="color:#6ee7b7">✅ 已建立登入帳號（目前密碼如上、要改請用下方「重設登入密碼」）</span>';
+            document.getElementById('instructor-pw-reset').style.display = 'block';
           } else {
+            idEl.value = ins.idNumber || '';
             idEl.readOnly = false; idEl.style.opacity = '1';
             authStatusEl.innerHTML = '<span style="color:#fcd34d">⚠️ 尚未建立登入帳號、填身分證後儲存即建立</span>';
+            document.getElementById('instructor-pw-reset').style.display = 'none';
           }
         }
       } else {
         document.getElementById('instructor-name').value = '';
+        idEl.value = '';
         idEl.readOnly = false; idEl.style.opacity = '1';
+        document.getElementById('instructor-pw-reset').style.display = 'none';
       }
       document.getElementById('instructor-modal-error').innerHTML = '';
       document.getElementById('instructor-modal').classList.add('active');
@@ -1827,11 +1842,32 @@ TP18,新北 TP18,2026"></textarea>
           targetRef = doc(db, 'instructors', currentEditingInstructor);
           const snap = await getDoc(targetRef);
           existingData = snap.exists() ? snap.data() : {};
-          await updateDoc(targetRef, {
-            name, managedClassIds,
-            ...(idNumber ? { idNumber } : {}),
-            updatedAt: serverTimestamp(), updatedBy: currentUser.email
-          });
+          const upd = { name, managedClassIds, updatedAt: serverTimestamp(), updatedBy: currentUser.email };
+          if (existingData.hasAuthAccount) {
+            // 已建帳號：idNumber 是登入信箱來源、不可動；改密碼走「重設」流程
+            const oldPw = document.getElementById('instructor-pw-old').value.trim().toUpperCase();
+            const newPw = document.getElementById('instructor-pw-new').value.trim().toUpperCase();
+            if (oldPw || newPw) {
+              if (!oldPw) { errEl.innerHTML = '<div class="err-msg">❌ 請填「目前密碼」來驗證身分</div>'; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+              if (newPw.length < 6) { errEl.innerHTML = '<div class="err-msg">❌ 新密碼至少 6 碼</div>'; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+              const loginEmail = `${(existingData.idNumber || '').toLowerCase()}@emtp.local`;
+              try {
+                btn.textContent = '⏳ 重設密碼...';
+                const cred = await signInWithEmailAndPassword(secondaryAuth, loginEmail, oldPw);
+                await updatePassword(cred.user, newPw);
+                await signOut(secondaryAuth);
+                upd.loginPassword = newPw;
+              } catch (authErr) {
+                const m = (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/wrong-password') ? '「目前密碼」不正確（與現有登入密碼不符）' : authErr.message;
+                errEl.innerHTML = `<div class="err-msg">❌ 重設密碼失敗：${m}</div>`;
+                btn.disabled = false; btn.textContent = '💾 儲存'; return;
+              }
+            }
+          } else if (idNumber) {
+            // 尚未建帳號：idNumber 可改（之後建帳號會用它當信箱+密碼）
+            upd.idNumber = idNumber;
+          }
+          await updateDoc(targetRef, upd);
         } else {
           const q = query(collection(db, 'instructors'), where('email', '==', email));
           const existing = await getDocs(q);
