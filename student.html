@@ -203,12 +203,29 @@
       </div>
 
       <!-- F12-B: 歷次考試成績落點趨勢河流圖 -->
+      <style>
+        .river-mode-btn{flex:1;background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;padding:8px 6px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+        .river-mode-btn.active{background:#3b82f6;color:#fff;border-color:#3b82f6}
+        .river-info-ic{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:#cbd5e1;color:#fff;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;font-style:normal;margin-left:4px}
+      </style>
       <div class="milestone-section" data-tab="academic" data-feat="scoreriver">
-        <h3>🌊 歷次考試成績落點趨勢</h3>
+        <h3>🌊 歷次考試成績落點趨勢 <span class="river-info-ic" data-info="main">?</span></h3>
+        <div id="river-mode-toggle" style="display:flex;gap:6px;margin-bottom:10px">
+          <button id="river-tab-river" class="river-mode-btn active">📈 成績河流圖</button>
+          <button id="river-tab-density" class="river-mode-btn">🔥 密度熱力圖 <span class="river-info-ic" data-info="density">?</span></button>
+        </div>
         <div style="position:relative;height:280px">
           <canvas id="score-river-chart"></canvas>
         </div>
         <div class="empty-hint" id="score-river-empty-hint">⏳ 尚無考試成績、上傳考試後河流圖會自動更新</div>
+      </div>
+
+      <!-- 圖表說明彈窗 -->
+      <div id="river-info-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1600;justify-content:center;align-items:center;padding:20px">
+        <div style="background:#fff;border-radius:14px;max-width:430px;width:100%;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><strong id="river-info-title" style="font-size:16px;color:#1e293b">說明</strong><button id="river-info-close" style="background:#f1f5f9;border:none;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:18px">×</button></div>
+          <div id="river-info-body" style="font-size:13px;line-height:1.9;color:#334155"></div>
+        </div>
       </div>
 
       <!-- F13-J: 能量條（獨立 section、放河流圖後、題庫與答題前） -->
@@ -1036,116 +1053,137 @@
       if (type === 'success') setTimeout(() => banner.remove(), 8000);
     }
 
-    // ===== F12-B: 成績河流圖（歷次考試趨勢） =====
+    // ===== F12-B: 成績河流圖 / 密度熱力圖（歷次考試趨勢） =====
     let scoreRiverChart = null;
+    let _riverMode = 'river';   // 'river' | 'density'
+    let _riverStats = null;
+
+    function _pct(sorted, p) {
+      if (!sorted.length) return null;
+      if (sorted.length === 1) return sorted[0];
+      const idx = (p / 100) * (sorted.length - 1);
+      const lo = Math.floor(idx), hi = Math.ceil(idx), w = idx - lo;
+      return sorted[lo] * (1 - w) + sorted[hi] * w;
+    }
+    function _band(label, upArr, loArr, rgba) {
+      return [
+        { label: label + '_lo', data: loArr, borderColor: 'transparent', backgroundColor: 'transparent', pointRadius: 0, fill: false, tension: 0.3, spanGaps: false, _band: true },
+        { label: label + '_hi', data: upArr, borderColor: 'transparent', backgroundColor: rgba, pointRadius: 0, fill: '-1', tension: 0.3, spanGaps: false, _band: true }
+      ];
+    }
+    function renderRiver() {
+      const ctx = document.getElementById('score-river-chart');
+      if (!_riverStats || !ctx || !window.Chart) return;
+      const S = _riverStats.examStats, labels = _riverStats.labels;
+      const myData = S.map(s => s.my);
+      const avgData = S.map(s => s.mean != null ? Math.round(s.mean * 10) / 10 : null);
+      const passLine = S.map(() => 75);
+      let datasets = [];
+      if (_riverMode === 'river') {
+        datasets.push(..._band('河道', S.map(s => s.p75), S.map(s => s.p25), 'rgba(148,163,184,0.30)'));
+      } else {
+        datasets.push(..._band('全班', S.map(s => s.p90), S.map(s => s.p10), 'rgba(239,68,68,0.10)'));
+        datasets.push(..._band('穩定', S.map(s => s.p80), S.map(s => s.p20), 'rgba(239,68,68,0.10)'));
+        datasets.push(..._band('主力', S.map(s => s.p70), S.map(s => s.p30), 'rgba(239,68,68,0.12)'));
+        datasets.push(..._band('核心', S.map(s => s.p60), S.map(s => s.p40), 'rgba(239,68,68,0.15)'));
+      }
+      datasets.push({ label: '班級平均', data: avgData, borderColor: 'rgba(148,163,184,0.9)', pointBackgroundColor: 'rgba(148,163,184,0.9)', pointRadius: 3, borderWidth: 2, borderDash: [4, 4], fill: false, tension: 0.3, spanGaps: true });
+      datasets.push({ label: '及格門檻 (75 分)', data: passLine, borderColor: 'rgba(239,68,68,0.8)', pointRadius: 0, borderWidth: 1.5, borderDash: [6, 4], fill: false });
+      datasets.push({ label: '你的綜合得分', data: myData, borderColor: 'rgba(37,99,235,1)', backgroundColor: 'rgba(37,99,235,0.1)', pointBackgroundColor: 'rgba(37,99,235,1)', pointBorderColor: '#fff', pointRadius: 5, pointHoverRadius: 7, borderWidth: 3, fill: false, tension: 0.3, spanGaps: true });
+
+      if (scoreRiverChart) scoreRiverChart.destroy();
+      scoreRiverChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            y: { min: 30, max: 100, ticks: { stepSize: 10, color: '#64748b' }, grid: { color: 'rgba(148,163,184,0.2)' } },
+            x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(148,163,184,0.1)' } }
+          },
+          plugins: {
+            legend: { position: 'bottom', labels: { padding: 12, font: { size: 12 }, filter: it => !/_(lo|hi)$/.test(it.text) } },
+            tooltip: {
+              filter: it => !it.dataset._band,
+              callbacks: {
+                title: items => { const s = S[items[0]?.dataIndex]; return s ? `${s.name}（${s.label}）` : ''; },
+                afterBody: items => {
+                  const s = S[items[0]?.dataIndex]; if (!s) return '';
+                  const L = [];
+                  if (_riverMode === 'density') {
+                    if (s.enough) {
+                      L.push('— 落點區間 —');
+                      L.push(`核心 P40-60: ${Math.round(s.p40)}~${Math.round(s.p60)} 分`);
+                      L.push(`主力 P30-70: ${Math.round(s.p30)}~${Math.round(s.p70)} 分`);
+                      L.push(`穩定 P20-80: ${Math.round(s.p20)}~${Math.round(s.p80)} 分`);
+                      L.push(`全班 P10-90: ${Math.round(s.p10)}~${Math.round(s.p90)} 分`);
+                    } else { L.push(`（有成績 ${s.n} 人 < 5、不畫密度帶）`); }
+                  }
+                  L.push('— 全班人數分佈 —');
+                  L.push(`85以上: ${s.dist.d85} 人`);
+                  L.push(`76-85: ${s.dist.d76} 人`);
+                  L.push(`66-75: ${s.dist.d66} 人`);
+                  L.push(`65以下: ${s.dist.d65} 人`);
+                  return L;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    const RIVER_INFO = {
+      main: { title: '圖表說明', html: '📈 <b>成績河流圖</b>：藍線是你的得分、灰虛線是班級平均、灰色河道是全班中間 50%（後標 P25～前標 P75）的落點區間。<br><br>🔥 <b>密度熱力圖</b>：紅色越深代表該分數帶的人越多（核心 P40–60／主力 P30–70／穩定 P20–80／全班 P10–90）。<br><br>📊 點圖上任一點可看該場「全班人數分佈」（85以上／76–85／66–75／65以下）。<br><br>紅虛線為及格門檻 75 分。' },
+      density: { title: '密度熱力圖說明', html: '用百分位畫出全班分數的疏密：<b>紅色越深＝該分數區間的人越多</b>，越淡＝越少。<br><br>⚠️ 當某場考試「有成績的人數 < 5」時不畫密度帶（樣本太少、分布沒意義），只保留你的得分與班平均。' }
+    };
+    document.addEventListener('click', (e) => {
+      const ic = e.target.closest && e.target.closest('.river-info-ic');
+      if (!ic) return;
+      e.stopPropagation();
+      const info = RIVER_INFO[ic.dataset.info]; if (!info) return;
+      document.getElementById('river-info-title').textContent = info.title;
+      document.getElementById('river-info-body').innerHTML = info.html;
+      document.getElementById('river-info-modal').style.display = 'flex';
+    });
+    document.getElementById('river-info-close')?.addEventListener('click', () => document.getElementById('river-info-modal').style.display = 'none');
+    document.getElementById('river-info-modal')?.addEventListener('click', (e) => { if (e.target.id === 'river-info-modal') e.currentTarget.style.display = 'none'; });
+    document.getElementById('river-tab-river')?.addEventListener('click', () => { _riverMode = 'river'; document.getElementById('river-tab-river').classList.add('active'); document.getElementById('river-tab-density').classList.remove('active'); renderRiver(); });
+    document.getElementById('river-tab-density')?.addEventListener('click', () => { _riverMode = 'density'; document.getElementById('river-tab-density').classList.add('active'); document.getElementById('river-tab-river').classList.remove('active'); renderRiver(); });
+
     async function loadScoreRiverChart() {
       try {
         const ctx = document.getElementById('score-river-chart');
         if (!ctx || !window.Chart) return;
 
-        // 1. 讀此學員所有總分（按日期升序）
-        const myQuery = query(collection(db, 'exam_scores_total'), where('studentId', '==', currentStudent.id));
-        const mySnap = await getDocs(myQuery);
-        const myScores = [];
-        mySnap.forEach(d => myScores.push(d.data()));
-        myScores.sort((a, b) => (a.examDate || '').localeCompare(b.examDate || ''));
+        // 我的成績（status=scored）
+        const mySnap = await getDocs(query(collection(db, 'exam_scores_total'), where('studentId', '==', currentStudent.id)));
+        const myMap = {};
+        mySnap.forEach(d => { const x = d.data(); if (x.status === 'scored' && x.totalScore != null) myMap[x.examName] = { date: x.examDate || '', score: x.totalScore }; });
 
-        // 2. 讀同班所有總分（算各場考試的班級平均）
-        const classQuery = query(collection(db, 'exam_scores_total'), where('classId', '==', currentStudent.classId));
-        const classSnap = await getDocs(classQuery);
-        const classScores = [];
-        classSnap.forEach(d => classScores.push(d.data()));
+        // 同班成績（算百分位 / 分布）
+        const classSnap = await getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', currentStudent.classId)));
+        const byExam = {};
+        classSnap.forEach(d => { const x = d.data(); if (x.status !== 'scored' || x.totalScore == null) return; const k = x.examName; if (!byExam[k]) byExam[k] = { name: k, date: x.examDate || '', scores: [] }; byExam[k].scores.push(x.totalScore); if (x.examDate) byExam[k].date = x.examDate; });
 
         const hint = document.getElementById('score-river-empty-hint');
-        if (myScores.length === 0) {
-          hint.style.display = 'block';
-          ctx.style.display = 'none';
-          return;
-        }
-        hint.style.display = 'none';
-        ctx.style.display = 'block';
+        const exams = Object.values(byExam).filter(e => myMap[e.name] != null).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+        if (exams.length === 0) { hint.style.display = 'block'; ctx.style.display = 'none'; return; }
+        hint.style.display = 'none'; ctx.style.display = 'block';
 
-        // 3. 班級平均 by examName（同場考試所有有效分數平均）
-        const classByExam = {};
-        classScores.forEach(s => {
-          if (s.status !== 'scored' || s.totalScore == null) return;
-          const k = s.examName;
-          if (!classByExam[k]) classByExam[k] = { sum: 0, n: 0, date: s.examDate };
-          classByExam[k].sum += s.totalScore;
-          classByExam[k].n++;
+        const examStats = exams.map(e => {
+          const arr = e.scores.slice().sort((a, b) => a - b);
+          const n = arr.length, enough = n >= 5;
+          const mean = n ? arr.reduce((x, y) => x + y, 0) / n : null;
+          const P = p => enough ? _pct(arr, p) : null;
+          const dist = { d85: arr.filter(v => v >= 85).length, d76: arr.filter(v => v >= 76 && v < 85).length, d66: arr.filter(v => v >= 66 && v < 76).length, d65: arr.filter(v => v < 66).length };
+          const dt = e.date ? new Date(e.date) : null;
+          return { name: e.name, date: e.date, label: dt ? `${dt.getMonth() + 1}/${dt.getDate()}` : e.name, n, mean, enough, my: myMap[e.name].score, dist,
+            p10: P(10), p20: P(20), p25: P(25), p30: P(30), p40: P(40), p60: P(60), p70: P(70), p75: P(75), p80: P(80), p90: P(90) };
         });
-
-        // 4. labels + datasets
-        const labels = myScores.map(s => {
-          if (s.examDate) {
-            const d = new Date(s.examDate);
-            return `${d.getMonth() + 1}/${d.getDate()}`;
-          }
-          return s.examName;
-        });
-        const myData = myScores.map(s => s.status === 'scored' && s.totalScore != null ? s.totalScore : null);
-        const classAvgData = myScores.map(s => {
-          const c = classByExam[s.examName];
-          return c && c.n > 0 ? c.sum / c.n : null;
-        });
-        const passLine = myScores.map(() => 75);
-
-        if (scoreRiverChart) scoreRiverChart.destroy();
-        scoreRiverChart = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels,
-            datasets: [
-              {
-                label: '你的綜合得分',
-                data: myData,
-                borderColor: 'rgba(59, 130, 246, 1)',
-                backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                pointBackgroundColor: 'rgba(59, 130, 246, 1)',
-                pointBorderColor: '#fff',
-                pointRadius: 5,
-                pointHoverRadius: 7,
-                borderWidth: 3,
-                fill: false,
-                tension: 0.3,
-                spanGaps: true
-              },
-              {
-                label: '班級平均',
-                data: classAvgData,
-                borderColor: 'rgba(148, 163, 184, 0.8)',
-                backgroundColor: 'rgba(148, 163, 184, 0.1)',
-                pointBackgroundColor: 'rgba(148, 163, 184, 0.8)',
-                pointRadius: 3,
-                borderWidth: 2,
-                borderDash: [4, 4],
-                fill: false,
-                tension: 0.3,
-                spanGaps: true
-              },
-              {
-                label: '及格門檻 (75 分)',
-                data: passLine,
-                borderColor: 'rgba(239, 68, 68, 0.7)',
-                backgroundColor: 'transparent',
-                pointRadius: 0,
-                borderWidth: 1.5,
-                borderDash: [6, 4],
-                fill: false
-              }
-            ]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            scales: {
-              y: { min: 30, max: 100, ticks: { stepSize: 10, color: '#64748b' }, grid: { color: 'rgba(148, 163, 184, 0.2)' } },
-              x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(148, 163, 184, 0.1)' } }
-            },
-            plugins: { legend: { position: 'bottom', labels: { padding: 12, font: { size: 12 } } } }
-          }
-        });
+        _riverStats = { labels: examStats.map(s => s.label), examStats };
+        renderRiver();
       } catch (e) {
         console.error('[F12-B] loadScoreRiverChart error:', e);
         const hint = document.getElementById('score-river-empty-hint');
