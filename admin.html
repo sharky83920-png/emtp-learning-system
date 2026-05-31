@@ -515,14 +515,14 @@
         <div class="form-group"><label>姓名</label><input type="text" id="se-edit-name"></div>
         <div class="form-group"><label>Email（聯絡用、不影響登入）</label><input type="email" id="se-edit-email"></div>
         <div id="se-edit-pw-section" style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px;margin-top:8px">
-          <h4 style="color:#60a5fa;font-size:13px;margin-bottom:8px">🔑 登入密碼（身分證）</h4>
+          <h4 style="color:#60a5fa;font-size:13px;margin-bottom:8px">🔑 登入密碼（預設身分證、可自訂）</h4>
           <div id="se-edit-pw-noacct" style="display:none">
-            <div class="form-group" style="margin-bottom:0"><label>身分證字號（建帳號時的密碼）</label><input type="text" id="se-edit-id-new" maxlength="10" style="font-family:monospace;text-transform:uppercase"></div>
+            <div class="form-group" style="margin-bottom:0"><label>登入密碼（建帳號用、至少 6 碼）</label><input type="text" id="se-edit-id-new" maxlength="20" style="font-family:monospace;text-transform:uppercase"></div>
           </div>
           <div id="se-edit-pw-hasacct" style="display:none">
-            <p style="color:#94a3b8;font-size:12px;margin-bottom:8px">⚠️ 已建帳號。要改登入密碼需輸入「目前身分證」驗證、再設新的。</p>
-            <div class="form-group"><label>目前身分證（舊密碼）</label><input type="text" id="se-edit-id-old" maxlength="10" style="font-family:monospace;text-transform:uppercase" placeholder="留空＝不改密碼"></div>
-            <div class="form-group" style="margin-bottom:0"><label>新身分證（新密碼）</label><input type="text" id="se-edit-id-set" maxlength="10" style="font-family:monospace;text-transform:uppercase" placeholder="留空＝不改密碼"></div>
+            <p style="color:#94a3b8;font-size:12px;margin-bottom:8px">⚠️ 已建帳號。要改登入密碼需輸入「目前密碼」驗證、再設新的。</p>
+            <div class="form-group"><label>目前密碼（舊密碼）</label><input type="text" id="se-edit-id-old" maxlength="20" style="font-family:monospace;text-transform:uppercase" placeholder="留空＝不改密碼"></div>
+            <div class="form-group" style="margin-bottom:0"><label>新密碼（至少 6 碼）</label><input type="text" id="se-edit-id-set" maxlength="20" style="font-family:monospace;text-transform:uppercase" placeholder="留空＝不改密碼"></div>
           </div>
         </div>
         <div id="se-edit-error"></div>
@@ -542,7 +542,7 @@
         <div class="form-group"><label>班級（自動帶入）</label><input type="text" id="student-class-display" readonly style="background:#0a0f1f;color:#94a3b8"></div>
         <div class="form-group"><label>學號（數字）</label><input type="number" id="student-no" placeholder="1"></div>
         <div class="form-group"><label>姓名</label><input type="text" id="student-name" placeholder="尤偉檁"></div>
-        <div class="form-group"><label>身分證字號（10字、英文大寫+9數字、當登入密碼）</label><input type="text" id="student-id-number" maxlength="10" style="font-family:monospace;text-transform:uppercase;font-size:16px" placeholder="A123456789"></div>
+        <div class="form-group"><label>登入密碼（預設填身分證、可自訂、至少 6 碼）</label><input type="text" id="student-id-number" maxlength="20" style="font-family:monospace;text-transform:uppercase;font-size:16px" placeholder="A123456789 或自訂密碼"></div>
         <div class="form-group"><label>Email（選填、聯絡用、不用於登入）</label><input type="email" id="student-email" placeholder="contact@example.com"></div>
         <div id="student-modal-error"></div>
       </div>
@@ -568,7 +568,7 @@
 2	李大華	B234567890	li@example.com
 3	張小美	C345678901	
 
-💡 身分證 = 初始密碼、學員首次登入後可改
+💡 第三欄＝登入密碼（預設身分證、可自訂、至少 6 碼）
 💡 Email 可空白、不用於登入
 
 💡 Email 可以空白、之後再補"></textarea>
@@ -616,13 +616,13 @@ TP18,新北 TP18,2026"></textarea>
       <div class="modal-header"><h3>📤 批次匯入指導員</h3><button class="modal-close" id="ib-close">×</button></div>
       <div class="modal-body">
         <div class="form-group">
-          <label>指導員資料（每行一筆。格式：姓名 [Tab/逗號] 身分證 [Tab/逗號] 班級代碼(可多班、用 / 分隔)）</label>
-          <textarea id="ib-data" rows="12" placeholder="【格式】姓名,身分證,班級代碼
+          <label>指導員資料（每行一筆。格式：姓名 [Tab/逗號] 密碼 [Tab/逗號] 班級代碼(可多班、用 / 分隔)）</label>
+          <textarea id="ib-data" rows="12" placeholder="【格式】姓名,密碼,班級代碼
 王教官,A123456789,TP17
 李教官,B234567890,Taichung
 陳教官,C345678901,TP17/Taichung
 
-💡 身分證＝登入密碼（須 1 英文大寫＋9 數字）
+💡 密碼＝登入密碼（預設身分證、可自訂、至少 6 碼）
 💡 班級代碼要先在班級管理建好"></textarea>
         </div>
         <div id="ib-preview"></div>
@@ -643,8 +643,8 @@ TP18,新北 TP18,2026"></textarea>
       <div class="modal-body">
         <div class="form-group"><label>姓名</label><input type="text" id="instructor-name" placeholder="某教官"></div>
         <div class="form-group">
-          <label>身分證字號（當帳號 + 登入密碼、10 碼）</label>
-          <input type="text" id="instructor-idnumber" maxlength="10" style="font-family:monospace;text-transform:uppercase;font-size:16px" placeholder="A123456789">
+          <label>登入密碼（當帳號 + 密碼、預設身分證、可自訂、至少 6 碼）</label>
+          <input type="text" id="instructor-idnumber" maxlength="20" style="font-family:monospace;text-transform:uppercase;font-size:16px" placeholder="A123456789 或自訂密碼">
           <div id="instructor-auth-status" style="font-size:12px;margin-top:6px"></div>
         </div>
         <div class="form-group">
@@ -683,10 +683,10 @@ TP18,新北 TP18,2026"></textarea>
           <div style="color:#e2e8f0;font-size:16px;font-weight:600" id="create-auth-student">—</div>
         </div>
         <div class="form-group"><label>學員 Email（自動帶入）</label><input type="email" id="create-auth-email" readonly style="background:#0a0f1f;color:#94a3b8"></div>
-        <div class="form-group"><label>身分證字號（10 字元、當作初始密碼）</label><input type="text" id="create-auth-id" maxlength="10" placeholder="A123456789" style="font-family:monospace;text-transform:uppercase;font-size:16px"></div>
+        <div class="form-group"><label>登入密碼（預設身分證、可自訂、至少 6 碼）</label><input type="text" id="create-auth-id" maxlength="20" placeholder="A123456789 或自訂密碼" style="font-family:monospace;text-transform:uppercase;font-size:16px"></div>
         <div class="warn-msg" style="background:#78350f;color:#fef3c7">
           ⚠️ <strong>建立後請通知學員：</strong><br>
-          1. 學員 Email = 上面 email、初始密碼 = 身分證字號（含英文大寫）<br>
+          1. 學員 Email = 上面 email、初始密碼 = 你設定的密碼<br>
           2. 學員第一次登入後請自行修改密碼
         </div>
         <div id="create-auth-error"></div>
@@ -1305,8 +1305,8 @@ TP18,新北 TP18,2026"></textarea>
         const email = idNumber ? `${idNumber.toLowerCase()}@emtp.local` : '';
         let ok = true, note = '';
         if (!name) { ok = false; note = '缺姓名'; }
-        else if (!/^[A-Z]\d{9}$/.test(idNumber)) { ok = false; note = '身分證格式錯誤'; }
-        else if (existEmails.has(email) || seen.has(email)) { ok = false; note = '身分證重複/已存在'; }
+        else if (idNumber.length < 6) { ok = false; note = '密碼至少 6 碼'; }
+        else if (existEmails.has(email) || seen.has(email)) { ok = false; note = '密碼重複/已存在'; }
         else { const bad = classIds.filter(x => !validClasses.has(x)); if (classIds.length === 0) { ok = false; note = '缺班級'; } else if (bad.length) { ok = false; note = '班級不存在: ' + bad.join(','); } }
         seen.add(email);
         rows.push({ name, idNumber, email, classIds, ok, note });
@@ -1321,7 +1321,7 @@ TP18,新北 TP18,2026"></textarea>
     });
     document.getElementById('ib-commit').addEventListener('click', async () => {
       if (!instructorBatchPreview || instructorBatchPreview.length === 0) return;
-      if (!confirm(`確定建立 ${instructorBatchPreview.length} 位指導員 + 登入帳號？\n密碼＝身分證。`)) return;
+      if (!confirm(`確定建立 ${instructorBatchPreview.length} 位指導員 + 登入帳號？\n密碼＝第二欄（預設身分證、可自訂）。`)) return;
       const btn = document.getElementById('ib-commit'); btn.disabled = true;
       let ok = 0, fail = 0, fails = [];
       try {
@@ -1472,8 +1472,8 @@ TP18,新北 TP18,2026"></textarea>
           const oldId = document.getElementById('se-edit-id-old').value.trim().toUpperCase();
           const newId = document.getElementById('se-edit-id-set').value.trim().toUpperCase();
           if (oldId || newId) {
-            if (!/^[A-Z]\d{9}$/.test(oldId)) { errEl.innerHTML = '<div class="err-msg">❌ 請填正確「目前身分證」（舊密碼）來驗證身分</div>'; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
-            if (!/^[A-Z]\d{9}$/.test(newId)) { errEl.innerHTML = '<div class="err-msg">❌ 新身分證格式錯誤（1 英文 + 9 數字）</div>'; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+            if (!oldId) { errEl.innerHTML = '<div class="err-msg">❌ 請填「目前密碼」來驗證身分</div>'; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+            if (newId.length < 6) { errEl.innerHTML = '<div class="err-msg">❌ 新密碼至少 6 碼</div>'; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
             const fakeEmail = `${s.classId.toLowerCase()}-${s.studentNo}@emtp.local`;
             try {
               btn.textContent = '⏳ 重設密碼...';
@@ -1520,7 +1520,7 @@ TP18,新北 TP18,2026"></textarea>
       errEl.innerHTML = '';
       if (isNaN(studentNo) || studentNo < 1) { errEl.innerHTML = '<div class="err-msg">❌ 學號必須是 1 以上數字</div>'; return; }
       if (!name) { errEl.innerHTML = '<div class="err-msg">❌ 姓名必填</div>'; return; }
-      if (!/^[A-Z]\d{9}$/.test(idNumber)) { errEl.innerHTML = '<div class="err-msg">❌ 身分證格式錯誤（1 個英文字母 + 9 個數字、例：A123456789）</div>'; return; }
+      if (idNumber.length < 6) { errEl.innerHTML = '<div class="err-msg">❌ 密碼至少 6 碼（預設填身分證、也可自訂）</div>'; return; }
       const studentId = `${classId.toLowerCase()}-${studentNo}`;
       const fakeEmail = `${classId.toLowerCase()}-${studentNo}@emtp.local`;
       const btn = document.getElementById('student-modal-save');
@@ -1591,7 +1591,7 @@ TP18,新北 TP18,2026"></textarea>
         const email = parts[3] || '';
         if (isNaN(no)) { rows.push({ line: idx + 1, err: '學號不是數字' }); return; }
         if (!name) { rows.push({ line: idx + 1, no, err: '姓名空白' }); return; }
-        if (!/^[A-Z]\d{9}$/.test(idNumber)) { rows.push({ line: idx + 1, no, name, err: '身分證格式錯誤' }); return; }
+        if (idNumber.length < 6) { rows.push({ line: idx + 1, no, name, err: '密碼至少 6 碼' }); return; }
         if (seen[no]) { rows.push({ line: idx + 1, no, name, err: `學號重複（也在第 ${seen[no]} 行）` }); return; }
         seen[no] = idx + 1;
         rows.push({ line: idx + 1, no, name, idNumber, email, ok: true });
@@ -1624,7 +1624,7 @@ TP18,新北 TP18,2026"></textarea>
     document.getElementById('btn-batch-commit').addEventListener('click', async () => {
       if (!currentBatchPreview) return;
       const { classId, rows } = currentBatchPreview;
-      if (!confirm(`確定寫入 ${rows.length} 筆學員、並自動建立帳號？\n\n密碼一律設為身分證字號、請通知學員首次登入後改密碼。`)) return;
+      if (!confirm(`確定寫入 ${rows.length} 筆學員、並自動建立帳號？\n\n密碼＝第三欄（預設身分證、可自訂），請通知學員首次登入後改密碼。`)) return;
       const btn = document.getElementById('btn-batch-commit');
       btn.disabled = true;
       let success = 0, failed = 0, failures = [];
@@ -1797,7 +1797,7 @@ TP18,新北 TP18,2026"></textarea>
       const errEl = document.getElementById('instructor-modal-error');
       errEl.innerHTML = '';
       if (!name) { errEl.innerHTML = '<div class="err-msg">❌ 姓名必填</div>'; return; }
-      if (!currentEditingInstructor && !/^[A-Z]\d{9}$/.test(idNumber)) { errEl.innerHTML = '<div class="err-msg">❌ 身分證格式錯誤（1 英文 + 9 數字、當帳號與密碼）</div>'; return; }
+      if (!currentEditingInstructor && idNumber.length < 6) { errEl.innerHTML = '<div class="err-msg">❌ 密碼至少 6 碼（預設填身分證、也可自訂、當帳號與密碼）</div>'; return; }
       // 不需信箱：用身分證自動產生內部帳號 email
       const email = idNumber ? `${idNumber.toLowerCase()}@emtp.local` : '';
       const managedClassIds = Array.from(document.querySelectorAll('.instructor-class-cb:checked')).map(cb => cb.value);
@@ -1829,8 +1829,8 @@ TP18,新北 TP18,2026"></textarea>
 
         // 建立登入帳號（尚未建立 + 有填身分證）
         if (!existingData.hasAuthAccount && idNumber) {
-          if (!/^[A-Z]\d{9}$/.test(idNumber)) {
-            errEl.innerHTML = '<div class="warn-msg">⚠️ 資料已存、但身分證格式錯誤、未建立登入帳號（應為 1 英文 + 9 數字）</div>';
+          if (idNumber.length < 6) {
+            errEl.innerHTML = '<div class="warn-msg">⚠️ 資料已存、但密碼太短（至少 6 碼）、未建立登入帳號</div>';
           } else {
             try {
               const cred = await createUserWithEmailAndPassword(secondaryAuth, email, idNumber);
@@ -4865,8 +4865,8 @@ TP18,新北 TP18,2026"></textarea>
       const idNumber = document.getElementById('create-auth-id').value.trim().toUpperCase();
       const errEl = document.getElementById('create-auth-error');
       errEl.innerHTML = '';
-      if (!/^[A-Z]\d{9}$/.test(idNumber)) {
-        errEl.innerHTML = '<div class="err-msg">❌ 身分證格式錯誤、應為 1 個英文字母 + 9 個數字（例：A123456789）</div>';
+      if (idNumber.length < 6) {
+        errEl.innerHTML = '<div class="err-msg">❌ 密碼至少 6 碼（預設填身分證、也可自訂）</div>';
         return;
       }
       const btn = document.getElementById('create-auth-save');

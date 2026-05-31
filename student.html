@@ -118,7 +118,7 @@
       </div>
       <button class="btn-primary" id="btn-login">➜ 登入系統</button>
       <div id="login-error"></div>
-      <div class="info-msg">💡 初始密碼 = 身分證字號</div>
+      <div class="info-msg">💡 初始密碼由管理員設定（預設身分證、可自訂）</div>
     </div>
   </div>
 
@@ -661,7 +661,7 @@
       errEl.innerHTML = '';
       if (!classId) { errEl.innerHTML = '<div class="err-msg">❌ 請選班級</div>'; return; }
       if (!nameValue) { errEl.innerHTML = '<div class="err-msg">❌ 請選姓名</div>'; return; }
-      if (!/^[A-Z]\d{9}$/.test(idNumber)) { errEl.innerHTML = '<div class="err-msg">❌ 身分證格式錯誤（1 個英文字母 + 9 個數字）</div>'; return; }
+      if (!idNumber) { errEl.innerHTML = '<div class="err-msg">❌ 請輸入密碼</div>'; return; }
 
       const [studentNo, name] = nameValue.split('|');
       const fakeEmail = `${classId.toLowerCase()}-${studentNo}@emtp.local`;
