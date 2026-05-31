@@ -189,7 +189,7 @@
       </div>
 
       <!-- F11-F: 6 角學科雷達（D1-D6、首刷/考試切換） -->
-      <div class="milestone-section" data-tab="academic">
+      <div class="milestone-section" data-tab="academic" id="academic-radar-card">
         <h3>📊 學科綜合雷達（國考範圍）</h3>
         <div class="radar-toggle" id="radar-toggle" style="display:none">
           <button class="radar-tab active" id="radar-tab-first" data-mode="first">✏️ 首刷雷達</button>
@@ -1231,7 +1231,7 @@
           exams.forEach(e => { if (!e.dimensions) return; ACAD_DIMS.forEach(d => { const s = e.dimensions[d]; if (s) { sums[d].c += s.correct || 0; sums[d].t += s.total || 0; } }); });
           return ACAD_DIMS.map(d => sums[d].t === 0 ? 0 : (sums[d].c / sums[d].t) * 10);
         }
-        const hasExam = classExams.length > 0;   // 班級已上傳 → 解鎖切換
+        const hasExam = classExams.length > 0;   // 班級已上傳 → 有考試資料
 
         _radarData = {
           first: { my: myFirstScores, cls: clsFirstScores },
@@ -1239,10 +1239,22 @@
           hasExam
         };
 
-        // 解鎖切換鈕
+        // 班級功能開關（首刷雷達 / 考試雷達）
+        const sf = studentFeatures || {};
+        const showFirst = sf.radarFirst !== false;
+        const showExam = sf.radarExam !== false && hasExam;   // 考試雷達還需有資料
+        // 兩個都關 → 整張卡片隱藏
+        const card = document.getElementById('academic-radar-card');
+        if (card) card.classList.toggle('empty-hide', !showFirst && !showExam);
+        // 個別模式鈕
+        const bFirst = document.getElementById('radar-tab-first'); if (bFirst) bFirst.style.display = showFirst ? '' : 'none';
+        const bExam = document.getElementById('radar-tab-exam'); if (bExam) bExam.style.display = showExam ? '' : 'none';
+        // 切換列：兩個都有才需要切換
         const toggle = document.getElementById('radar-toggle');
-        if (toggle) toggle.style.display = hasExam ? 'flex' : 'none';
-        if (!hasExam) _radarMode = 'first';   // 沒解鎖 → 強制首刷
+        if (toggle) toggle.style.display = (showFirst && showExam) ? 'flex' : 'none';
+        // 修正目前模式
+        if (_radarMode === 'exam' && !showExam) _radarMode = 'first';
+        if (_radarMode === 'first' && !showFirst) _radarMode = showExam ? 'exam' : 'first';
 
         drawAcademicRadar();
       } catch (e) {
