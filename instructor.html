@@ -58,7 +58,10 @@
     .qr-student-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 13px; }
     .qr-student-row:last-child { border-bottom: none; }
     .pri-select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 14px; background: white; }
+    .sv-river-tab { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; padding: 5px 12px; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; }
+    .sv-river-tab.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -246,6 +249,46 @@
           <div id="ann-list" style="margin-top:14px"></div>
         </div>
 
+        <div class="card" id="student-view-card">
+          <h2>👤 個別學員檢視</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:12px">選一位學員，查看他的成績河流圖、學科雷達圖與每日刷題動能。</p>
+          <select id="sv-student" class="pri-select" style="margin-bottom:14px"><option value="">⏳ 載入中...</option></select>
+
+          <div id="sv-river-card" style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <h3 style="font-size:15px;color:#1e293b">📈 成績河流圖</h3>
+              <div style="display:flex;gap:6px">
+                <button id="sv-river-tab-river" class="sv-river-tab active" data-mode="river">河流</button>
+                <button id="sv-river-tab-density" class="sv-river-tab" data-mode="density">密度熱力</button>
+              </div>
+            </div>
+            <div id="sv-river-empty" style="display:none;color:#94a3b8;font-size:13px;text-align:center;padding:24px">這位學員尚無已評分的考試成績</div>
+            <div style="position:relative;height:300px"><canvas id="sv-river-chart"></canvas></div>
+          </div>
+
+          <div id="sv-radar-card" style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <h3 style="font-size:15px;color:#1e293b">🎯 學科雷達圖</h3>
+              <div id="sv-radar-toggle" style="display:flex;gap:6px">
+                <button id="sv-radar-tab-first" class="sv-river-tab active" data-mode="first">✏️ 首刷</button>
+                <button id="sv-radar-tab-exam" class="sv-river-tab" data-mode="exam">📊 考試</button>
+              </div>
+            </div>
+            <div id="sv-radar-note" style="font-size:12px;color:#64748b;margin-bottom:6px"></div>
+            <div id="sv-radar-empty" style="display:none;color:#94a3b8;font-size:13px;text-align:center;padding:24px">這位學員尚無資料</div>
+            <div style="position:relative;max-width:360px;margin:0 auto"><canvas id="sv-radar-chart"></canvas></div>
+          </div>
+
+          <div id="sv-momentum-card" style="border:1px solid #e2e8f0;border-radius:12px;padding:14px">
+            <h3 style="font-size:15px;color:#1e293b;margin-bottom:4px">🔥 每日刷題熱力 ＆ 累積動能</h3>
+            <div id="sv-momentum-stat" style="font-size:12px;color:#64748b;margin-bottom:10px">—</div>
+            <div id="sv-momentum-empty" style="display:none;color:#94a3b8;font-size:13px;text-align:center;padding:24px">這位學員尚無刷題紀錄</div>
+            <div style="position:relative;height:260px"><canvas id="sv-momentum-chart"></canvas></div>
+          </div>
+
+          <div id="sv-noperm" style="display:none;color:#94a3b8;font-size:13px;text-align:center;padding:20px">🔒 你沒有檢視學員個人資料的權限</div>
+        </div>
+
         <div class="card" id="mb-card">
           <h2>📓 錯題本開關</h2>
           <div id="mb-body"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
@@ -369,7 +412,10 @@
       canHandleCorrections: '處理勘誤',
       canUploadScores: '上傳成績',
       canEditScores: '個人成績修正',
-      canViewMistakeBook: '查看錯題本'
+      canViewMistakeBook: '查看錯題本',
+      canViewStudentRadar: '看學員個人雷達圖',
+      canViewStudentMomentum: '看學員刷題動能',
+      canViewStudentRiver: '看學員成績河流圖'
     };
 
     // ===== 登入 UI =====
@@ -1230,6 +1276,8 @@
       const d = document.getElementById('ann-expire');
       if (d && !d.value) { const t = new Date(); t.setDate(t.getDate() + 7); d.value = t.toISOString().slice(0, 10); }
       loadInstructorAnnouncements();
+      // 個別學員檢視（三個獨立權限：雷達/動能/河流）
+      loadStudentViewPanel(perms);
       // 沒「開關錯題本」權限 → 整張卡隱藏
       const mbCard = document.getElementById('mb-card');
       if (perms.canToggleMistakeBook) { mbCard.style.display = ''; loadMistakeBookToggle(); }
@@ -1343,6 +1391,240 @@
         }));
         el.querySelectorAll('button[data-edit-ann]').forEach(b => b.addEventListener('click', () => editAnnouncement(b.dataset.editAnn)));
       } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+    }
+
+    // ===== 個別學員檢視（河流 / 雷達 / 動能；三個獨立權限）=====
+    const SV_DIMS = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'];
+    const SV_DIM_NAMES = ['緊急救護系統', '基礎醫學含評估', '創傷', '非創傷', '特殊族群', '災難及特殊情境'];
+    let svRiverChart = null, svRadarChart = null, svMomentumChart = null;
+    let svRiverMode = 'river', svRadarMode = 'first';
+    let _svRiverStats = null, _svRadarData = null;
+    let _svCurrentStudentId = null;
+
+    function _svPct(sorted, p) {
+      if (!sorted.length) return null;
+      if (sorted.length === 1) return sorted[0];
+      const idx = (p / 100) * (sorted.length - 1);
+      const lo = Math.floor(idx), hi = Math.ceil(idx), w = idx - lo;
+      return sorted[lo] * (1 - w) + sorted[hi] * w;
+    }
+    function _svBand(label, upArr, loArr, rgba) {
+      return [
+        { label: label + '_lo', data: loArr, borderColor: 'transparent', backgroundColor: 'transparent', pointRadius: 0, fill: false, tension: 0.3, _band: true },
+        { label: label + '_hi', data: upArr, borderColor: 'transparent', backgroundColor: rgba, pointRadius: 0, fill: '-1', tension: 0.3, _band: true }
+      ];
+    }
+
+    async function loadStudentViewPanel(perms) {
+      const card = document.getElementById('student-view-card');
+      const p = perms || classPerms || {};
+      const anyPerm = p.canViewStudentRiver || p.canViewStudentRadar || p.canViewStudentMomentum;
+      if (!card) return;
+      // 完全沒權限 → 整張卡隱藏
+      if (!anyPerm) { card.style.display = 'none'; return; }
+      card.style.display = '';
+      // 各子卡依權限顯示
+      document.getElementById('sv-river-card').style.display = p.canViewStudentRiver ? '' : 'none';
+      document.getElementById('sv-radar-card').style.display = p.canViewStudentRadar ? '' : 'none';
+      document.getElementById('sv-momentum-card').style.display = p.canViewStudentMomentum ? '' : 'none';
+      document.getElementById('sv-noperm').style.display = 'none';
+      // 載入學員下拉
+      const sel = document.getElementById('sv-student');
+      sel.innerHTML = '<option value="">⏳ 載入中...</option>';
+      try {
+        const snap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
+        const studs = [];
+        snap.forEach(d => { const x = d.data(); if (x.isActive === false) return; studs.push({ id: d.id, no: x.studentNo || '', name: x.name || d.id }); });
+        studs.sort((a, b) => (parseInt(a.no) || 0) - (parseInt(b.no) || 0));
+        sel.innerHTML = '<option value="">請選擇學員...</option>' + studs.map(s => `<option value="${s.id}">${s.no ? s.no + '號 ' : ''}${s.name}</option>`).join('');
+        _svCurrentStudentId = null;
+      } catch (e) { sel.innerHTML = '<option value="">❌ 載入失敗</option>'; }
+    }
+
+    document.getElementById('sv-student').addEventListener('change', (e) => {
+      _svCurrentStudentId = e.target.value || null;
+      const p = classPerms || {};
+      if (!_svCurrentStudentId) return;
+      if (p.canViewStudentRiver) loadSvRiver(_svCurrentStudentId);
+      if (p.canViewStudentRadar) loadSvRadar(_svCurrentStudentId);
+      if (p.canViewStudentMomentum) loadSvMomentum(_svCurrentStudentId);
+    });
+
+    // 河流圖切換
+    document.getElementById('sv-river-tab-river').addEventListener('click', () => { svRiverMode = 'river'; document.getElementById('sv-river-tab-river').classList.add('active'); document.getElementById('sv-river-tab-density').classList.remove('active'); renderSvRiver(); });
+    document.getElementById('sv-river-tab-density').addEventListener('click', () => { svRiverMode = 'density'; document.getElementById('sv-river-tab-density').classList.add('active'); document.getElementById('sv-river-tab-river').classList.remove('active'); renderSvRiver(); });
+    // 雷達切換
+    document.getElementById('sv-radar-tab-first').addEventListener('click', () => { svRadarMode = 'first'; drawSvRadar(); });
+    document.getElementById('sv-radar-tab-exam').addEventListener('click', () => { svRadarMode = 'exam'; drawSvRadar(); });
+
+    async function loadSvRiver(studentId) {
+      const empty = document.getElementById('sv-river-empty');
+      const ctx = document.getElementById('sv-river-chart');
+      try {
+        // 全班成績（同班，status=scored）
+        const classSnap = await getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', selectedClassId)));
+        const byExam = {}; const myMap = {};
+        classSnap.forEach(d => {
+          const x = d.data(); if (x.status !== 'scored' || x.totalScore == null) return;
+          const k = x.examName; if (!byExam[k]) byExam[k] = { name: k, date: x.examDate || '', scores: [] };
+          byExam[k].scores.push(x.totalScore); if (x.examDate) byExam[k].date = x.examDate;
+          if (x.studentId === studentId) myMap[k] = x.totalScore;
+        });
+        const exams = Object.values(byExam).filter(e => myMap[e.name] != null).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+        if (exams.length === 0) { empty.style.display = 'block'; ctx.style.display = 'none'; if (svRiverChart) { svRiverChart.destroy(); svRiverChart = null; } return; }
+        empty.style.display = 'none'; ctx.style.display = 'block';
+        const examStats = exams.map(e => {
+          const arr = e.scores.slice().sort((a, b) => a - b);
+          const n = arr.length, enough = n >= 5;
+          const mean = n ? arr.reduce((x, y) => x + y, 0) / n : null;
+          const P = p => enough ? _svPct(arr, p) : null;
+          const dist = { d85: arr.filter(v => v >= 85).length, d76: arr.filter(v => v >= 76 && v < 85).length, d66: arr.filter(v => v >= 66 && v < 76).length, d65: arr.filter(v => v < 66).length };
+          const dt = e.date ? new Date(e.date) : null;
+          return { name: e.name, date: e.date, label: dt ? `${dt.getMonth() + 1}/${dt.getDate()}` : e.name, n, mean, enough, my: myMap[e.name], dist,
+            p10: P(10), p20: P(20), p25: P(25), p30: P(30), p40: P(40), p60: P(60), p70: P(70), p75: P(75), p80: P(80), p90: P(90) };
+        });
+        _svRiverStats = { labels: examStats.map(s => s.label), examStats };
+        renderSvRiver();
+      } catch (e) { empty.style.display = 'block'; empty.textContent = '❌ ' + e.message; ctx.style.display = 'none'; }
+    }
+
+    function renderSvRiver() {
+      const ctx = document.getElementById('sv-river-chart');
+      if (!_svRiverStats || !ctx || !window.Chart) return;
+      const S = _svRiverStats.examStats, labels = _svRiverStats.labels;
+      const myData = S.map(s => s.my);
+      const avgData = S.map(s => s.mean != null ? Math.round(s.mean * 10) / 10 : null);
+      const passLine = S.map(() => 75);
+      let datasets = [];
+      if (svRiverMode === 'river') {
+        datasets.push(..._svBand('河道', S.map(s => s.p75), S.map(s => s.p25), 'rgba(148,163,184,0.30)'));
+      } else {
+        datasets.push(..._svBand('全班', S.map(s => s.p90), S.map(s => s.p10), 'rgba(239,68,68,0.10)'));
+        datasets.push(..._svBand('穩定', S.map(s => s.p80), S.map(s => s.p20), 'rgba(239,68,68,0.10)'));
+        datasets.push(..._svBand('主力', S.map(s => s.p70), S.map(s => s.p30), 'rgba(239,68,68,0.12)'));
+        datasets.push(..._svBand('核心', S.map(s => s.p60), S.map(s => s.p40), 'rgba(239,68,68,0.15)'));
+      }
+      datasets.push({ label: '班級平均', data: avgData, borderColor: 'rgba(148,163,184,0.9)', pointBackgroundColor: 'rgba(148,163,184,0.9)', pointRadius: 3, borderWidth: 2, borderDash: [4, 4], fill: false, tension: 0.3, spanGaps: true });
+      datasets.push({ label: '及格門檻 (75)', data: passLine, borderColor: 'rgba(239,68,68,0.8)', pointRadius: 0, borderWidth: 1.5, borderDash: [6, 4], fill: false });
+      datasets.push({ label: '學員得分', data: myData, borderColor: 'rgba(37,99,235,1)', backgroundColor: 'rgba(37,99,235,0.1)', pointBackgroundColor: 'rgba(37,99,235,1)', pointBorderColor: '#fff', pointRadius: 5, pointHoverRadius: 7, borderWidth: 3, fill: false, tension: 0.3, spanGaps: true });
+      if (svRiverChart) svRiverChart.destroy();
+      svRiverChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: { y: { min: 30, max: 100, ticks: { stepSize: 10, color: '#64748b' }, grid: { color: 'rgba(148,163,184,0.2)' } }, x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(148,163,184,0.1)' } } },
+          plugins: {
+            legend: { position: 'bottom', labels: { padding: 10, font: { size: 11 }, filter: it => !/_(lo|hi)$/.test(it.text) } },
+            tooltip: {
+              filter: it => !it.dataset._band,
+              callbacks: {
+                title: items => { const s = S[items[0]?.dataIndex]; return s ? `${s.name}（${s.label}）` : ''; },
+                afterBody: items => {
+                  const s = S[items[0]?.dataIndex]; if (!s) return '';
+                  const L = [];
+                  if (svRiverMode === 'density') {
+                    if (s.enough) { L.push('— 落點區間 —'); L.push(`核心 P40-60: ${Math.round(s.p40)}~${Math.round(s.p60)}`); L.push(`主力 P30-70: ${Math.round(s.p30)}~${Math.round(s.p70)}`); L.push(`穩定 P20-80: ${Math.round(s.p20)}~${Math.round(s.p80)}`); L.push(`全班 P10-90: ${Math.round(s.p10)}~${Math.round(s.p90)}`); }
+                    else { L.push(`（有成績 ${s.n} 人 < 5、不畫密度帶）`); }
+                  }
+                  L.push('— 全班人數分佈 —'); L.push(`85以上: ${s.dist.d85} 人`); L.push(`76-85: ${s.dist.d76} 人`); L.push(`66-75: ${s.dist.d66} 人`); L.push(`65以下: ${s.dist.d65} 人`);
+                  return L;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    async function loadSvRadar(studentId) {
+      const empty = document.getElementById('sv-radar-empty');
+      const ctx = document.getElementById('sv-radar-chart');
+      try {
+        const dimAcc10 = recs => { const sums = {}; SV_DIMS.forEach(d => sums[d] = { c: 0, t: 0 }); recs.forEach(r => { if (sums[r.dim]) { sums[r.dim].t++; if (r.isCorrect) sums[r.dim].c++; } }); return SV_DIMS.map(d => sums[d].t === 0 ? 0 : (sums[d].c / sums[d].t) * 10); };
+        // 首刷：該生 question_attempts，每題取最早一次
+        const mySnap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', studentId)));
+        const myFirst = {};
+        mySnap.forEach(d => { const a = d.data(); if (!a.questionId || !a.dimension) return; const t = a.attemptedAt?.seconds || 0; if (!myFirst[a.questionId] || t < myFirst[a.questionId].t) myFirst[a.questionId] = { dim: a.dimension, isCorrect: a.isCorrect, t }; });
+        const myFirstScores = dimAcc10(Object.values(myFirst));
+        // 全班首刷平均：讀彙總 class_radar
+        let clsFirstScores = SV_DIMS.map(() => 0);
+        const crDoc = await getDoc(doc(db, 'class_radar', selectedClassId));
+        if (crDoc.exists() && crDoc.data().first) { const f = crDoc.data().first; clsFirstScores = SV_DIMS.map(d => { const o = f[d]; return (o && o.t) ? (o.c / o.t) * 10 : 0; }); }
+        // 考試：exam_scores_radar
+        const calcExam = exams => { const sums = {}; SV_DIMS.forEach(d => sums[d] = { c: 0, t: 0 }); exams.forEach(e => { if (!e.dimensions) return; SV_DIMS.forEach(d => { const s = e.dimensions[d]; if (s) { sums[d].c += s.correct || 0; sums[d].t += s.total || 0; } }); }); return SV_DIMS.map(d => sums[d].t === 0 ? 0 : (sums[d].c / sums[d].t) * 10); };
+        const myExamSnap = await getDocs(query(collection(db, 'exam_scores_radar'), where('studentId', '==', studentId)));
+        const myExams = []; myExamSnap.forEach(d => myExams.push(d.data()));
+        const clsExamSnap = await getDocs(query(collection(db, 'exam_scores_radar'), where('classId', '==', selectedClassId)));
+        const clsExams = []; clsExamSnap.forEach(d => clsExams.push(d.data()));
+        const hasExam = clsExams.length > 0;
+        _svRadarData = { first: { my: myFirstScores, cls: clsFirstScores }, exam: { my: calcExam(myExams), cls: calcExam(clsExams) }, hasExam };
+        // 考試鈕有資料才顯示
+        const bExam = document.getElementById('sv-radar-tab-exam'); bExam.style.display = hasExam ? '' : 'none';
+        if (svRadarMode === 'exam' && !hasExam) svRadarMode = 'first';
+        empty.style.display = 'none'; ctx.style.display = 'block';
+        drawSvRadar();
+      } catch (e) { empty.style.display = 'block'; empty.textContent = '❌ ' + e.message; ctx.style.display = 'none'; }
+    }
+
+    function drawSvRadar() {
+      const ctx = document.getElementById('sv-radar-chart');
+      if (!_svRadarData || !ctx || !window.Chart) return;
+      const src = svRadarMode === 'exam' ? _svRadarData.exam : _svRadarData.first;
+      document.getElementById('sv-radar-tab-first').classList.toggle('active', svRadarMode === 'first');
+      document.getElementById('sv-radar-tab-exam').classList.toggle('active', svRadarMode === 'exam');
+      document.getElementById('sv-radar-note').textContent = svRadarMode === 'exam' ? '📊 來自考試成績' : '✏️ 來自刷題首刷';
+      if (svRadarChart) svRadarChart.destroy();
+      svRadarChart = new Chart(ctx, {
+        type: 'radar',
+        data: { labels: SV_DIM_NAMES, datasets: [
+          { label: '學員得分', data: src.my, backgroundColor: 'rgba(59,130,246,0.25)', borderColor: 'rgba(59,130,246,1)', pointBackgroundColor: 'rgba(59,130,246,1)', pointBorderColor: '#fff', borderWidth: 2 },
+          { label: '班級平均', data: src.cls, backgroundColor: 'rgba(239,68,68,0)', borderColor: 'rgba(239,68,68,0.7)', borderDash: [6, 4], pointBackgroundColor: 'rgba(239,68,68,0.7)', pointRadius: 3, borderWidth: 1.5 }
+        ] },
+        options: { responsive: true, maintainAspectRatio: true, scales: { r: { min: 0, max: 10, ticks: { stepSize: 2, color: '#94a3b8', backdropColor: 'transparent' }, pointLabels: { font: { size: 11, weight: '600' }, color: '#1e293b' }, grid: { color: 'rgba(148,163,184,0.25)' }, angleLines: { color: 'rgba(148,163,184,0.3)' } } }, plugins: { legend: { position: 'bottom', labels: { padding: 10, font: { size: 11 } } } } }
+      });
+    }
+
+    async function loadSvMomentum(studentId) {
+      const empty = document.getElementById('sv-momentum-empty');
+      const ctx = document.getElementById('sv-momentum-chart');
+      const stat = document.getElementById('sv-momentum-stat');
+      try {
+        const snap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', studentId)));
+        const byDay = {};
+        snap.forEach(d => { const a = d.data(); const sec = a.attemptedAt?.seconds; if (!sec) return; const dt = new Date(sec * 1000); const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`; byDay[key] = (byDay[key] || 0) + 1; });
+        const days = Object.keys(byDay).sort();
+        if (days.length === 0) { empty.style.display = 'block'; ctx.style.display = 'none'; stat.textContent = '—'; if (svMomentumChart) { svMomentumChart.destroy(); svMomentumChart = null; } return; }
+        empty.style.display = 'none'; ctx.style.display = 'block';
+        // 補齊每日（含空白日）讓動能線連續
+        const first = new Date(days[0]), last = new Date(days[days.length - 1]);
+        const labels = [], daily = [], cumu = [];
+        let acc = 0;
+        for (let t = new Date(first); t <= last; t.setDate(t.getDate() + 1)) {
+          const key = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+          const c = byDay[key] || 0; acc += c;
+          labels.push(`${t.getMonth() + 1}/${t.getDate()}`); daily.push(c); cumu.push(acc);
+        }
+        const total = acc, activeDays = days.length, span = labels.length;
+        stat.textContent = `累積 ${total} 題　|　活躍 ${activeDays} 天 / 共 ${span} 天　|　日均 ${(total / span).toFixed(1)} 題`;
+        if (svMomentumChart) svMomentumChart.destroy();
+        svMomentumChart = new Chart(ctx, {
+          data: { labels, datasets: [
+            { type: 'bar', label: '當日刷題', data: daily, backgroundColor: 'rgba(249,115,22,0.55)', borderRadius: 3, yAxisID: 'y', order: 2 },
+            { type: 'line', label: '累積動能', data: cumu, borderColor: 'rgba(37,99,235,1)', backgroundColor: 'rgba(37,99,235,0.08)', pointRadius: 0, borderWidth: 2.5, fill: true, tension: 0.25, yAxisID: 'y1', order: 1 }
+          ] },
+          options: {
+            responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+            scales: {
+              y: { position: 'left', beginAtZero: true, title: { display: true, text: '當日題數', color: '#ea580c', font: { size: 11 } }, ticks: { color: '#64748b' }, grid: { color: 'rgba(148,163,184,0.15)' } },
+              y1: { position: 'right', beginAtZero: true, title: { display: true, text: '累積', color: '#2563eb', font: { size: 11 } }, ticks: { color: '#64748b' }, grid: { drawOnChartArea: false } },
+              x: { ticks: { color: '#64748b', maxTicksLimit: 12, autoSkip: true }, grid: { display: false } }
+            },
+            plugins: { legend: { position: 'bottom', labels: { padding: 10, font: { size: 11 } } } }
+          }
+        });
+      } catch (e) { empty.style.display = 'block'; empty.textContent = '❌ ' + e.message; ctx.style.display = 'none'; }
     }
 
     async function loadMistakeBookToggle() {
