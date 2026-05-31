@@ -902,9 +902,10 @@
         let students = [];
         stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false) students.push({ id: d.id, name: s.name, no: s.studentNo }); });
         students.sort((a, b) => (a.no || 0) - (b.no || 0));
-        const subSnap = await getDocs(query(collection(db, 'question_submissions'), where('classId', '==', selectedClassId)));
+        // 以「題庫出題者」判斷：該班該日、每位學員出了幾題
+        const qSnap = await getDocs(query(collection(db, 'questions'), where('createdByClassId', '==', selectedClassId)));
         const countByStu = {};
-        subSnap.forEach(d => { const s = d.data(); if (s.scheduledDate === date) countByStu[s.studentId] = (countByStu[s.studentId] || 0) + 1; });
+        qSnap.forEach(d => { const q = d.data(); if (q.scheduledDate === date && q.createdByStudentId) countByStu[q.createdByStudentId] = (countByStu[q.createdByStudentId] || 0) + 1; });
         const rows = students.map(s => ({ ...s, cnt: countByStu[s.id] || 0, done: (countByStu[s.id] || 0) >= need }));
         const total = rows.length, done = rows.filter(r => r.done).length, miss = total - done;
         el.innerHTML = `
@@ -930,9 +931,10 @@
       if (schedCache.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">本班尚未設定應繳出題日</div>'; return; }
       el.innerHTML = '<div class="placeholder" style="padding:12px"><div class="icon">⏳</div></div>';
       try {
-        const subSnap = await getDocs(query(collection(db, 'question_submissions'), where('classId', '==', selectedClassId)));
+        // 以「題庫出題者」判斷：該學員每個應繳日各出了幾題
+        const qSnap = await getDocs(query(collection(db, 'questions'), where('createdByStudentId', '==', stuId)));
         const cntByDate = {};
-        subSnap.forEach(d => { const s = d.data(); if (s.studentId === stuId) cntByDate[s.scheduledDate] = (cntByDate[s.scheduledDate] || 0) + 1; });
+        qSnap.forEach(d => { const sd = d.data().scheduledDate; if (sd) cntByDate[sd] = (cntByDate[sd] || 0) + 1; });
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const dates = [...schedCache].sort((a, b) => (b.scheduledDate || '').localeCompare(a.scheduledDate || '')); // 新→舊
         const rows = dates.map(s => {
