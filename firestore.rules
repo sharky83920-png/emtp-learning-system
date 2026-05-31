@@ -71,6 +71,7 @@ service cloud.firestore {
     // ── 成績 ──
     match /exam_scores_total/{id} { allow read: if authed(); allow write: if authed(); }
     match /exam_scores_radar/{id} { allow read: if authed(); allow write: if authed(); }
+    match /class_radar/{id}       { allow read: if authed(); allow write: if isMaster(); }
     match /upload_batches/{id}    { allow read: if authed(); allow write: if authed(); }
 
     // ── 公告 / 通知 ──
