@@ -1216,10 +1216,18 @@
         mySnap.forEach(d => { const a = d.data(); if (!a.questionId || !a.dimension) return; const t = a.attemptedAt?.seconds || 0; if (!myFirst[a.questionId] || t < myFirst[a.questionId].t) myFirst[a.questionId] = { dim: a.dimension, isCorrect: a.isCorrect, t }; });
         const myFirstScores = dimAccuracy10(Object.values(myFirst));
 
-        const clsSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', currentStudent.classId)));
-        const clsFirst = {};
-        clsSnap.forEach(d => { const a = d.data(); if (!a.questionId || !a.dimension) return; const k = a.studentId + '|' + a.questionId; const t = a.attemptedAt?.seconds || 0; if (!clsFirst[k] || t < clsFirst[k].t) clsFirst[k] = { dim: a.dimension, isCorrect: a.isCorrect, t }; });
-        const clsFirstScores = dimAccuracy10(Object.values(clsFirst));
+        // 全班首刷平均：優先讀彙總 class_radar（避免掃全班 18.5 萬）
+        let clsFirstScores;
+        const crDoc = await getDoc(doc(db, 'class_radar', currentStudent.classId));
+        if (crDoc.exists() && crDoc.data().first) {
+          const f = crDoc.data().first;
+          clsFirstScores = ACAD_DIMS.map(d => { const o = f[d]; return (o && o.t) ? (o.c / o.t) * 10 : 0; });
+        } else {
+          const clsSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', currentStudent.classId)));
+          const clsFirst = {};
+          clsSnap.forEach(d => { const a = d.data(); if (!a.questionId || !a.dimension) return; const k = a.studentId + '|' + a.questionId; const t = a.attemptedAt?.seconds || 0; if (!clsFirst[k] || t < clsFirst[k].t) clsFirst[k] = { dim: a.dimension, isCorrect: a.isCorrect, t }; });
+          clsFirstScores = dimAccuracy10(Object.values(clsFirst));
+        }
 
         // === 考試雷達：exam_scores_radar ===
         const myExamSnap = await getDocs(query(collection(db, 'exam_scores_radar'), where('studentId', '==', currentStudent.id)));
