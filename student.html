@@ -214,9 +214,12 @@
           <button id="river-tab-river" class="river-mode-btn active">📈 成績河流圖</button>
           <button id="river-tab-density" class="river-mode-btn">🔥 密度熱力圖 <span class="river-info-ic" data-info="density">?</span></button>
         </div>
-        <div style="position:relative;height:280px">
-          <canvas id="score-river-chart"></canvas>
+        <div id="river-scroll" style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;border-radius:10px">
+          <div id="river-canvas-wrap" style="position:relative;height:300px;min-width:100%">
+            <canvas id="score-river-chart"></canvas>
+          </div>
         </div>
+        <div id="river-scroll-hint" style="display:none;text-align:center;color:#94a3b8;font-size:11px;margin-top:6px">← 左右滑動看更多考試 →</div>
         <div class="empty-hint" id="score-river-empty-hint">⏳ 尚無考試成績、上傳考試後河流圖會自動更新</div>
       </div>
 
@@ -305,7 +308,20 @@
       <!-- F11-B: 核心技術簽核清單 -->
       <div class="milestone-section" data-tab="skills" data-feat="coreskill">
         <h3>🛠️ 核心技術簽核清單</h3>
+        <button id="btn-scan-qr" style="width:100%;background:linear-gradient(135deg,#14b8a6,#0d9488);color:#fff;border:none;padding:13px;border-radius:10px;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 12px rgba(20,184,166,0.3)">📷 掃描教官 QR 簽核</button>
         <div id="core-skills-list"><div class="loading">⏳ 載入中...</div></div>
+      </div>
+
+      <!-- F11-E2: App 內 QR 掃描簽核 Modal -->
+      <div id="qr-scan-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:1700;flex-direction:column;align-items:center;justify-content:center;padding:16px">
+        <div style="width:100%;max-width:420px;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+          <div style="background:linear-gradient(135deg,#14b8a6,#0d9488);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:16px;font-weight:700">📷 掃描教官 QR 簽核</div>
+            <button id="btn-scan-close" style="background:rgba(255,255,255,0.2);border:none;color:#fff;width:34px;height:34px;border-radius:50%;font-size:20px;cursor:pointer;line-height:1">×</button>
+          </div>
+          <div id="qr-reader" style="width:100%;background:#000;min-height:200px"></div>
+          <div id="qr-scan-status" style="padding:14px 18px;font-size:13px;color:#475569;text-align:center;line-height:1.7">將鏡頭對準教官出示的 QR Code</div>
+        </div>
       </div>
 
       <!-- F13-C: 新增自創題庫 Modal -->
@@ -1050,6 +1066,72 @@
       if (type === 'success') setTimeout(() => banner.remove(), 8000);
     }
 
+    // ===== F11-E2: App 內掃描 QR 簽核（不必離開 App 用外部相機） =====
+    let _html5Qr = null;
+    let _qrLibLoading = null;
+    function loadQrLib() {
+      if (window.Html5Qrcode) return Promise.resolve();
+      if (_qrLibLoading) return _qrLibLoading;
+      _qrLibLoading = new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js';
+        s.onload = res;
+        s.onerror = () => { _qrLibLoading = null; rej(new Error('掃描元件載入失敗、請檢查網路')); };
+        document.head.appendChild(s);
+      });
+      return _qrLibLoading;
+    }
+    // QR 內容可能是完整網址（含 ?qr=）或純 sessionId
+    function extractQrSessionId(text) {
+      if (!text) return null;
+      const m = text.match(/[?&]qr=([^&\s]+)/);
+      if (m) return decodeURIComponent(m[1]);
+      const t = text.trim();
+      if (/^qr_[a-z0-9]+$/i.test(t)) return t;
+      return null;
+    }
+    let _qrHandling = false;
+    async function openQrScanner() {
+      const modal = document.getElementById('qr-scan-modal');
+      const statusEl = document.getElementById('qr-scan-status');
+      _qrHandling = false;
+      statusEl.textContent = '⏳ 啟動相機中...';
+      modal.style.display = 'flex';
+      try {
+        await loadQrLib();
+        document.getElementById('qr-reader').innerHTML = '';
+        _html5Qr = new Html5Qrcode('qr-reader');
+        await _html5Qr.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: (vw, vh) => { const m = Math.min(vw, vh), s = Math.max(150, Math.floor(m * 0.7)); return { width: s, height: s }; } },
+          async (decodedText) => {
+            if (_qrHandling) return;                 // 防止同一張連續觸發
+            const sid = extractQrSessionId(decodedText);
+            if (!sid) { statusEl.textContent = '⚠️ 這不是有效的簽核 QR，請對準教官畫面再試'; return; }
+            _qrHandling = true;
+            statusEl.textContent = '✅ 已掃到、處理簽核中...';
+            await closeQrScanner();
+            await processQrSignoff(sid);
+          },
+          () => {}                                   // 每幀解碼失敗：忽略
+        );
+        statusEl.textContent = '將鏡頭對準教官出示的 QR Code';
+      } catch (e) {
+        statusEl.innerHTML = `❌ 無法啟動相機：${(e && e.message) || e}<br><span style="color:#94a3b8;font-size:12px">請確認已允許相機權限（HTTPS 下才能用），或改用手機相機 App 掃教官畫面。</span>`;
+      }
+    }
+    async function closeQrScanner() {
+      const modal = document.getElementById('qr-scan-modal');
+      if (_html5Qr) {
+        try { await _html5Qr.stop(); } catch (e) {}
+        try { _html5Qr.clear(); } catch (e) {}
+        _html5Qr = null;
+      }
+      if (modal) modal.style.display = 'none';
+    }
+    document.getElementById('btn-scan-qr')?.addEventListener('click', openQrScanner);
+    document.getElementById('btn-scan-close')?.addEventListener('click', closeQrScanner);
+
     // ===== F12-B: 成績河流圖 / 密度熱力圖（歷次考試趨勢） =====
     let scoreRiverChart = null;
     let _riverMode = 'river';   // 'river' | 'density'
@@ -1075,18 +1157,36 @@
       const myData = S.map(s => s.my);
       const avgData = S.map(s => s.mean != null ? Math.round(s.mean * 10) / 10 : null);
       const passLine = S.map(() => 75);
+
+      // 考試多時改為可橫向滑動：每場固定寬度、標籤不再擠成一團
+      const scroll = document.getElementById('river-scroll');
+      const wrap = document.getElementById('river-canvas-wrap');
+      const PER = 56;                                   // 每場考試寬度 (px)
+      const avail = scroll ? scroll.clientWidth : 0;
+      const need = labels.length * PER;
+      const scrollable = avail > 0 && need > avail;
+      if (wrap) wrap.style.width = scrollable ? need + 'px' : '100%';
+      const hint = document.getElementById('river-scroll-hint');
+      if (hint) hint.style.display = scrollable ? 'block' : 'none';
+
+      // 你的得分線下方漸層填色（只在河流模式、避免密度模式紅帶過於雜亂）
+      const cv = ctx.getContext('2d');
+      const grad = cv.createLinearGradient(0, 0, 0, 300);
+      grad.addColorStop(0, 'rgba(37,99,235,0.22)');
+      grad.addColorStop(1, 'rgba(37,99,235,0.01)');
+
       let datasets = [];
       if (_riverMode === 'river') {
-        datasets.push(..._band('河道', S.map(s => s.p75), S.map(s => s.p25), 'rgba(148,163,184,0.30)'));
+        datasets.push(..._band('河道', S.map(s => s.p75), S.map(s => s.p25), 'rgba(148,163,184,0.28)'));
       } else {
         datasets.push(..._band('全班', S.map(s => s.p90), S.map(s => s.p10), 'rgba(239,68,68,0.10)'));
         datasets.push(..._band('穩定', S.map(s => s.p80), S.map(s => s.p20), 'rgba(239,68,68,0.10)'));
         datasets.push(..._band('主力', S.map(s => s.p70), S.map(s => s.p30), 'rgba(239,68,68,0.12)'));
         datasets.push(..._band('核心', S.map(s => s.p60), S.map(s => s.p40), 'rgba(239,68,68,0.15)'));
       }
-      datasets.push({ label: '班級平均', data: avgData, borderColor: 'rgba(148,163,184,0.9)', pointBackgroundColor: 'rgba(148,163,184,0.9)', pointRadius: 3, borderWidth: 2, borderDash: [4, 4], fill: false, tension: 0.3, spanGaps: true });
+      datasets.push({ label: '班級平均', data: avgData, borderColor: 'rgba(148,163,184,0.9)', pointBackgroundColor: 'rgba(148,163,184,0.9)', pointRadius: 3, pointHoverRadius: 5, borderWidth: 2, borderDash: [4, 4], fill: false, tension: 0.35, cubicInterpolationMode: 'monotone', spanGaps: true });
       datasets.push({ label: '及格門檻 (75 分)', data: passLine, borderColor: 'rgba(239,68,68,0.8)', pointRadius: 0, borderWidth: 1.5, borderDash: [6, 4], fill: false });
-      datasets.push({ label: '你的綜合得分', data: myData, borderColor: 'rgba(37,99,235,1)', backgroundColor: 'rgba(37,99,235,0.1)', pointBackgroundColor: 'rgba(37,99,235,1)', pointBorderColor: '#fff', pointRadius: 5, pointHoverRadius: 7, borderWidth: 3, fill: false, tension: 0.3, spanGaps: true });
+      datasets.push({ label: '你的綜合得分', data: myData, borderColor: 'rgba(37,99,235,1)', backgroundColor: _riverMode === 'river' ? grad : 'transparent', pointBackgroundColor: 'rgba(37,99,235,1)', pointBorderColor: '#fff', pointBorderWidth: 2, pointRadius: 5, pointHoverRadius: 8, pointHitRadius: 18, borderWidth: 3, fill: _riverMode === 'river' ? 'origin' : false, tension: 0.35, cubicInterpolationMode: 'monotone', spanGaps: true });
 
       if (scoreRiverChart) scoreRiverChart.destroy();
       scoreRiverChart = new Chart(ctx, {
@@ -1094,13 +1194,16 @@
         data: { labels, datasets },
         options: {
           responsive: true, maintainAspectRatio: false,
+          animation: { duration: 600 },
+          layout: { padding: { top: 8, right: 10, left: 2 } },
+          elements: { line: { borderJoinStyle: 'round', borderCapStyle: 'round' } },
           interaction: { mode: 'index', intersect: false },
           scales: {
-            y: { min: 30, max: 100, ticks: { stepSize: 10, color: '#64748b' }, grid: { color: 'rgba(148,163,184,0.2)' } },
-            x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(148,163,184,0.1)' } }
+            y: { min: 30, max: 100, ticks: { stepSize: 10, color: '#64748b', font: { size: 11 } }, grid: { color: 'rgba(148,163,184,0.18)', drawBorder: false } },
+            x: { ticks: { color: '#64748b', font: { size: 11 }, maxRotation: 0, autoSkip: false }, grid: { display: false } }
           },
           plugins: {
-            legend: { position: 'bottom', labels: { padding: 12, font: { size: 12 }, filter: it => !/_(lo|hi)$/.test(it.text) } },
+            legend: { position: 'bottom', labels: { padding: 12, font: { size: 12 }, usePointStyle: true, filter: it => !/_(lo|hi)$/.test(it.text) } },
             tooltip: {
               filter: it => !it.dataset._band,
               callbacks: {
@@ -1129,6 +1232,8 @@
           }
         }
       });
+      // 載入後自動捲到最新一場考試（最右側）
+      if (scrollable && scroll) requestAnimationFrame(() => { scroll.scrollLeft = scroll.scrollWidth; });
     }
 
     const RIVER_INFO = {
@@ -1716,25 +1821,39 @@
           return;
         }
 
-        // 2. 讀此學員的所有簽核紀錄
+        // 2. 讀此學員的所有簽核紀錄（連同簽核時間，給「追加次數」計分用）
         const signoffsQuery = query(collection(db, 'core_skill_signoffs'), where('studentId', '==', currentStudent.id));
         const signoffsSnap = await getDocs(signoffsQuery);
-        const signoffsBySkill = {};
+        const signoffsBySkill = {};   // skillId -> [signedAt 秒數]
         signoffsSnap.forEach(d => {
           const data = d.data();
-          if (!signoffsBySkill[data.skillId]) signoffsBySkill[data.skillId] = 0;
-          signoffsBySkill[data.skillId]++;
+          const sec = data.signedAt?.seconds ?? data.createdAt?.seconds ?? 0;
+          (signoffsBySkill[data.skillId] = signoffsBySkill[data.skillId] || []).push(sec);
         });
 
+        // 計分規則：教官調高目標次數時，蓋了 targetChangedAt + prevTargetCount。
+        // 追加前的簽核只認到「舊目標」，追加的次數一律要從「調整後」重新累計。
+        function creditedDone(skill) {
+          const target = skill.targetCount || 1;
+          const arr = signoffsBySkill[skill.id] || [];
+          const changedAt = skill.targetChangedAt?.seconds || 0;
+          const prevTarget = skill.prevTargetCount;
+          if (changedAt && prevTarget != null && target > prevTarget) {
+            const before = arr.filter(s => s < changedAt).length;
+            const after = arr.filter(s => s >= changedAt).length;
+            return Math.min(before, prevTarget) + after;
+          }
+          return arr.length;
+        }
+
         // F13-J: 改下拉、避免頁面過長
-        const totalDone = skills.filter(s => (signoffsBySkill[s.id] || 0) >= (s.targetCount || 1)).length;
+        const totalDone = skills.filter(s => creditedDone(s) >= (s.targetCount || 1)).length;
 
         function renderOneSkill(skill) {
           const target = skill.targetCount || 1;
-          const done = signoffsBySkill[skill.id] || 0;
-          const displayDone = Math.min(done, target);
+          const done = creditedDone(skill);
+          const displayDone = Math.min(done, target);   // 顯示封頂在規定次數、不顯示超額
           const isDone = done >= target;
-          const overflow = done > target ? done - target : 0;
           const pct = Math.min(100, (displayDone / target) * 100);
           const doneIcon = isDone ? '✅' : '';
           const pdfBtn = skill.testStandardUrl
@@ -1743,7 +1862,7 @@
           return `<div class="skill-item${isDone ? ' done' : ''}" style="display:block">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px">
               <div class="skill-name">${skill.name} ${doneIcon}${pdfBtn}</div>
-              <div class="skill-progress" style="font-size:12px;color:#64748b;white-space:nowrap">完成 ${done} / ${target} 次${overflow > 0 ? ` <span style="color:#10b981;font-weight:700">+${overflow}</span>` : ''}</div>
+              <div class="skill-progress" style="font-size:12px;color:#64748b;white-space:nowrap">完成 ${displayDone} / ${target} 次</div>
             </div>
             <div class="rainbow-track">
               <div class="rainbow-cover" style="width:${100 - pct}%"></div>
@@ -1757,10 +1876,10 @@
             <select id="cs-filter" style="flex:1;min-width:180px;padding:10px 12px;border:2px solid #e2e8f0;border-radius:8px;font-family:inherit;font-size:14px;background:white">
               <option value="__all__">📋 顯示全部</option>
               ${skills.map(s => {
-                const done2 = signoffsBySkill[s.id] || 0;
                 const target2 = s.targetCount || 1;
+                const done2 = creditedDone(s);
                 const tick = done2 >= target2 ? '✅ ' : '';
-                return `<option value="${s.id}">${tick}${s.name}（${done2}/${target2}）</option>`;
+                return `<option value="${s.id}">${tick}${s.name}（${Math.min(done2, target2)}/${target2}）</option>`;
               }).join('')}
             </select>
           </div>

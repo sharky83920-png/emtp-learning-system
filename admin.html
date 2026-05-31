@@ -3099,9 +3099,20 @@ TP18,新北 TP18,2026"></textarea>
             return;
           }
         }
+        // 追加次數計分：目標「調高」時記下變更時間與舊目標，
+        // 學員端會讓追加的次數從調整後重新累計（調整前的簽核只認到舊目標）。
+        const targetChange = {};
+        if (skillEditingId) {
+          const oldSkill = skillsCache.find(x => x.id === id);
+          const oldTarget = oldSkill ? (oldSkill.targetCount || 1) : null;
+          if (oldTarget != null && target > oldTarget) {
+            targetChange.prevTargetCount = oldTarget;
+            targetChange.targetChangedAt = serverTimestamp();
+          }
+        }
         await setDoc(doc(db, 'core_skills', id), {
           name, targetCount: target, testStandard: standard,
-          displayOrder: order, isActive: active, ...extra,
+          displayOrder: order, isActive: active, ...extra, ...targetChange,
           updatedAt: serverTimestamp(), updatedBy: currentUser.email,
           ...(skillEditingId ? {} : { createdAt: serverTimestamp(), createdBy: currentUser.email })
         }, { merge: true });
