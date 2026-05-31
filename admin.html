@@ -1323,30 +1323,38 @@ TP18,新北 TP18,2026"></textarea>
       if (!instructorBatchPreview || instructorBatchPreview.length === 0) return;
       if (!confirm(`確定建立 ${instructorBatchPreview.length} 位指導員 + 登入帳號？\n密碼＝第二欄（預設身分證、可自訂）。`)) return;
       const btn = document.getElementById('ib-commit'); btn.disabled = true;
-      let ok = 0, fail = 0, fails = [];
+      let ok = 0, fail = 0, fails = [], rateLimited = false;
       try {
-        for (const r of instructorBatchPreview) {
-          btn.textContent = `⏳ ${ok + fail + 1}/${instructorBatchPreview.length}`;
+        for (let i = 0; i < instructorBatchPreview.length; i++) {
+          const r = instructorBatchPreview[i];
+          btn.textContent = `⏳ ${i + 1}/${instructorBatchPreview.length}`;
           try {
-            const ref = doc(collection(db, 'instructors'));
-            await setDoc(ref, {
-              email: r.email, name: r.name, managedClassIds: r.classIds, idNumber: r.idNumber,
-              isActive: true, archivedAt: null, hasAuthAccount: false,
-              createdAt: serverTimestamp(), createdBy: currentUser.email
-            });
-            // 建登入帳號（撞已存在就嘗試接管）
+            // 先建帳號（失敗就不寫 doc、可重跑）
             let uid = null;
             try { const cred = await createUserWithEmailAndPassword(secondaryAuth, r.email, r.idNumber); uid = cred.user.uid; }
             catch (authErr) {
+              if (authErr.code === 'auth/too-many-requests') { rateLimited = true; break; }
               if (authErr.code !== 'auth/email-already-in-use') throw authErr;
-              const cred2 = await signInWithEmailAndPassword(secondaryAuth, r.email, r.idNumber); uid = cred2.user.uid;
+              const cred2 = await signInWithEmailAndPassword(secondaryAuth, r.email, r.idNumber); uid = cred2.user.uid; // 接管殘留帳號
             }
-            await updateDoc(ref, { hasAuthAccount: true, authUid: uid, authAccountCreatedAt: serverTimestamp(), authAccountCreatedBy: currentUser.email });
+            await setDoc(doc(collection(db, 'instructors')), {
+              email: r.email, name: r.name, managedClassIds: r.classIds, idNumber: r.idNumber,
+              isActive: true, archivedAt: null, hasAuthAccount: true, authUid: uid,
+              authAccountCreatedAt: serverTimestamp(), authAccountCreatedBy: currentUser.email,
+              createdAt: serverTimestamp(), createdBy: currentUser.email
+            });
             ok++;
-          } catch (e) { fail++; fails.push(`${r.name}: ${e.message}`); }
+            await new Promise(res => setTimeout(res, 800)); // 節流
+          } catch (e) {
+            if (e.code === 'auth/too-many-requests') { rateLimited = true; break; }
+            fail++; fails.push(`${r.name}: ${e.message}`);
+          }
         }
         try { await signOut(secondaryAuth); } catch (e) {}
-        alert(`✅ 完成！\n成功：${ok}\n失敗：${fail}` + (fails.length ? '\n\n' + fails.slice(0, 8).join('\n') : ''));
+        let msg = `✅ 完成！\n成功：${ok}\n失敗：${fail}`;
+        if (rateLimited) msg += `\n\n⚠️ 觸發 Firebase 速率上限、已自動暫停。\n請等 15~30 分鐘後、再貼同一份檔重跑（已建好的會在預覽被標「已存在」自動排除、只補剩下的）。`;
+        if (fails.length) msg += '\n\n' + fails.slice(0, 8).join('\n');
+        alert(msg);
         document.getElementById('instructor-batch-modal').classList.remove('active');
         loadInstructors(); loadOverviewStats();
       } catch (e) { alert('❌ ' + e.message); }
@@ -1627,21 +1635,24 @@ TP18,新北 TP18,2026"></textarea>
       if (!confirm(`確定寫入 ${rows.length} 筆學員、並自動建立帳號？\n\n密碼＝第三欄（預設身分證、可自訂），請通知學員首次登入後改密碼。`)) return;
       const btn = document.getElementById('btn-batch-commit');
       btn.disabled = true;
-      let success = 0, failed = 0, failures = [];
+      let success = 0, skipped = 0, failed = 0, failures = [], rateLimited = false;
       try {
-        for (const r of rows) {
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i];
           const sid = `${classId.toLowerCase()}-${r.no}`;
           const fakeEmail = `${classId.toLowerCase()}-${r.no}@emtp.local`;
-          btn.textContent = `⏳ 建立中 ${success + failed + 1}/${rows.length}`;
+          btn.textContent = `⏳ ${i + 1}/${rows.length}`;
+          // 可重跑：已建好的跳過
+          try { const ex = await getDoc(doc(db, 'students', sid)); if (ex.exists() && ex.data().hasAuthAccount) { skipped++; continue; } } catch (e) {}
           try {
             let authUid = null;
             try {
               const cred = await createUserWithEmailAndPassword(secondaryAuth, fakeEmail, r.idNumber);
               authUid = cred.user.uid;
             } catch (authErr) {
+              if (authErr.code === 'auth/too-many-requests') { rateLimited = true; break; }
               if (authErr.code !== 'auth/email-already-in-use') throw authErr;
-              // 殘留的舊 Auth 帳號 → 嘗試接管
-              const cred2 = await signInWithEmailAndPassword(secondaryAuth, fakeEmail, r.idNumber);
+              const cred2 = await signInWithEmailAndPassword(secondaryAuth, fakeEmail, r.idNumber); // 接管殘留帳號
               authUid = cred2.user.uid;
             }
             await setDoc(doc(db, 'students', sid), {
@@ -1651,13 +1662,16 @@ TP18,新北 TP18,2026"></textarea>
               createdAt: serverTimestamp(), createdBy: currentUser.email
             });
             success++;
+            await new Promise(res => setTimeout(res, 800)); // 節流、避免 too-many-requests
           } catch (e) {
+            if (e.code === 'auth/too-many-requests') { rateLimited = true; break; }
             failed++;
             failures.push(`${r.name}(學號${r.no}): ${e.message}`);
           }
         }
         try { await signOut(secondaryAuth); } catch (e) {}
-        let msg = `✅ 完成！\n\n成功：${success} 筆\n失敗：${failed} 筆`;
+        let msg = `✅ 完成！\n\n新建：${success}\n已存在跳過：${skipped}\n失敗：${failed}`;
+        if (rateLimited) msg += `\n\n⚠️ 觸發 Firebase 速率上限、已自動暫停。\n請等 15~30 分鐘後、再貼「同一份檔」重跑一次（已建好的會自動跳過、只補剩下的）。`;
         if (failures.length > 0) msg += '\n\n失敗清單：\n' + failures.slice(0, 5).join('\n');
         alert(msg);
         document.getElementById('batch-modal').classList.remove('active');
