@@ -2027,6 +2027,7 @@
             serialDate: dateStr,
             serialNumber: nextNum,
             createdBy: currentStudent.id,
+            createdByStudentId: currentStudent.id,
             createdByName: currentStudent.name,
             createdByRole: 'student',
             createdByClassId: currentStudent.classId,
@@ -2103,11 +2104,15 @@
         schSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) sch.push(data); });
         sch.sort((a, b) => (a.scheduledDate || '').localeCompare(b.scheduledDate || ''));
 
-        // 我的繳交紀錄
-        const subQ = query(collection(db, 'question_submissions'), where('studentId', '==', currentStudent.id));
-        const subSnap = await getDocs(subQ);
+        // 我的繳交紀錄：以「題庫出題者」判斷（哪天有出題 = 該天有我建立的題目）
         const submittedDates = new Set();
-        subSnap.forEach(d => submittedDates.add(d.data().scheduledDate));
+        const myQSnap = await getDocs(query(collection(db, 'questions'), where('createdByStudentId', '==', currentStudent.id)));
+        myQSnap.forEach(d => { const sd = d.data().scheduledDate; if (sd) submittedDates.add(sd); });
+        // 相容舊的 question_submissions（若有）
+        try {
+          const subSnap = await getDocs(query(collection(db, 'question_submissions'), where('studentId', '==', currentStudent.id)));
+          subSnap.forEach(d => { const sd = d.data().scheduledDate; if (sd) submittedDates.add(sd); });
+        } catch (e) {}
 
         const today = new Date(); today.setHours(0,0,0,0);
 
