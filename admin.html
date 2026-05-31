@@ -150,6 +150,7 @@
           <h2><span>🏫 班級管理</span>
             <span>
               <button class="btn btn-ghost" id="btn-toggle-archived">顯示封存班級</button>
+              <button class="btn" id="btn-batch-class">📤 批次匯入</button>
               <button class="btn btn-green" id="btn-add-class">➕ 新增班級</button>
             </span>
           </h2>
@@ -176,6 +177,7 @@
           <h2><span>👨‍🏫 指導員管理</span>
             <span>
               <button class="btn btn-ghost" id="btn-toggle-archived-instructors">顯示封存指導員</button>
+              <button class="btn" id="btn-batch-instructor">📤 批次匯入</button>
               <button class="btn btn-green" id="btn-add-instructor">➕ 新增指導員</button>
             </span>
           </h2>
@@ -578,6 +580,58 @@
         <button class="btn btn-ghost" id="batch-modal-cancel">取消</button>
         <button class="btn" id="btn-batch-preview">🔍 預覽</button>
         <button class="btn btn-green" id="btn-batch-commit" disabled>💾 寫入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 班級批次匯入 Modal -->
+  <div class="modal-overlay" id="class-batch-modal">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3>📤 批次匯入班級</h3><button class="modal-close" id="cb-close">×</button></div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>班級資料（每行一筆。格式：代碼 [Tab/逗號] 顯示名稱(可空) [Tab/逗號] 年度(可空)）</label>
+          <textarea id="cb-data" rows="12" placeholder="【最簡】一行一個代碼（顯示名稱＝代碼、年度＝2026）
+TP17
+Taichung
+Military
+
+【完整】代碼,顯示名稱,年度
+TP18,新北 TP18,2026"></textarea>
+        </div>
+        <div id="cb-preview"></div>
+        <div id="cb-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="cb-cancel">取消</button>
+        <button class="btn" id="cb-preview-btn">🔍 預覽</button>
+        <button class="btn btn-green" id="cb-commit" disabled>💾 寫入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 指導員批次匯入 Modal -->
+  <div class="modal-overlay" id="instructor-batch-modal">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3>📤 批次匯入指導員</h3><button class="modal-close" id="ib-close">×</button></div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>指導員資料（每行一筆。格式：姓名 [Tab/逗號] 身分證 [Tab/逗號] 班級代碼(可多班、用 / 分隔)）</label>
+          <textarea id="ib-data" rows="12" placeholder="【格式】姓名,身分證,班級代碼
+王教官,A123456789,TP17
+李教官,B234567890,Taichung
+陳教官,C345678901,TP17/Taichung
+
+💡 身分證＝登入密碼（須 1 英文大寫＋9 數字）
+💡 班級代碼要先在班級管理建好"></textarea>
+        </div>
+        <div id="ib-preview"></div>
+        <div id="ib-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="ib-cancel">取消</button>
+        <button class="btn" id="ib-preview-btn">🔍 預覽</button>
+        <button class="btn btn-green" id="ib-commit" disabled>💾 寫入 + 建帳號</button>
       </div>
     </div>
   </div>
@@ -1157,6 +1211,146 @@
         loadClasses(); loadOverviewStats();
       } catch (e) { errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
       finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
+    });
+
+    // === 班級批次匯入 ===
+    let classBatchPreview = null;
+    function splitCols(line) { return line.split(/\t|,/).map(s => s.trim()); }
+    document.getElementById('btn-batch-class').addEventListener('click', () => {
+      document.getElementById('cb-data').value = '';
+      document.getElementById('cb-preview').innerHTML = '';
+      document.getElementById('cb-error').innerHTML = '';
+      document.getElementById('cb-commit').disabled = true;
+      classBatchPreview = null;
+      document.getElementById('class-batch-modal').classList.add('active');
+    });
+    document.getElementById('cb-close').addEventListener('click', () => document.getElementById('class-batch-modal').classList.remove('active'));
+    document.getElementById('cb-cancel').addEventListener('click', () => document.getElementById('class-batch-modal').classList.remove('active'));
+    document.getElementById('class-batch-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('class-batch-modal').classList.remove('active'); });
+    document.getElementById('cb-preview-btn').addEventListener('click', async () => {
+      const lines = document.getElementById('cb-data').value.split('\n').map(l => l.trim()).filter(l => l);
+      const prevEl = document.getElementById('cb-preview');
+      if (lines.length === 0) { prevEl.innerHTML = '<div class="err-msg">沒有資料</div>'; return; }
+      const existSnap = await getDocs(collection(db, 'classes'));
+      const existing = new Set(); existSnap.forEach(d => existing.add(d.id));
+      const rows = []; const seen = new Set();
+      lines.forEach(line => {
+        const c = splitCols(line);
+        const id = c[0];
+        const name = c[1] || id;
+        const year = parseInt(c[2]) || 2026;
+        let ok = true, note = '';
+        if (!/^[A-Za-z0-9_-]+$/.test(id)) { ok = false; note = '代碼格式錯誤'; }
+        else if (existing.has(id)) { ok = false; note = '已存在'; }
+        else if (seen.has(id)) { ok = false; note = '重複'; }
+        seen.add(id);
+        rows.push({ id, name, year, ok, note });
+      });
+      const okCount = rows.filter(r => r.ok).length;
+      prevEl.innerHTML = '<table class="table"><thead><tr><th>代碼</th><th>顯示名稱</th><th>年度</th><th>狀態</th></tr></thead><tbody>' +
+        rows.map(r => `<tr><td>${r.id}</td><td>${r.name}</td><td>${r.year}</td><td>${r.ok ? '<span class="tag-pill">✅</span>' : `<span class="tag-pill red">❌ ${r.note}</span>`}</td></tr>`).join('') +
+        `</tbody></table><div style="margin-top:10px"><span class="tag-pill">可建 ${okCount}</span></div>`;
+      classBatchPreview = rows.filter(r => r.ok);
+      document.getElementById('cb-commit').disabled = okCount === 0;
+      document.getElementById('cb-commit').textContent = `💾 寫入 ${okCount} 班`;
+    });
+    document.getElementById('cb-commit').addEventListener('click', async () => {
+      if (!classBatchPreview || classBatchPreview.length === 0) return;
+      const btn = document.getElementById('cb-commit'); btn.disabled = true;
+      let ok = 0, fail = 0, fails = [];
+      try {
+        for (const r of classBatchPreview) {
+          btn.textContent = `⏳ ${ok + fail + 1}/${classBatchPreview.length}`;
+          try {
+            await setDoc(doc(db, 'classes', r.id), {
+              name: r.id, displayName: r.name, courseType: 'EMTP', year: r.year, description: '',
+              isActive: true, archivedAt: null, createdAt: serverTimestamp(), createdBy: currentUser.email
+            });
+            ok++;
+          } catch (e) { fail++; fails.push(`${r.id}: ${e.message}`); }
+        }
+        alert(`✅ 完成！\n成功：${ok}\n失敗：${fail}` + (fails.length ? '\n\n' + fails.slice(0, 5).join('\n') : ''));
+        document.getElementById('class-batch-modal').classList.remove('active');
+        loadClasses(); loadOverviewStats();
+      } catch (e) { alert('❌ ' + e.message); }
+      finally { btn.disabled = false; }
+    });
+
+    // === 指導員批次匯入 ===
+    let instructorBatchPreview = null;
+    document.getElementById('btn-batch-instructor').addEventListener('click', () => {
+      document.getElementById('ib-data').value = '';
+      document.getElementById('ib-preview').innerHTML = '';
+      document.getElementById('ib-error').innerHTML = '';
+      document.getElementById('ib-commit').disabled = true;
+      instructorBatchPreview = null;
+      document.getElementById('instructor-batch-modal').classList.add('active');
+    });
+    document.getElementById('ib-close').addEventListener('click', () => document.getElementById('instructor-batch-modal').classList.remove('active'));
+    document.getElementById('ib-cancel').addEventListener('click', () => document.getElementById('instructor-batch-modal').classList.remove('active'));
+    document.getElementById('instructor-batch-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('instructor-batch-modal').classList.remove('active'); });
+    document.getElementById('ib-preview-btn').addEventListener('click', async () => {
+      const lines = document.getElementById('ib-data').value.split('\n').map(l => l.trim()).filter(l => l);
+      const prevEl = document.getElementById('ib-preview');
+      if (lines.length === 0) { prevEl.innerHTML = '<div class="err-msg">沒有資料</div>'; return; }
+      const clsSnap = await getDocs(collection(db, 'classes'));
+      const validClasses = new Set(); clsSnap.forEach(d => validClasses.add(d.id));
+      const insSnap = await getDocs(collection(db, 'instructors'));
+      const existEmails = new Set(); insSnap.forEach(d => { if (d.data().email) existEmails.add(d.data().email); });
+      const rows = []; const seen = new Set();
+      lines.forEach(line => {
+        const c = splitCols(line);
+        const name = c[0]; const idNumber = (c[1] || '').toUpperCase();
+        const classIds = (c[2] || '').split('/').map(s => s.trim()).filter(s => s);
+        const email = idNumber ? `${idNumber.toLowerCase()}@emtp.local` : '';
+        let ok = true, note = '';
+        if (!name) { ok = false; note = '缺姓名'; }
+        else if (!/^[A-Z]\d{9}$/.test(idNumber)) { ok = false; note = '身分證格式錯誤'; }
+        else if (existEmails.has(email) || seen.has(email)) { ok = false; note = '身分證重複/已存在'; }
+        else { const bad = classIds.filter(x => !validClasses.has(x)); if (classIds.length === 0) { ok = false; note = '缺班級'; } else if (bad.length) { ok = false; note = '班級不存在: ' + bad.join(','); } }
+        seen.add(email);
+        rows.push({ name, idNumber, email, classIds, ok, note });
+      });
+      const okCount = rows.filter(r => r.ok).length;
+      prevEl.innerHTML = '<table class="table"><thead><tr><th>姓名</th><th>身分證</th><th>班級</th><th>狀態</th></tr></thead><tbody>' +
+        rows.map(r => `<tr><td>${r.name}</td><td style="font-family:monospace">${r.idNumber}</td><td>${r.classIds.join(', ')}</td><td>${r.ok ? '<span class="tag-pill">✅</span>' : `<span class="tag-pill red">❌ ${r.note}</span>`}</td></tr>`).join('') +
+        `</tbody></table><div style="margin-top:10px"><span class="tag-pill">可建 ${okCount}</span></div>`;
+      instructorBatchPreview = rows.filter(r => r.ok);
+      document.getElementById('ib-commit').disabled = okCount === 0;
+      document.getElementById('ib-commit').textContent = `💾 寫入 + 建帳號 ${okCount} 位`;
+    });
+    document.getElementById('ib-commit').addEventListener('click', async () => {
+      if (!instructorBatchPreview || instructorBatchPreview.length === 0) return;
+      if (!confirm(`確定建立 ${instructorBatchPreview.length} 位指導員 + 登入帳號？\n密碼＝身分證。`)) return;
+      const btn = document.getElementById('ib-commit'); btn.disabled = true;
+      let ok = 0, fail = 0, fails = [];
+      try {
+        for (const r of instructorBatchPreview) {
+          btn.textContent = `⏳ ${ok + fail + 1}/${instructorBatchPreview.length}`;
+          try {
+            const ref = doc(collection(db, 'instructors'));
+            await setDoc(ref, {
+              email: r.email, name: r.name, managedClassIds: r.classIds, idNumber: r.idNumber,
+              isActive: true, archivedAt: null, hasAuthAccount: false,
+              createdAt: serverTimestamp(), createdBy: currentUser.email
+            });
+            // 建登入帳號（撞已存在就嘗試接管）
+            let uid = null;
+            try { const cred = await createUserWithEmailAndPassword(secondaryAuth, r.email, r.idNumber); uid = cred.user.uid; }
+            catch (authErr) {
+              if (authErr.code !== 'auth/email-already-in-use') throw authErr;
+              const cred2 = await signInWithEmailAndPassword(secondaryAuth, r.email, r.idNumber); uid = cred2.user.uid;
+            }
+            await updateDoc(ref, { hasAuthAccount: true, authUid: uid, authAccountCreatedAt: serverTimestamp(), authAccountCreatedBy: currentUser.email });
+            ok++;
+          } catch (e) { fail++; fails.push(`${r.name}: ${e.message}`); }
+        }
+        try { await signOut(secondaryAuth); } catch (e) {}
+        alert(`✅ 完成！\n成功：${ok}\n失敗：${fail}` + (fails.length ? '\n\n' + fails.slice(0, 8).join('\n') : ''));
+        document.getElementById('instructor-batch-modal').classList.remove('active');
+        loadInstructors(); loadOverviewStats();
+      } catch (e) { alert('❌ ' + e.message); }
+      finally { btn.disabled = false; }
     });
 
     // === 學員管理 ===
