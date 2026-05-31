@@ -146,15 +146,25 @@
             <input type="date" id="perf-start" style="padding:7px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit;font-size:13px">
             <span style="color:#94a3b8">~</span>
             <input type="date" id="perf-end" style="padding:7px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit;font-size:13px">
-            <button id="perf-apply" class="btn-logout">查詢</button>
-            <button id="perf-clear" style="background:none;border:none;color:#3b82f6;cursor:pointer;font-size:13px">全部</button>
+            <button id="perf-apply" style="background:#3b82f6;color:#fff;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600">🔍 查詢</button>
+            <button id="perf-clear" style="background:none;border:none;color:#3b82f6;cursor:pointer;font-size:13px">全部期間</button>
           </div>
           <div id="rank-perf"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
         </div>
 
+        <style>
+          .cp-tab{flex:1;background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;padding:7px 4px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+          .cp-tab.active{background:#3b82f6;color:#fff;border-color:#3b82f6}
+        </style>
         <div class="card" id="classpower-card">
           <h2>📊 各班出題戰力</h2>
-          <p style="color:#64748b;font-size:13px;margin-bottom:10px">各班學員累積出題數（現役題庫）。你的班高亮。</p>
+          <p style="color:#64748b;font-size:13px;margin-bottom:8px">各班該期間出題數，看各班有沒有跟上進度。你的班高亮。</p>
+          <div id="cp-toggle" style="display:flex;gap:6px;margin-bottom:8px">
+            <button class="cp-tab active" data-period="week">本週(一~日)</button>
+            <button class="cp-tab" data-period="lastweek">上週</button>
+            <button class="cp-tab" data-period="all">總累計</button>
+          </div>
+          <div id="cp-total" style="text-align:center;color:#475569;font-size:13px;margin-bottom:10px"></div>
           <div id="rank-questions"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
         </div>
       </section>
@@ -720,7 +730,8 @@
       if (perms.canEditEnergyBar) tasks.push(loadEnergyBar());   // 沒權限不載、卡片已隱藏
       await Promise.all(tasks);
       populateTrackControls();                                    // 出題繳交追蹤（schedCache 已就緒）
-      loadPerfRanking();                                          // 綜合績效排名維持顯示
+      if (!document.getElementById('perf-start').value) _setPerfWeek(); // 預設本週、不撈全部
+      loadPerfRanking();                                          // 綜合績效排名
       if (perms.canViewClassPower) loadQuestionPower();           // 各班出題戰力（需權限）
     }
 
@@ -730,77 +741,132 @@
       catch (e) { return 0; }
     }
 
+    // ===== 共用：週期區間 / 數字動畫 =====
+    const CP_COLORS = ['#f59e0b', '#ef4444', '#8b5cf6', '#10b981', '#3b82f6', '#ec4899', '#14b8a6', '#6366f1', '#f97316', '#0ea5e9', '#84cc16', '#a855f7'];
+    function _localDate(ms) { const x = new Date(ms); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); }
+    function _weekRange(which) {
+      const now = new Date(); now.setHours(0, 0, 0, 0);
+      const day = now.getDay();                                  // 0=日
+      const mon = new Date(now); mon.setDate(now.getDate() - (day === 0 ? 6 : day - 1)); // 本週一
+      if (which === 'lastweek') {
+        const lm = new Date(mon); lm.setDate(mon.getDate() - 7);
+        const ls = new Date(mon); ls.setMilliseconds(-1);        // 上週日 23:59:59
+        return [lm.getTime(), ls.getTime()];
+      }
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 7); sun.setMilliseconds(-1); // 本週日 23:59:59
+      return [mon.getTime(), sun.getTime()];
+    }
+    function _animateNum(el, target, suffix) {
+      if (!el) return; const dur = 800, t0 = performance.now();
+      function step(now) { const p = Math.min(1, (now - t0) / dur); el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3))) + (suffix || ''); if (p < 1) requestAnimationFrame(step); }
+      requestAnimationFrame(step);
+    }
+    function _setPerfWeek() { const [s, e] = _weekRange('week'); document.getElementById('perf-start').value = _localDate(s); document.getElementById('perf-end').value = _localDate(e); }
+
+    // ===== F16: 綜合測驗績效排名（正規化 0~100、預設本週、可收折） =====
     async function loadPerfRanking() {
       const el = document.getElementById('rank-perf');
       el.innerHTML = '<div class="placeholder" style="padding:12px"><div class="icon">⏳</div></div>';
       try {
-        // 日期區間
         const startStr = document.getElementById('perf-start')?.value;
         const endStr = document.getElementById('perf-end')?.value;
-        const startMs = startStr ? new Date(startStr + 'T00:00:00').getTime() : 0;
-        const endMs = endStr ? new Date(endStr + 'T23:59:59').getTime() : Infinity;
-        // 公式
+        const startMs = startStr ? new Date(startStr + 'T00:00:00').getTime() : null;
+        const endMs = endStr ? new Date(endStr + 'T23:59:59').getTime() : null;
         let expr = 'Math.sqrt(attempts) * accuracy';
         try { const f = await getDoc(doc(db, 'formulas', 'weighted_score')); if (f.exists() && f.data().expression) expr = f.data().expression; } catch (e) {}
-        // 本班全部學員
         const stuSnap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
         const students = {}; stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false) students[d.id] = { name: s.name, no: s.studentNo, attempts: 0, correct: 0 }; });
-        // 本班 scoring 作答（不含 practice、只算有作答、依日期區間）
-        const atSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', selectedClassId)));
+        // 有日期 → 伺服器端區間查詢（省讀取）；缺索引或全部期間 → 退回掃全班再前端篩
+        let atSnap, clientFilter = false;
+        if (startMs && endMs) {
+          try {
+            atSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', selectedClassId), where('attemptedAt', '>=', Timestamp.fromMillis(startMs)), where('attemptedAt', '<=', Timestamp.fromMillis(endMs))));
+          } catch (idxErr) { atSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', selectedClassId))); clientFilter = true; }
+        } else { atSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', selectedClassId))); clientFilter = !!startMs; }
         atSnap.forEach(d => {
           const a = d.data();
-          if (a.examMode === 'practice') return;          // 專項練習不算動能
-          const t = a.attemptedAt?.seconds ? a.attemptedAt.seconds * 1000 : 0;
-          if (t < startMs || t > endMs) return;
+          if (a.examMode === 'practice') return;
+          if (clientFilter) { const t = a.attemptedAt?.seconds ? a.attemptedAt.seconds * 1000 : 0; if ((startMs && t < startMs) || (endMs && t > endMs)) return; }
           const s = students[a.studentId]; if (!s) return;
-          s.attempts++;                                   // 沒作答的也算 1 題（防閃躲）
-          if (a.isCorrect) s.correct++;                   // 沒作答 isCorrect=false → 當錯
+          s.attempts++; if (a.isCorrect) s.correct++;
         });
-        // 全班都列、依加權分數排名（沒作答的排最後）
-        const rows = Object.values(students).map(s => { const accuracy = s.attempts ? s.correct / s.attempts : 0; return { ...s, accuracy, score: safeEvalFormula(expr, s.attempts, accuracy) }; });
-        rows.sort((a, b) => b.score - a.score || (b.attempts - a.attempts) || ((a.no || 0) - (b.no || 0)));
+        let rows = Object.values(students).map(s => { const accuracy = s.attempts ? s.correct / s.attempts : 0; return { ...s, accuracy, raw: safeEvalFormula(expr, s.attempts, accuracy) }; });
+        const maxRaw = Math.max(0, ...rows.map(r => r.raw));
+        rows.forEach(r => r.score = maxRaw > 0 ? (r.raw / maxRaw) * 100 : 0);   // 正規化 0~100
+        rows.sort((a, b) => b.raw - a.raw || (b.attempts - a.attempts) || ((a.no || 0) - (b.no || 0)));
         if (rows.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">此班沒有學員</div>'; return; }
         const medal = ['🥇', '🥈', '🥉'];
         const rangeLabel = (startStr || endStr) ? `${startStr || '起'} ~ ${endStr || '今'}` : '全部期間';
-        el.innerHTML = `<div style="font-size:11px;color:#94a3b8;margin-bottom:6px">期間：${rangeLabel}　公式：<code>${expr}</code></div>
-          <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:11px;color:#94a3b8;border-bottom:2px solid #e2e8f0">
-            <span style="width:30px">名次</span><span style="flex:1">姓名</span><span style="width:48px;text-align:right">刷題</span><span style="width:48px;text-align:right">答對率</span><span style="width:54px;text-align:right">加權分</span>
-          </div>` + rows.map((r, i) => `
-          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #f1f5f9;${i < 3 && r.attempts > 0 ? 'background:#fffbeb' : ''};${r.attempts === 0 ? 'opacity:0.5' : ''}">
+        const row = (r, i) => `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #f1f5f9;${i < 3 && r.attempts > 0 ? 'background:#fffbeb' : ''};${r.attempts === 0 ? 'opacity:0.5' : ''}">
             <span style="width:30px;font-weight:700;color:#475569">${(i < 3 && r.attempts > 0) ? medal[i] : (i + 1)}</span>
             <span style="flex:1;font-size:14px">${r.no}. ${r.name}</span>
             <span style="width:48px;text-align:right;font-size:13px;color:#64748b">${r.attempts}</span>
             <span style="width:48px;text-align:right;font-size:13px;color:#64748b">${Math.round(r.accuracy * 100)}%</span>
             <span style="width:54px;text-align:right;font-weight:700;color:#3b82f6">${r.score.toFixed(1)}</span>
-          </div>`).join('');
+          </div>`;
+        const TOPN = 10;
+        let html = `<div style="font-size:11px;color:#94a3b8;margin-bottom:6px">期間：${rangeLabel}　加權分已正規化 0~100（班內最高＝100）</div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:11px;color:#94a3b8;border-bottom:2px solid #e2e8f0">
+            <span style="width:30px">名次</span><span style="flex:1">姓名</span><span style="width:48px;text-align:right">刷題</span><span style="width:48px;text-align:right">答對率</span><span style="width:54px;text-align:right">加權分</span>
+          </div>` + rows.slice(0, TOPN).map(row).join('');
+        if (rows.length > TOPN) {
+          html += `<div id="perf-more" style="display:none">${rows.slice(TOPN).map((r, i) => row(r, i + TOPN)).join('')}</div>
+            <button id="perf-toggle" style="width:100%;background:#f1f5f9;border:none;color:#475569;padding:9px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;margin-top:8px">▼ 展開全部 ${rows.length} 人</button>`;
+        }
+        el.innerHTML = html;
+        const tg = document.getElementById('perf-toggle');
+        if (tg) tg.addEventListener('click', () => { const m = document.getElementById('perf-more'); const open = m.style.display !== 'none'; m.style.display = open ? 'none' : 'block'; tg.textContent = open ? `▼ 展開全部 ${rows.length} 人` : '▲ 收合'; });
       } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
     }
     document.getElementById('perf-apply').addEventListener('click', loadPerfRanking);
     document.getElementById('perf-clear').addEventListener('click', () => { document.getElementById('perf-start').value = ''; document.getElementById('perf-end').value = ''; loadPerfRanking(); });
 
+    // ===== 各班出題戰力（本週/上週/總累計 + 彩色橫條 + 數字動畫）=====
+    let _cpPeriod = 'week';
     async function loadQuestionPower() {
       const el = document.getElementById('rank-questions');
+      const totalEl = document.getElementById('cp-total');
       el.innerHTML = '<div class="placeholder" style="padding:12px"><div class="icon">⏳</div></div>';
       try {
+        let startMs = 0, endMs = Infinity;
+        if (_cpPeriod !== 'all') { const [s, e] = _weekRange(_cpPeriod); startMs = s; endMs = e; }
         const qSnap = await getDocs(collection(db, 'questions'));
         const byClass = {};
-        qSnap.forEach(d => { const q = d.data(); if (q.isVisible === false || q.isActive === false) return; const c = q.createdByClassId || '其他'; byClass[c] = (byClass[c] || 0) + 1; });
+        qSnap.forEach(d => {
+          const q = d.data();
+          if (q.isVisible === false || q.isActive === false) return;
+          const t = q.createdAt?.seconds ? q.createdAt.seconds * 1000 : 0;
+          if (t < startMs || t > endMs) return;
+          const c = q.createdByClassId || '其他'; byClass[c] = (byClass[c] || 0) + 1;
+        });
         const list = Object.entries(byClass).map(([cid, n]) => ({ cid, n })).sort((a, b) => b.n - a.n);
-        if (list.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">尚無題目</div>'; return; }
+        const total = list.reduce((s, x) => s + x.n, 0);
+        totalEl.innerHTML = `該期間全班總出題 <b id="cp-total-num" style="color:#3b82f6;font-size:18px">0</b> 題`;
+        if (list.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">此期間尚無出題</div>'; _animateNum(document.getElementById('cp-total-num'), 0, ''); return; }
         const max = list[0].n;
-        // 班級顯示名
         const nameCache = {};
         for (const it of list) { try { const c = await getDoc(doc(db, 'classes', it.cid)); nameCache[it.cid] = c.exists() ? (c.data().displayName || it.cid) : it.cid; } catch (e) { nameCache[it.cid] = it.cid; } }
-        el.innerHTML = list.map(it => {
+        el.innerHTML = list.map((it, i) => {
           const mine = it.cid === selectedClassId;
-          const pct = max ? (it.n / max) * 100 : 0;
-          return `<div style="margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span style="font-weight:${mine ? '700' : '400'};color:${mine ? '#e11d48' : '#1e293b'}">${mine ? '⭐ ' : ''}${nameCache[it.cid]}</span><span style="color:#64748b">${it.n} 題</span></div>
-            <div style="height:10px;background:#f1f5f9;border-radius:5px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${mine ? '#e11d48' : '#3b82f6'};border-radius:5px"></div></div>
+          const color = mine ? '#e11d48' : CP_COLORS[i % CP_COLORS.length];
+          return `<div style="margin-bottom:11px">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="font-weight:${mine ? '700' : '600'};color:${mine ? '#e11d48' : '#1e293b'}">${mine ? '⭐ ' : ''}${nameCache[it.cid]}</span><span style="color:#64748b" class="cp-num" data-target="${it.n}">0 題</span></div>
+            <div style="height:13px;background:#f1f5f9;border-radius:7px;overflow:hidden"><div class="cp-bar" style="height:100%;width:0%;background:${color};border-radius:7px;transition:width 0.9s ease-out" data-w="${max ? (it.n / max) * 100 : 0}"></div></div>
           </div>`;
         }).join('');
+        requestAnimationFrame(() => {
+          el.querySelectorAll('.cp-bar').forEach(b => { b.style.width = b.dataset.w + '%'; });
+          el.querySelectorAll('.cp-num').forEach(n => _animateNum(n, parseInt(n.dataset.target), ' 題'));
+          _animateNum(document.getElementById('cp-total-num'), total, '');
+        });
       } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
     }
+    document.querySelectorAll('#cp-toggle .cp-tab').forEach(b => b.addEventListener('click', () => {
+      _cpPeriod = b.dataset.period;
+      document.querySelectorAll('#cp-toggle .cp-tab').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      loadQuestionPower();
+    }));
 
     async function loadScheduleList() {
       const el = document.getElementById('sched-list');
