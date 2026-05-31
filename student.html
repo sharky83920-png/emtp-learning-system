@@ -2045,6 +2045,14 @@
         errEl.innerHTML = `<div class="err-msg">❌ 選項 ${miss} 至少要有文字或圖片</div>`; return;
       }
 
+      // 重複日期提醒：同一出題日已出過題 → 提示第幾題、按確定才繼續
+      try {
+        const dupSnap = await getDocs(query(collection(db, 'questions'), where('createdByStudentId', '==', currentStudent.id), where('scheduledDate', '==', scheduledDate)));
+        if (dupSnap.size > 0) {
+          if (!confirm(`⚠️ 你在 ${scheduledDate} 這個出題日已經出過 ${dupSnap.size} 題了。\n這將是第 ${dupSnap.size + 1} 題，確定要再出一題嗎？`)) return;
+        }
+      } catch (e) {}
+
       const btn = document.getElementById('btn-submit-question');
       btn.disabled = true; btn.textContent = '⏳ 上傳圖片中...';
 
@@ -2076,10 +2084,13 @@
         const counterRef = doc(db, 'counters', dateStr);
         const questionId = await runTransaction(db, async (tx) => {
           const counterDoc = await tx.get(counterRef);
-          let nextNum = 1;
-          if (counterDoc.exists()) nextNum = (counterDoc.data().lastNumber || 0) + 1;
-          const qid = `${dateStr}-${nextNum}`;
-          const qRef = doc(db, 'questions', qid);
+          let nextNum = counterDoc.exists() ? (counterDoc.data().lastNumber || 0) + 1 : 1;
+          // 防撞號（搬遷資料/雙軌期）：該編號已存在就往後找空號
+          let qid = `${dateStr}-${nextNum}`;
+          let qRef = doc(db, 'questions', qid);
+          let exist = await tx.get(qRef);
+          let guard = 0;
+          while (exist.exists() && guard < 500) { nextNum++; qid = `${dateStr}-${nextNum}`; qRef = doc(db, 'questions', qid); exist = await tx.get(qRef); guard++; }
           // F13-I: 同時存「原始版本」快照、編輯時不動
           const fullData = {
             serialDate: dateStr,
