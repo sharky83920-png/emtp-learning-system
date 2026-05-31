@@ -4100,7 +4100,7 @@ TP18,新北 TP18,2026"></textarea>
     let qmCache = [];
     let qmBooksCache = [];
     let qmChaptersCache = [];
-    let qmFilters = { bookId: '', dimension: '', visibility: 'visible' };
+    let qmFilters = { bookId: '', dimension: '', visibility: 'visible', scheduledDate: '', classId: '', studentName: '', keyword: '' };
     let qmBatchPreview = null;
 
     async function loadQuestionsPage() {
@@ -4133,8 +4133,21 @@ TP18,新北 TP18,2026"></textarea>
         if (qmFilters.dimension && q.derivedDimension !== qmFilters.dimension) return false;
         if (qmFilters.visibility === 'visible' && q.isVisible === false) return false;
         if (qmFilters.visibility === 'hidden' && q.isVisible !== false) return false;
+        if (qmFilters.scheduledDate && q.scheduledDate !== qmFilters.scheduledDate) return false;
+        if (qmFilters.classId && q.createdByClassId !== qmFilters.classId) return false;
+        if (qmFilters.studentName && q.createdByName !== qmFilters.studentName) return false;
+        if (qmFilters.keyword) {
+          const kw = qmFilters.keyword.toLowerCase();
+          const o = q.options || {};
+          const hay = (q.id + ' ' + (q.questionText || '') + ' ' + (o.A?.text || '') + (o.B?.text || '') + (o.C?.text || '') + (o.D?.text || '')).toLowerCase();
+          if (!hay.includes(kw)) return false;
+        }
         return true;
       });
+
+      // 班級 / 姓名 下拉（從題庫的出題者，姓名隨班級連動）
+      const qmClasses = [...new Set(qmCache.map(q => q.createdByClassId).filter(Boolean))].sort();
+      const qmNames = [...new Set(qmCache.filter(q => !qmFilters.classId || q.createdByClassId === qmFilters.classId).map(q => q.createdByName).filter(Boolean))].sort();
 
       let html = `
         <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:end">
@@ -4160,6 +4173,24 @@ TP18,新北 TP18,2026"></textarea>
               <option value="all"${qmFilters.visibility === 'all' ? ' selected' : ''}>全部</option>
             </select>
           </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>出題日</label>
+            <input type="date" id="qm-f-date" value="${qmFilters.scheduledDate}" style="padding:6px 8px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:6px;font-family:inherit">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>班級</label>
+            <select id="qm-f-class"><option value="">全部</option>${qmClasses.map(c => `<option value="${c}"${qmFilters.classId === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>姓名</label>
+            <select id="qm-f-name"><option value="">全部</option>${qmNames.map(n => `<option value="${n}"${qmFilters.studentName === n ? ' selected' : ''}>${n}</option>`).join('')}</select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>關鍵字</label>
+            <input type="text" id="qm-f-kw" value="${qmFilters.keyword}" placeholder="題目/選項/題號" style="padding:6px 8px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:6px;font-family:inherit">
+          </div>
+          <button class="btn btn-green" id="qm-f-search">🔍 查詢</button>
+          <button class="btn btn-ghost" id="qm-f-reset">清除</button>
           <div style="flex:1"></div>
           <button class="btn btn-ghost" id="btn-qm-bulk-tpl">📥 範本 CSV</button>
           <button class="btn btn-green" id="btn-qm-bulk-import">📤 批次匯入</button>
@@ -4203,6 +4234,13 @@ TP18,新北 TP18,2026"></textarea>
       document.getElementById('qm-f-book').addEventListener('change', (e) => { qmFilters.bookId = e.target.value; renderQuestionsPage(); });
       document.getElementById('qm-f-dim').addEventListener('change', (e) => { qmFilters.dimension = e.target.value; renderQuestionsPage(); });
       document.getElementById('qm-f-vis').addEventListener('change', (e) => { qmFilters.visibility = e.target.value; renderQuestionsPage(); });
+      document.getElementById('qm-f-date').addEventListener('change', (e) => { qmFilters.scheduledDate = e.target.value; renderQuestionsPage(); });
+      document.getElementById('qm-f-class').addEventListener('change', (e) => { qmFilters.classId = e.target.value; qmFilters.studentName = ''; renderQuestionsPage(); });
+      document.getElementById('qm-f-name').addEventListener('change', (e) => { qmFilters.studentName = e.target.value; renderQuestionsPage(); });
+      document.getElementById('qm-f-kw').addEventListener('input', (e) => { qmFilters.keyword = e.target.value; });
+      document.getElementById('qm-f-kw').addEventListener('keydown', (e) => { if (e.key === 'Enter') renderQuestionsPage(); });
+      document.getElementById('qm-f-search').addEventListener('click', renderQuestionsPage);
+      document.getElementById('qm-f-reset').addEventListener('click', () => { qmFilters = { bookId: '', dimension: '', visibility: 'visible', scheduledDate: '', classId: '', studentName: '', keyword: '' }; renderQuestionsPage(); });
       document.getElementById('btn-qm-bulk-tpl').addEventListener('click', downloadQuestionsTpl);
       document.getElementById('btn-qm-bulk-import').addEventListener('click', () => document.getElementById('qm-bulk-modal').classList.add('active'));
       document.getElementById('btn-qm-export-orig').addEventListener('click', () => exportQuestionsCSV('original'));

@@ -2045,6 +2045,11 @@
         errEl.innerHTML = `<div class="err-msg">❌ 選項 ${miss} 至少要有文字或圖片</div>`; return;
       }
 
+      // 沒章節/維度 → 提醒（章節是下拉、一定是阿拉伯數字；但沒選會無法歸維度、不進雷達）
+      if (!dimension) {
+        if (!confirm('⚠️ 你沒有選章節（或該章節未對應維度），此題不會計入 6 角雷達。\n建議回去選一個章節。確定仍要這樣送出嗎？')) return;
+      }
+
       // 重複日期提醒：同一出題日已出過題 → 提示第幾題、按確定才繼續
       try {
         const dupSnap = await getDocs(query(collection(db, 'questions'), where('createdByStudentId', '==', currentStudent.id), where('scheduledDate', '==', scheduledDate)));
