@@ -381,7 +381,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
     import { getFirestore, collection, query, where, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp, onSnapshot, Timestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -395,6 +395,8 @@
     };
     const app = initializeApp(firebaseConfig, 'instructor-app');
     const auth = getAuth(app);
+    // 取消自動登陸：用記憶體保存（與學員端一致）→ 重開 / 重整就要重新登入，不記住上次帳號
+    setPersistence(auth, inMemoryPersistence);
     const db = getFirestore(app);
 
     let currentInstructor = null;   // { id, email, name, managedClassIds }
