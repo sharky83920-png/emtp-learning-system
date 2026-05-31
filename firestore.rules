@@ -55,7 +55,7 @@ service cloud.firestore {
       allow read: if authed();
       allow create: if authed();             // 學員出題
       allow update: if authed();             // 指導員勘誤校正
-      allow delete: if false;                // 永不真刪、只能隱藏
+      allow delete: if isMaster();           // 真刪除僅限 Master（後台）；指導員端只能隱藏
     }
     match /question_attempts/{id}      { allow read: if authed(); allow create: if authed(); allow update, delete: if isMaster(); }
     match /student_quiz_progress/{id}  { allow read: if authed(); allow write: if authed(); }

@@ -4192,6 +4192,7 @@ TP18,新北 TP18,2026"></textarea>
               ${q.isVisible === false
                 ? `<button class="btn btn-ghost" data-qm-show="${q.id}">👁️</button>`
                 : `<button class="btn btn-orange" data-qm-hide="${q.id}">🚫</button>`}
+              <button class="btn btn-red" data-qm-del="${q.id}" title="真刪除（永久、不可復原）">🗑</button>
             </td>
           </tr>`;
         });
@@ -4210,6 +4211,19 @@ TP18,新北 TP18,2026"></textarea>
       el.querySelectorAll('button[data-qm-show]').forEach(b => b.addEventListener('click', () => toggleQuestionVis(b.dataset.qmShow, true)));
       el.querySelectorAll('button[data-qm-dl]').forEach(b => b.addEventListener('click', () => downloadOneOriginal(b.dataset.qmDl)));
       el.querySelectorAll('button[data-qm-edit]').forEach(b => b.addEventListener('click', () => openQmEdit(b.dataset.qmEdit)));
+      el.querySelectorAll('button[data-qm-del]').forEach(b => b.addEventListener('click', () => deleteQuestionHard(b.dataset.qmDel)));
+    }
+
+    // 真刪除題目（僅後台 Master、雙重確認、永久移除）
+    async function deleteQuestionHard(qid) {
+      if (!confirm(`⚠️ 真刪除題目 ${qid}？\n\n這會「永久移除」這一題（跟『隱藏』不同、不可復原）。\n一般只用來刪測試題 / 誤建題。`)) return;
+      if (!confirm(`再次確認：${qid} 永久刪除、無法復原，確定？`)) return;
+      try {
+        await deleteDoc(doc(db, 'questions', qid));
+        qmCache = qmCache.filter(q => q.id !== qid);
+        renderQuestionsPage();
+        alert(`✅ 已永久刪除 ${qid}`);
+      } catch (e) { alert('❌ ' + e.message); }
     }
 
     // F13-I: 下載原始版本（含校正歷史）
