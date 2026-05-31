@@ -625,9 +625,7 @@
         classes.forEach(c => { html += `<option value="${c.id}">${c.displayName || c.id}</option>`; });
         sel.innerHTML = html;
         sel.disabled = false;
-        // 共通入口：URL 帶 ?class= 時自動帶入並載入姓名
-        const pre = new URLSearchParams(location.search).get('class');
-        if (pre) { sel.value = pre; if (sel.value === pre) sel.dispatchEvent(new Event('change')); }
+        // （已取消）不再依 URL ?class= 自動帶入班級、一律手動選
       } catch (e) {
         console.error('[Init] Failed to load classes:', e);
         sel.innerHTML = `<option value="">❌ 載入失敗</option>`;
@@ -637,8 +635,7 @@
     // 身分切換：選指導員/教官 → 直接前往指導員端（共通入口、不彈窗、帶上已選單位）
     document.getElementById('login-role').addEventListener('change', (e) => {
       if (e.target.value === 'instructor') {
-        const c = document.getElementById('login-class').value;
-        window.location.href = 'instructor.html' + (c ? ('?class=' + encodeURIComponent(c)) : '');
+        window.location.href = 'instructor.html';
       }
     });
 
