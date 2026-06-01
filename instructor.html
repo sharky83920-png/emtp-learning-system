@@ -66,10 +66,15 @@
     .qr-student-row:last-child { border-bottom: none; }
     .pri-select { width: 100%; padding: 11px 14px; border: 2px solid #e2e8f0; border-radius: 10px; font-family: inherit; font-size: 14px; background: #f8fafc; color: #1e293b; }
     .pri-select:focus { outline: none; border-color: #6366f1; background: #fff; }
-    /* App 感：原生下拉箭頭 + 防 iOS 聚焦自動縮放（input/select 至少 16px）*/
-    .pri-select, select.pri-select, .form-group select { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%2394a3b8' stroke-width='1.6' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 34px; }
+    /* App 感 + 統一所有表單控制項尺寸（含帶 inline style 者）→ 解決「格子大小不一」*/
+    main input:not([type=checkbox]):not([type=radio]):not([type=range]), main select, main textarea {
+      font-size: 16px !important; font-family: inherit !important; color: #1e293b !important;
+      background-color: #f8fafc !important; border: 1px solid #d6dce6 !important; border-radius: 10px !important; padding: 11px 12px !important;
+    }
+    main input:not([type=checkbox]):not([type=radio]):not([type=range]), main select { min-height: 44px; }
+    main select { -webkit-appearance: none !important; appearance: none !important; padding-right: 34px !important; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%2394a3b8' stroke-width='1.6' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E") !important; background-repeat: no-repeat !important; background-position: right 12px center !important; }
+    main input:focus, main select:focus, main textarea:focus { border-color: #6366f1 !important; background-color: #fff !important; outline: none !important; }
     .header-right select { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%23ffffff' stroke-width='1.6' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; padding-right: 26px; }
-    .card input, .card select, .card textarea, .pri-select, .form-group input, .form-group select, input[type="date"] { font-size: 16px; }
     button { -webkit-tap-highlight-color: transparent; }
     /* === RWD 防超框：手機上不再硬塞、不橫向捲動 === */
     html, body { overflow-x: hidden; max-width: 100%; }
@@ -408,6 +413,7 @@
           <div id="corr-reason" style="font-size:14px;color:#78350f;white-space:pre-wrap">—</div>
         </div>
         <div style="font-size:12px;color:#64748b;font-family:monospace;margin-bottom:6px">題號 <span id="corr-qid">—</span></div>
+        <div id="corr-meta" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
         <div class="form-group"><label>題目</label><textarea id="corr-qtext" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px"></textarea></div>
         <div id="corr-options"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -738,6 +744,18 @@
       document.getElementById('corr-reporter').textContent = `${g.reports.length} 筆回報`;
       document.getElementById('corr-reason').innerHTML = g.reports.map(r => `• ${r.reportedByName || '學員'}：${r.reason || ''}`).join('<br>');
       document.getElementById('corr-qid').textContent = qid;
+      // 出題者班級/姓名 + 書籍出處（章/頁），方便指導員判斷怎麼改
+      const _esc = v => String(v == null ? '' : v).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+      const _s = q.source || {};
+      const _cls = q.createdByClassId || '—';
+      const _who = q.createdByName || q.createdBy || '—';
+      const _book = _s.bookName || _s.bookId || '';
+      const _ch = _s.chapterNumber ? `第${_s.chapterNumber}章` : '';
+      const _pg = _s.page ? `p.${_s.page}` : '';
+      const _src = [_book, _ch, _pg].filter(Boolean).join(' ') || '（無出處）';
+      document.getElementById('corr-meta').innerHTML =
+        `<span style="background:#eef2ff;color:#4338ca;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600">👤 ${_esc(_cls)} · ${_esc(_who)}</span>` +
+        `<span style="background:#ecfdf5;color:#065f46;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600">📖 ${_esc(_src)}</span>`;
       document.getElementById('corr-qtext').value = q.questionText || '';
       document.getElementById('corr-answer').value = q.correctAnswer || 'A';
       document.getElementById('corr-page').value = (q.source && q.source.page) || '';
