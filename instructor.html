@@ -417,7 +417,7 @@
         </div>
         <div style="font-size:12px;color:#64748b;font-family:monospace;margin-bottom:6px">題號 <span id="corr-qid">—</span></div>
         <div id="corr-meta" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
-        <div class="form-group"><label>題目</label><textarea id="corr-qtext" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px"></textarea></div>
+        <div class="form-group"><label>題目</label><textarea id="corr-qtext" class="corr-grow" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px;line-height:1.55;resize:none;overflow:hidden"></textarea></div>
         <div id="corr-options"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div class="form-group"><label>書籍 <span style="color:#dc2626">*</span></label>
@@ -777,13 +777,14 @@
       // 選項
       const opts = q.options || {};
       document.getElementById('corr-options').innerHTML = ['A','B','C','D'].map(k =>
-        `<div class="form-group" style="margin-bottom:8px"><label>選項 ${k}</label><input class="corr-opt" data-k="${k}" value="${(opts[k]?.text || '').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:9px;font-family:inherit;font-size:14px"></div>`
+        `<div class="form-group" style="margin-bottom:8px"><label>選項 ${k}</label><textarea class="corr-opt corr-grow" data-k="${k}" rows="1" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:9px;font-family:inherit;font-size:14px;line-height:1.5;resize:none;overflow:hidden">${String(opts[k]?.text || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</textarea></div>`
       ).join('');
       // 書籍 / 章節（可改、存檔時重算維度）：先顯示窗、再帶入現有出處
       document.getElementById('corr-book').innerHTML = '<option value="">載入中…</option>';
       document.getElementById('corr-chapter').innerHTML = '<option value="">先選書籍</option>';
       document.getElementById('corr-dim-hint').innerHTML = '';
       document.getElementById('corr-modal').style.display = 'flex';
+      corrAutosizeAll();   // 顯示後依內容長高（題目+選項）
       try {
         await ensureCorrBooksChapters();
         const src = q.source || {};
@@ -835,6 +836,10 @@
     }
     document.getElementById('corr-book').addEventListener('change', () => { populateCorrChapter(document.getElementById('corr-book').value, '', ''); updateCorrDimHint(); });
     document.getElementById('corr-chapter').addEventListener('change', updateCorrDimHint);
+    // 題目/選項框依內容縱向自動長高
+    function corrGrow(el) { if (!el) return; el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
+    function corrAutosizeAll() { document.querySelectorAll('#corr-modal textarea.corr-grow').forEach(corrGrow); }
+    document.getElementById('corr-modal').addEventListener('input', (e) => { if (e.target.classList && e.target.classList.contains('corr-grow')) corrGrow(e.target); });
 
     async function resolveCorr(resolution) {
       if (!currentCorr) return;
