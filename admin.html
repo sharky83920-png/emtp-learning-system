@@ -396,6 +396,15 @@
           </div>
           <div id="faucet-body"><div class="loading">⏳ 請先選「設定目標班級」</div></div>
         </div>
+        <div class="card" id="qmfix-card">
+          <h2><span>🔧 修復：題目「出題班級」標記</span></h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:12px">部分題目（多為搬遷進來的舊題）缺少「出題班級」標記，導致依班級查詢/下載、以及🚰水龍頭都抓不到。此工具用「出題學員」反推班級補上。<strong>先預覽（不寫入），確認後再修復。</strong></p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-ghost" id="btn-qmfix-preview">🔍 預覽（不寫入）</button>
+            <button class="btn btn-green" id="btn-qmfix-run" style="display:none">🔧 開始修復</button>
+          </div>
+          <div id="qmfix-result" style="margin-top:12px"></div>
+        </div>
         <div class="card" id="qm-corr-card" style="display:none;border:1px solid #f59e0b">
           <h2><span>⚠️ 待處理勘誤</span></h2>
           <div id="qm-corr-list"></div>
@@ -4481,6 +4490,71 @@ TP18,新北 TP18,2026"></textarea>
         setTimeout(() => { msg.innerHTML = ''; }, 3000);
       } catch (e) { msg.innerHTML = `<span style="color:#ef4444">❌ ${e.message}</span>`; }
       finally { btn.disabled = false; btn.textContent = '💾 儲存授權'; }
+    });
+
+    // ===== 🔧 修復題目「出題班級」標記（補 createdByClassId）=====
+    // 優先用「出題學號」精準對應班級；學號缺時才用「姓名」，且僅當該姓名只屬於一個班才補；同名跨班一律不猜。
+    let _qmfixPlan = null;
+    document.getElementById('btn-qmfix-preview').addEventListener('click', async () => {
+      const box = document.getElementById('qmfix-result');
+      const runBtn = document.getElementById('btn-qmfix-run');
+      runBtn.style.display = 'none'; _qmfixPlan = null;
+      box.innerHTML = '<div class="loading">⏳ 掃描題庫與學員中...</div>';
+      try {
+        const [qSnap, sSnap] = await Promise.all([getDocs(collection(db, 'questions')), getDocs(collection(db, 'students'))]);
+        const stuClass = {}, nameClasses = {};
+        sSnap.forEach(d => { const x = d.data(); stuClass[d.id] = x.classId; if (x.name) (nameClasses[x.name] = nameClasses[x.name] || new Set()).add(x.classId); });
+        let total = 0, missing = 0, byStu = 0, byName = 0, ambiguous = 0, noinfo = 0;
+        const plan = [], ambSamples = [];
+        qSnap.forEach(d => {
+          total++;
+          const q = d.data();
+          if (q.createdByClassId) return;
+          missing++;
+          if (q.createdByStudentId && stuClass[q.createdByStudentId]) { plan.push({ id: d.id, cls: stuClass[q.createdByStudentId] }); byStu++; return; }
+          const nm = q.createdByName;
+          if (nm && nameClasses[nm]) {
+            if (nameClasses[nm].size === 1) { plan.push({ id: d.id, cls: [...nameClasses[nm]][0] }); byName++; return; }
+            ambiguous++; if (ambSamples.length < 8) ambSamples.push(`${nm}（${[...nameClasses[nm]].join('/')}）`); return;
+          }
+          noinfo++;
+        });
+        _qmfixPlan = plan;
+        box.innerHTML = `
+          <div style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:14px;font-size:14px;color:#e2e8f0;line-height:2">
+            題庫總題數：<b>${total}</b><br>
+            缺「出題班級」：<b style="color:#fbbf24">${missing}</b> 題<br>
+            ✅ 可由<strong>學號精準補</strong>：<b style="color:#34d399">${byStu}</b> 題<br>
+            ✅ 可由<strong>姓名唯一推定</strong>：<b style="color:#34d399">${byName}</b> 題<br>
+            ⚠️ <strong>同名跨班、無法判斷</strong>：<b style="color:#f87171">${ambiguous}</b> 題（不亂猜、保持空白）${ambSamples.length ? '<br><span style="color:#94a3b8;font-size:12px">例：' + ambSamples.join('、') + '</span>' : ''}<br>
+            ⚠️ <strong>連姓名都查不到</strong>：<b style="color:#f87171">${noinfo}</b> 題（保持空白）
+          </div>
+          <div style="color:#94a3b8;font-size:13px;margin-top:8px">按「開始修復」會補上前兩類共 <b style="color:#34d399">${plan.length}</b> 題；同名跨班與無資訊的不動、留給你手動處理。</div>`;
+        runBtn.style.display = plan.length ? '' : 'none';
+      } catch (e) { box.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+    });
+
+    document.getElementById('btn-qmfix-run').addEventListener('click', async () => {
+      if (!_qmfixPlan || !_qmfixPlan.length) return;
+      if (!confirm(`確定替 ${_qmfixPlan.length} 題補上「出題班級」？\n（同名跨班與無資訊的題目不會動）`)) return;
+      const btn = document.getElementById('btn-qmfix-run'); const box = document.getElementById('qmfix-result');
+      btn.disabled = true;
+      try {
+        let done = 0;
+        for (let i = 0; i < _qmfixPlan.length; i += 400) {
+          const chunk = _qmfixPlan.slice(i, i + 400);
+          const batch = writeBatch(db);
+          chunk.forEach(p => batch.update(doc(db, 'questions', p.id), { createdByClassId: p.cls, classFixedAt: serverTimestamp(), classFixedBy: currentUser.email }));
+          await batch.commit();
+          done += chunk.length;
+          btn.textContent = `⏳ ${done}/${_qmfixPlan.length}`;
+        }
+        box.innerHTML = `<div style="color:#34d399;font-size:14px">✅ 已補上 ${done} 題的出題班級。正在重新載入題庫...</div>`;
+        _qmfixPlan = null; btn.style.display = 'none';
+        await loadQuestionsPage();
+        loadFaucetPage();
+      } catch (e) { box.innerHTML = `<div class="err-msg">❌ 修復失敗：${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '🔧 開始修復'; }
     });
 
     // 題庫篩選條件（render 與下載共用，下載＝畫面上篩選結果、含出題日範圍）
