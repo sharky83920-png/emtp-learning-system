@@ -2,11 +2,16 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="EMTP 指導員">
+  <meta name="theme-color" content="#e11d48">
   <title>🧑‍🏫 EMTP 指導員後台</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; background: #f1f5f9; color: #1e293b; min-height: 100vh; line-height: 1.6; }
+    html, body { font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; background: #eef1f6; color: #1e293b; min-height: 100vh; line-height: 1.6; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
     /* 登入 */
     .login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
     .login-screen { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
@@ -25,19 +30,19 @@
     .ok-msg { background: #f0fdf4; color: #065f46; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 12px; }
     .info-msg { background: #eff6ff; color: #1e40af; padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-top: 14px; }
     /* 後台（手機 App 版型）*/
-    .dashboard { display: none; padding-bottom: 78px; }
-    .header { background: linear-gradient(135deg,#e11d48,#be123c); color: white; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 50; box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
+    .dashboard { display: none; padding-bottom: calc(82px + env(safe-area-inset-bottom)); }
+    .header { background: linear-gradient(135deg,#e11d48,#be123c); color: white; padding: calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 12px calc(16px + env(safe-area-inset-left)); display: flex; justify-content: space-between; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 50; box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
     .header h1 { font-size: 17px; font-weight: 700; }
     .header-right { display: flex; align-items: center; gap: 8px; }
     .header-right select { background: rgba(255,255,255,0.18); color: white; border: 1px solid rgba(255,255,255,0.4); border-radius: 8px; padding: 6px 10px; font-family: inherit; font-size: 14px; font-weight: 600; max-width: 150px; }
     .header-right select option { color: #1e293b; }
     .btn-logout { background: rgba(255,255,255,0.22); color: white; padding: 6px 12px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-family: inherit; white-space: nowrap; }
-    main { padding: 20px 16px 24px; max-width: 720px; margin: 0 auto; }
+    main { padding: 14px 12px calc(20px + env(safe-area-inset-bottom)); max-width: 600px; margin: 0 auto; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
-    /* 卡片比照學員端：白底、淡邊框、柔和陰影、留白加大 */
-    .card { background: #fff; border: 1px solid #eef2f7; border-radius: 16px; padding: 22px; margin-bottom: 18px; box-shadow: 0 1px 3px rgba(15,23,42,0.04), 0 10px 28px -18px rgba(15,23,42,0.18); }
-    .card h2 { font-size: 17px; margin-bottom: 14px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    /* 卡片：App 風格、緊湊、柔和陰影 */
+    .card { background: #fff; border: 1px solid #eceff4; border-radius: 16px; padding: 16px; margin-bottom: 13px; box-shadow: 0 1px 2px rgba(15,23,42,0.05), 0 8px 22px -16px rgba(15,23,42,0.16); }
+    .card h2 { font-size: 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .card > p { line-height: 1.7; }
     .placeholder { text-align: center; padding: 40px 20px; color: #94a3b8; }
     .placeholder .icon { font-size: 50px; margin-bottom: 12px; }
@@ -47,7 +52,7 @@
     .build-box .icon { font-size: 42px; margin-bottom: 10px; }
     .build-box h3 { color: #64748b; font-size: 16px; margin-bottom: 6px; }
     /* 底部固定 tab（像學員端）*/
-    .bottom-tabs { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e2e8f0; display: flex; padding: 6px 4px; box-shadow: 0 -4px 20px rgba(0,0,0,0.06); z-index: 90; }
+    .bottom-tabs { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,0.9); backdrop-filter: saturate(180%) blur(16px); -webkit-backdrop-filter: saturate(180%) blur(16px); border-top: 1px solid #e8edf3; display: flex; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 20px rgba(0,0,0,0.06); z-index: 90; }
     .bottom-tabs button { flex: 1; background: transparent; border: none; padding: 8px 4px; color: #94a3b8; font-size: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; font-family: inherit; border-radius: 8px; }
     .bottom-tabs button .bt-icon { font-size: 21px; }
     .bottom-tabs button.active { color: #e11d48; background: #fff1f2; font-weight: 600; }
@@ -61,6 +66,11 @@
     .qr-student-row:last-child { border-bottom: none; }
     .pri-select { width: 100%; padding: 11px 14px; border: 2px solid #e2e8f0; border-radius: 10px; font-family: inherit; font-size: 14px; background: #f8fafc; color: #1e293b; }
     .pri-select:focus { outline: none; border-color: #6366f1; background: #fff; }
+    /* App 感：原生下拉箭頭 + 防 iOS 聚焦自動縮放（input/select 至少 16px）*/
+    .pri-select, select.pri-select, .form-group select { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%2394a3b8' stroke-width='1.6' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 34px; }
+    .header-right select { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%23ffffff' stroke-width='1.6' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; padding-right: 26px; }
+    .card input, .card select, .card textarea, .pri-select, .form-group input, .form-group select, input[type="date"] { font-size: 16px; }
+    button { -webkit-tap-highlight-color: transparent; }
     /* === RWD 防超框：手機上不再硬塞、不橫向捲動 === */
     html, body { overflow-x: hidden; max-width: 100%; }
     main { width: 100%; }
@@ -1008,12 +1018,35 @@
 
     // ===== 出題繳交追蹤 =====
     // 出題日下拉：最近且已到達的 3 筆放最前面，其次歷史（過往），最後尚未到期
-    function populateTrackControls() {
+    async function populateTrackControls() {
       const dateSel = document.getElementById('track-date');
       const stuSel = document.getElementById('track-student');
       if (!dateSel) return;
       const _t = new Date();
       const todayStr = `${_t.getFullYear()}-${String(_t.getMonth() + 1).padStart(2, '0')}-${String(_t.getDate()).padStart(2, '0')}`;  // 字串比較、含今天，避免時區位移
+      // 本班學員抓一次（排除測試帳號＝姓名含「測試」；統計只算真實學員）
+      let allStudents = [];
+      try {
+        const snap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
+        snap.forEach(d => { const s = d.data(); if (s.isActive !== false) allStudents.push({ id: d.id, name: s.name || '', no: s.studentNo }); });
+      } catch (e) {}
+      allStudents.sort((a, b) => (a.no || 0) - (b.no || 0));
+      const realStudents = allStudents.filter(s => !s.name.includes('測試'));
+      const realIdSet = new Set(realStudents.map(s => s.id));
+      const realCount = realStudents.length;
+      // 各出題日 → 每位真實學員出了幾題（依題庫 createdByClassId/createdByStudentId）
+      const cntByDateStu = {};
+      try {
+        const qSnap = await getDocs(query(collection(db, 'questions'), where('createdByClassId', '==', selectedClassId)));
+        qSnap.forEach(d => { const q = d.data(); const sd = q.scheduledDate, sid = q.createdByStudentId; if (!sd || !sid || !realIdSet.has(sid)) return; (cntByDateStu[sd] = cntByDateStu[sd] || {})[sid] = (cntByDateStu[sd][sid] || 0) + 1; });
+      } catch (e) {}
+      const missOf = s => { const need = s.questionsPerStudent || 1; const m = cntByDateStu[s.scheduledDate] || {}; let done = 0; realStudents.forEach(st => { if ((m[st.id] || 0) >= need) done++; }); return realCount - done; };
+      // option 文字：已到期的日期標注「✅ 全繳 / 尚 N 人未繳」（排除測試帳號）
+      const optText = (s, annotate) => {
+        let t = `${s.scheduledDate}${s.questionsPerStudent > 1 ? `（${s.questionsPerStudent}題）` : ''}`;
+        if (annotate && realCount > 0) { const miss = missOf(s); t += miss === 0 ? ' ✅ 全繳' : `・尚 ${miss} 人未繳`; }
+        return t;
+      };
       const arrived = schedCache.filter(s => (s.scheduledDate || '') <= todayStr)
         .sort((a, b) => (b.scheduledDate || '').localeCompare(a.scheduledDate || '')); // 新→舊
       const future = schedCache.filter(s => (s.scheduledDate || '') > todayStr)
@@ -1022,20 +1055,13 @@
       const older = arrived.slice(3);
       const prev = dateSel.value;
       let h = '<option value="">請選出題日...</option>';
-      if (recent.length) { h += '<optgroup label="🔥 最近可繳交（近期 3 筆）">'; recent.forEach(s => h += `<option value="${s.scheduledDate}">${s.scheduledDate}${s.questionsPerStudent > 1 ? `（${s.questionsPerStudent}題）` : ''}</option>`); h += '</optgroup>'; }
-      if (older.length) { h += '<optgroup label="📁 歷史排程（過往日期）">'; older.forEach(s => h += `<option value="${s.scheduledDate}">${s.scheduledDate}${s.questionsPerStudent > 1 ? `（${s.questionsPerStudent}題）` : ''}</option>`); h += '</optgroup>'; }
-      if (future.length) { h += '<optgroup label="⏳ 尚未到期">'; future.forEach(s => h += `<option value="${s.scheduledDate}">${s.scheduledDate}${s.questionsPerStudent > 1 ? `（${s.questionsPerStudent}題）` : ''}</option>`); h += '</optgroup>'; }
+      if (recent.length) { h += '<optgroup label="🔥 最近可繳交（近期 3 筆）">'; recent.forEach(s => h += `<option value="${s.scheduledDate}">${optText(s, true)}</option>`); h += '</optgroup>'; }
+      if (older.length) { h += '<optgroup label="📁 歷史排程（過往日期）">'; older.forEach(s => h += `<option value="${s.scheduledDate}">${optText(s, true)}</option>`); h += '</optgroup>'; }
+      if (future.length) { h += '<optgroup label="⏳ 尚未到期">'; future.forEach(s => h += `<option value="${s.scheduledDate}">${optText(s, false)}</option>`); h += '</optgroup>'; }
       dateSel.innerHTML = h;
       if (prev && schedCache.some(s => s.scheduledDate === prev)) dateSel.value = prev;
-      // 學員下拉
-      if (stuSel) {
-        getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId))).then(snap => {
-          const list = [];
-          snap.forEach(d => { const s = d.data(); if (s.isActive !== false) list.push({ id: d.id, name: s.name, no: s.studentNo }); });
-          list.sort((a, b) => (a.no || 0) - (b.no || 0));
-          stuSel.innerHTML = '<option value="">全部學員</option>' + list.map(s => `<option value="${s.id}">${s.no}. ${s.name}</option>`).join('');
-        }).catch(() => {});
-      }
+      // 學員下拉（含測試帳號，供個別查看用）
+      if (stuSel) stuSel.innerHTML = '<option value="">全部學員</option>' + allStudents.map(s => `<option value="${s.id}">${s.no}. ${s.name}</option>`).join('');
     }
 
     async function loadTrackResult() {
@@ -1052,7 +1078,7 @@
         const need = (sch && sch.questionsPerStudent) || 1;
         const stuSnap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
         let students = [];
-        stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false) students.push({ id: d.id, name: s.name, no: s.studentNo }); });
+        stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false && !String(s.name || '').includes('測試')) students.push({ id: d.id, name: s.name, no: s.studentNo }); });
         students.sort((a, b) => (a.no || 0) - (b.no || 0));
         // 以「題庫出題者」判斷：該班該日、每位學員出了幾題
         const qSnap = await getDocs(query(collection(db, 'questions'), where('createdByClassId', '==', selectedClassId)));
