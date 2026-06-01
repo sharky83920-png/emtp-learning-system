@@ -1012,10 +1012,11 @@
       const dateSel = document.getElementById('track-date');
       const stuSel = document.getElementById('track-student');
       if (!dateSel) return;
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const arrived = schedCache.filter(s => new Date(s.scheduledDate) <= today)
+      const _t = new Date();
+      const todayStr = `${_t.getFullYear()}-${String(_t.getMonth() + 1).padStart(2, '0')}-${String(_t.getDate()).padStart(2, '0')}`;  // 字串比較、含今天，避免時區位移
+      const arrived = schedCache.filter(s => (s.scheduledDate || '') <= todayStr)
         .sort((a, b) => (b.scheduledDate || '').localeCompare(a.scheduledDate || '')); // 新→舊
-      const future = schedCache.filter(s => new Date(s.scheduledDate) > today)
+      const future = schedCache.filter(s => (s.scheduledDate || '') > todayStr)
         .sort((a, b) => (a.scheduledDate || '').localeCompare(b.scheduledDate || ''));
       const recent = arrived.slice(0, 3);
       const older = arrived.slice(3);
@@ -1086,12 +1087,13 @@
         const qSnap = await getDocs(query(collection(db, 'questions'), where('createdByStudentId', '==', stuId)));
         const cntByDate = {};
         qSnap.forEach(d => { const sd = d.data().scheduledDate; if (sd) cntByDate[sd] = (cntByDate[sd] || 0) + 1; });
-        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const _t2 = new Date();
+        const todayStr = `${_t2.getFullYear()}-${String(_t2.getMonth() + 1).padStart(2, '0')}-${String(_t2.getDate()).padStart(2, '0')}`;
         const dates = [...schedCache].sort((a, b) => (b.scheduledDate || '').localeCompare(a.scheduledDate || '')); // 新→舊
         const rows = dates.map(s => {
           const need = s.questionsPerStudent || 1;
           const cnt = cntByDate[s.scheduledDate] || 0;
-          const arrived = new Date(s.scheduledDate) <= today;
+          const arrived = (s.scheduledDate || '') <= todayStr;
           return { date: s.scheduledDate, need, cnt, arrived, done: cnt >= need };
         });
         const due = rows.filter(r => r.arrived);

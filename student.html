@@ -2047,11 +2047,13 @@
         const schSnap = await getDocs(schQ);
         nqSchedule = [];
         schSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) nqSchedule.push({ id: d.id, ...data }); });
-        const today = new Date(); today.setHours(0,0,0,0);
+        // 本地今天（純字串 YYYY-MM-DD，避免 new Date(ISO) 被當 UTC 午夜、把「今天」誤判成未來）
+        const _t = new Date();
+        const todayStr = `${_t.getFullYear()}-${String(_t.getMonth() + 1).padStart(2, '0')}-${String(_t.getDate()).padStart(2, '0')}`;
         // 依日期降序
         nqSchedule.sort((a, b) => (b.scheduledDate || '').localeCompare(a.scheduledDate || ''));
-        // 過濾：不能選未來日期、可選最近 / 過往
-        const valid = nqSchedule.filter(s => new Date(s.scheduledDate) <= today);
+        // 過濾：不能選未來日期（字串比較、含今天）、可選最近 / 過往
+        const valid = nqSchedule.filter(s => (s.scheduledDate || '') <= todayStr);
         const recent = valid.slice(0, 3);
         const past = valid.slice(3);
 
@@ -2305,7 +2307,8 @@
           subSnap.forEach(d => { const sd = d.data().scheduledDate; if (sd) submittedDates.add(sd); });
         } catch (e) {}
 
-        const today = new Date(); today.setHours(0,0,0,0);
+        const _t = new Date();
+        const todayStr = `${_t.getFullYear()}-${String(_t.getMonth() + 1).padStart(2, '0')}-${String(_t.getDate()).padStart(2, '0')}`;  // 字串比較、避免時區位移
 
         if (sch.length === 0) {
           grid.innerHTML = '<div class="empty-hint">尚無出題排程、請聯絡指導員設定</div>';
@@ -2314,9 +2317,8 @@
 
         let html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">';
         sch.forEach(s => {
-          const d = new Date(s.scheduledDate);
-          const isPast = d < today;
-          const isFuture = d > today;
+          const isPast = (s.scheduledDate || '') < todayStr;
+          const isFuture = (s.scheduledDate || '') > todayStr;
           const isSubmitted = submittedDates.has(s.scheduledDate);
           let bg, color, icon;
           if (isSubmitted) { bg = '#10b981'; color = 'white'; icon = '✓'; }
@@ -2331,8 +2333,8 @@
 
         // 統計
         const done = sch.filter(s => submittedDates.has(s.scheduledDate)).length;
-        const overdue = sch.filter(s => !submittedDates.has(s.scheduledDate) && new Date(s.scheduledDate) < today).length;
-        const future = sch.filter(s => new Date(s.scheduledDate) > today).length;
+        const overdue = sch.filter(s => !submittedDates.has(s.scheduledDate) && (s.scheduledDate || '') < todayStr).length;
+        const future = sch.filter(s => (s.scheduledDate || '') > todayStr).length;
         html += `<div style="margin-top:14px;background:#f8fafc;padding:12px;border-radius:8px;display:flex;justify-content:space-around;font-size:13px">
           <div><strong style="color:#10b981">已交 ${done}</strong></div>
           <div><strong style="color:#ef4444">缺交 ${overdue}</strong></div>
