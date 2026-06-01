@@ -542,6 +542,19 @@
           </p>
           <div id="settings-list"><div class="loading">載入中...</div></div>
         </div>
+
+        <div class="card">
+          <h2><span>📥 首刷紀錄明細下載（後台專屬）</span></h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">💡 匯出指定班級／學員／日期區間的「每題首刷」<strong>逐題明細</strong>（題號、書/章、維度、答對與否、首刷日期）。與上方「首刷雷達」彙總答對率不同，這裡是一題一列的原始紀錄。</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:12px">
+            <div class="form-group" style="margin-bottom:0;min-width:160px"><label>班級</label><select id="fd-class"><option value="">請選班級...</option></select></div>
+            <div class="form-group" style="margin-bottom:0;min-width:160px"><label>對象</label><select id="fd-student"><option value="">整班</option></select></div>
+            <div class="form-group" style="margin-bottom:0"><label>起日（空=全部）</label><input type="date" id="fd-start"></div>
+            <div class="form-group" style="margin-bottom:0"><label>迄日</label><input type="date" id="fd-end"></div>
+            <button class="btn btn-green" id="btn-fd-download">📥 下載明細 CSV</button>
+          </div>
+          <div id="fd-msg"></div>
+        </div>
       </section>
     </main>
   </div>
@@ -1128,7 +1141,7 @@ TP18,新北 TP18,2026"></textarea>
         if (btn.dataset.tab === 'schedule') loadSchedulePage();
         if (btn.dataset.tab === 'questions') { loadQuestionsPage(); loadFaucetPage(); }
         if (btn.dataset.tab === 'announcements') loadAnnouncementsPage();
-        if (btn.dataset.tab === 'settings') loadSettings();
+        if (btn.dataset.tab === 'settings') { loadSettings(); loadFirstAttemptDetailClasses(); }
       });
     });
 
@@ -3794,6 +3807,78 @@ TP18,新北 TP18,2026"></textarea>
         setTimeout(() => { msg.innerHTML = ''; }, 3000);
       } catch (e) { msg.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
       finally { btn.disabled = false; btn.textContent = '📥 下載 CSV'; }
+    });
+
+    // ===== 首刷紀錄明細下載（系統設定分頁、後台專屬）=====
+    async function loadFirstAttemptDetailClasses() {
+      try {
+        const snap = await getDocs(collection(db, 'classes'));
+        const cs = []; snap.forEach(d => { const x = d.data(); if (x.isActive !== false) cs.push({ id: d.id, name: x.displayName || d.id }); });
+        cs.sort((a, b) => (a.id > b.id ? 1 : -1));
+        const sel = document.getElementById('fd-class');
+        if (sel) sel.innerHTML = '<option value="">請選班級...</option>' + cs.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      } catch (e) { console.error('fd classes', e); }
+    }
+    document.getElementById('fd-class').addEventListener('change', async (e) => {
+      const cid = e.target.value; const sel = document.getElementById('fd-student');
+      if (!cid) { sel.innerHTML = '<option value="">整班</option>'; return; }
+      const snap = await getDocs(query(collection(db, 'students'), where('classId', '==', cid)));
+      const list = []; snap.forEach(d => { const s = d.data(); if (s.isActive !== false) list.push({ id: d.id, ...s }); });
+      list.sort((a, b) => (a.studentNo || 0) - (b.studentNo || 0));
+      sel.innerHTML = '<option value="">整班</option>' + list.map(s => `<option value="${s.id}">${s.studentNo}. ${s.name}</option>`).join('');
+    });
+    document.getElementById('btn-fd-download').addEventListener('click', async () => {
+      const cid = document.getElementById('fd-class').value;
+      const sid = document.getElementById('fd-student').value;
+      const startStr = document.getElementById('fd-start').value;
+      const endStr = document.getElementById('fd-end').value;
+      const msg = document.getElementById('fd-msg'); msg.innerHTML = '';
+      if (!cid) { msg.innerHTML = '<div class="err-msg">❌ 請選班級</div>'; return; }
+      const startMs = startStr ? new Date(startStr + 'T00:00:00').getTime() : 0;
+      const endMs = endStr ? new Date(endStr + 'T23:59:59').getTime() : Infinity;
+      const btn = document.getElementById('btn-fd-download'); btn.disabled = true; btn.textContent = '⏳ 計算中...';
+      try {
+        const stuSnap = await getDocs(query(collection(db, 'students'), where('classId', '==', cid)));
+        const students = {}; stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false && (!sid || d.id === sid)) students[d.id] = { no: s.studentNo, name: s.name }; });
+        // 題目主檔（補書/章/維度/題目摘要）
+        const qMap = {};
+        const qSnap = await getDocs(collection(db, 'questions'));
+        qSnap.forEach(d => { const q = d.data(); const s = q.source || {}; qMap[d.id] = { book: s.bookId || '', ch: s.chapterNumber || '', dim: q.derivedDimension || '', text: (q.questionText || '').replace(/\s+/g, ' ').slice(0, 40) }; });
+        // 該班 attempts → 每題首刷（最早一次）
+        const atSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', cid)));
+        const first = {};
+        atSnap.forEach(d => {
+          const a = d.data();
+          if (!a.questionId || !students[a.studentId]) return;
+          const t = a.attemptedAt?.seconds ? a.attemptedAt.seconds * 1000 : 0;
+          (first[a.studentId] = first[a.studentId] || {});
+          const cur = first[a.studentId][a.questionId];
+          if (!cur || t < cur.t) first[a.studentId][a.questionId] = { isCorrect: a.isCorrect, t, dim: a.dimension };
+        });
+        const fmtD = ms => { if (!ms) return ''; const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+        const esc = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+        const rows = [['學號', '姓名', '首刷日期', '題號', '書籍', '章', '維度', '答對', '題目摘要'].map(esc).join(',')];
+        let n = 0;
+        Object.entries(students).sort((a, b) => (a[1].no || 0) - (b[1].no || 0)).forEach(([id, s]) => {
+          const recs = Object.entries(first[id] || {}).map(([qid, r]) => ({ qid, ...r }))
+            .filter(r => r.t >= startMs && r.t <= endMs)
+            .sort((a, b) => a.t - b.t);
+          recs.forEach(r => {
+            const qm = qMap[r.qid] || {};
+            rows.push([s.no, s.name, fmtD(r.t), r.qid, qm.book, qm.ch, qm.dim || r.dim || '', r.isCorrect ? '是' : '否', qm.text].map(esc).join(','));
+            n++;
+          });
+        });
+        if (n === 0) { msg.innerHTML = '<div class="err-msg">⚠️ 此條件下沒有首刷紀錄</div>'; return; }
+        const blob = new Blob(['﻿' + rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `首刷明細_${cid}${sid ? '_個人' : ''}_${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        msg.innerHTML = `<div class="ok-msg">✅ 已下載 ${n} 筆首刷紀錄</div>`;
+        setTimeout(() => { msg.innerHTML = ''; }, 4000);
+      } catch (e) { msg.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '📥 下載明細 CSV'; }
     });
     document.querySelectorAll('#tab-exams .sub-tab').forEach(b => {
       b.addEventListener('click', () => {

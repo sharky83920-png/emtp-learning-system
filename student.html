@@ -127,6 +127,7 @@
       <h1>📚 EMTP 學員系統</h1>
       <div class="user-info">
         <button id="btn-bell" title="公告與通知" style="position:relative;background:transparent;border:none;font-size:22px;cursor:pointer;padding:2px 6px;line-height:1">🔔<span id="bell-badge" style="display:none;position:absolute;top:-2px;right:-2px;background:#ef4444;color:white;font-size:10px;min-width:16px;height:16px;border-radius:8px;padding:0 4px;line-height:16px;text-align:center;font-weight:700">0</span></button>
+        <button id="btn-feedback" title="我的勘誤回報與教官回饋" style="background:transparent;border:none;font-size:22px;cursor:pointer;padding:2px 6px;line-height:1">📋</button>
         <span id="user-name">—</span>
         <button class="btn-logout" id="btn-logout">登出</button>
       </div>
@@ -159,6 +160,17 @@
         <div style="padding:14px 22px;border-top:1px solid #e2e8f0;text-align:right">
           <button id="notice-mark-all" class="btn-primary" style="width:auto;padding:10px 20px">全部已讀並關閉</button>
         </div>
+      </div>
+    </div>
+
+    <!-- 勘誤回饋檢視 modal（鈴鐺旁、可反覆開）-->
+    <div id="feedback-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:1200;justify-content:center;align-items:flex-start;padding:20px;overflow-y:auto">
+      <div style="background:white;border-radius:16px;max-width:560px;width:100%;margin-top:20px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden">
+        <div style="background:linear-gradient(135deg,#f59e0b,#d97706);color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center">
+          <h3 style="margin:0;font-size:17px">📋 我的勘誤回報與教官回饋</h3>
+          <button id="feedback-modal-close" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:22px;width:32px;height:32px;border-radius:50%;cursor:pointer;line-height:1">×</button>
+        </div>
+        <div id="feedback-modal-body" style="padding:18px 22px;max-height:70vh;overflow-y:auto"><div class="loading">⏳ 載入中...</div></div>
       </div>
     </div>
 
@@ -988,6 +1000,45 @@
     }
 
     document.getElementById('btn-bell').addEventListener('click', openNoticeModal);
+    // 勘誤回饋檢視（可反覆開、讀 question_error_reports 教官回覆）
+    async function openFeedbackModal() {
+      const modal = document.getElementById('feedback-modal');
+      const body = document.getElementById('feedback-modal-body');
+      modal.style.display = 'flex';
+      body.innerHTML = '<div class="loading">⏳ 載入中...</div>';
+      try {
+        const snap = await getDocs(query(collection(db, 'question_error_reports'), where('reportedBy', '==', currentStudent.id)));
+        const reports = [];
+        snap.forEach(d => reports.push({ id: d.id, ...d.data() }));
+        reports.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        if (reports.length === 0) {
+          body.innerHTML = '<div class="empty-hint">你還沒有送出過題目勘誤回報。<br><br>做完測驗、在檢討畫面按「⚠️ 題目勘誤」即可回報；教官處理後的回饋會留在這裡、可隨時回來看。</div>';
+          return;
+        }
+        const fmt = sec => sec ? new Date(sec * 1000).toLocaleDateString('zh-TW') : '';
+        const esc = s => String(s == null ? '' : s).replace(/</g, '&lt;');
+        body.innerHTML = reports.map(r => {
+          const done = r.status && r.status !== 'pending';
+          const statusBadge = done
+            ? '<span style="background:#d1fae5;color:#065f46;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600">✅ 已處理</span>'
+            : '<span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600">⏳ 處理中</span>';
+          const reply = (r.reviewerNote || '').trim();
+          return `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
+              <span style="font-family:monospace;font-size:13px;color:#64748b">題號 ${esc(r.questionId) || '—'}</span>${statusBadge}
+            </div>
+            <div style="font-size:13px;color:#334155;margin-bottom:8px"><b>你的回報：</b>${esc(r.reason)}</div>
+            <div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:10px 12px;border-radius:6px;font-size:13px;color:#78350f">
+              <b>教官回饋：</b>${reply ? esc(reply) : (done ? '（已處理、無文字說明）' : '尚未回覆')}
+              ${r.reviewedByName ? `<div style="color:#a16207;font-size:12px;margin-top:6px">— ${esc(r.reviewedByName)}${r.reviewedAt?.seconds ? ' · ' + fmt(r.reviewedAt.seconds) : ''}</div>` : ''}
+            </div>
+          </div>`;
+        }).join('');
+      } catch (e) { body.innerHTML = `<div class="err-msg">❌ 載入失敗：${e.message}</div>`; }
+    }
+    document.getElementById('btn-feedback').addEventListener('click', openFeedbackModal);
+    document.getElementById('feedback-modal-close').addEventListener('click', () => document.getElementById('feedback-modal').style.display = 'none');
+    document.getElementById('feedback-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('feedback-modal').style.display = 'none'; });
     document.getElementById('notice-modal-close').addEventListener('click', closeNoticeModal);
     document.getElementById('notice-mark-all').addEventListener('click', markAllNoticesRead);
     document.getElementById('notice-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeNoticeModal(); });
