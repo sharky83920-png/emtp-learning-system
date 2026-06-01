@@ -775,6 +775,7 @@
         const classData = classDoc.data();
         document.getElementById('student-class').textContent = classData.displayName || currentStudent.classId;
         const s = classData.settings || {};
+        _questionFaucet = s.questionFaucet || null;   // 水龍頭：來源/章節授權（null＝全開）
         const eb = s.energyBar || { enabled: false };
 
         // F14-C: 錯題本班級開關 → 控制底部「錯題本」tab 顯示
@@ -2370,6 +2371,7 @@
 
     // 學員端功能開關（班級層級、Master 在系統設定逐班設）：沒開放就隱藏
     let studentFeatures = {};
+    let _questionFaucet = null;   // 水龍頭設定：{ sources: { 來源班id: { enabled, allMode, chapters:[...] } } }；null＝全開
     function applyStudentFeatures() {
       const sf = studentFeatures || {};
       const off = k => sf[k] === false;                 // undefined＝預設顯示
@@ -2467,6 +2469,23 @@
       return all;
     }
 
+    // 水龍頭過濾：依本班 questionFaucet 設定，限定可抽到的「來源班級 + 章節」
+    function faucetAllows(q) {
+      const fc = _questionFaucet;
+      if (!fc || !fc.sources) return true;                                  // 沒設定 → 全開
+      const sources = fc.sources;
+      const enabledIds = Object.keys(sources).filter(k => sources[k] && sources[k].enabled);
+      if (enabledIds.length === 0) return true;                            // 防呆：完全沒開任何來源 → 視為全開
+      const cfg = q.createdByClassId && sources[q.createdByClassId];
+      if (!cfg || !cfg.enabled) return false;                              // 此來源班未授權
+      if (cfg.allMode) return true;                                        // 該來源無視章節限制
+      const bookId = q.source?.bookId, chNum = q.source?.chapterNumber;
+      const list = cfg.chapters || [];
+      if (bookId && list.includes(`${bookId}|*`)) return true;             // 整本授權
+      if (bookId && chNum != null && chNum !== '' && list.includes(`${bookId}|${chNum}`)) return true;
+      return false;
+    }
+
     // 讀此學員每題刷過次數（輪次抽題用）
     async function loadQuizProgress() {
       try { const d = await getDoc(doc(db, 'student_quiz_progress', currentStudent.id)); return (d.exists() && d.data().counts) || {}; }
@@ -2483,8 +2502,8 @@
       const btn = document.getElementById('btn-start-quiz');
       btn.disabled = true; btn.textContent = '⏳ 抽題中...';
       try {
-        const all = await loadVisibleQuestions();
-        if (all.length === 0) { alert('⚠️ 題庫目前沒有題目、請先讓學員出題！'); return; }
+        const all = (await loadVisibleQuestions()).filter(faucetAllows);
+        if (all.length === 0) { alert('⚠️ 目前可抽範圍內沒有題目（可能本班授權的來源/章節尚無題目，或還沒出題）'); return; }
         const counts = await loadQuizProgress();
         orderByRound(all, counts);
         beginQuiz(all, 'scoring', '🎲 隨機綜合測驗');
@@ -2499,9 +2518,9 @@
       const btns = document.querySelectorAll('.practice-btn');
       btns.forEach(b => b.disabled = true);
       try {
-        const all = await loadVisibleQuestions();
+        const all = (await loadVisibleQuestions()).filter(faucetAllows);
         const filtered = all.filter(q => q.derivedDimension === dim);
-        if (filtered.length === 0) { alert(`⚠️ 「${dim} ${DIM_NAMES[dim] || ''}」目前沒有題目`); return; }
+        if (filtered.length === 0) { alert(`⚠️ 「${dim} ${DIM_NAMES[dim] || ''}」在可抽範圍內目前沒有題目`); return; }
         const counts = await loadQuizProgress();
         orderByRound(filtered, counts);
         beginQuiz(filtered, 'practice', `🎯 專項練習 · ${dim} ${DIM_NAMES[dim] || ''}（不計分）`);

@@ -367,6 +367,35 @@
       </section>
 
       <section class="tab-content" id="tab-questions">
+        <style>
+          .fc-src { border: 1px solid #334155; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; background: #0f172a; }
+          .fc-src-head { display: flex; align-items: center; gap: 10px; }
+          .fc-src-head label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; color: #e2e8f0; }
+          .fc-self-tag { background: #1d4ed8; color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+          .fc-cfg { margin-top: 12px; padding-top: 12px; border-top: 1px solid #1e293b; }
+          .fc-allrow { display: flex; align-items: center; gap: 8px; color: #fcd34d; font-weight: 600; margin-bottom: 10px; cursor: pointer; }
+          .fc-book { margin-bottom: 12px; }
+          .fc-book-head { display: flex; align-items: center; gap: 10px; color: #60a5fa; font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+          .fc-book-head label { display: flex; align-items: center; gap: 5px; color: #94a3b8; font-weight: 500; cursor: pointer; }
+          .fc-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
+          .fc-chip { display: flex; align-items: center; justify-content: center; gap: 4px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 5px 4px; font-size: 12px; color: #cbd5e1; cursor: pointer; }
+          .fc-chip input { cursor: pointer; }
+        </style>
+        <div class="card" id="faucet-card">
+          <h2><span>🚰 題目來源水龍頭（各班可抽範圍）</span>
+            <button class="btn btn-ghost" id="btn-faucet-refresh">🔄 重新整理</button>
+          </h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:12px">💡 控制某班學員抽題時能抽到「哪些來源班出的題 ＋ 哪些章節」。<strong>預設全開</strong>，替某班存檔後才開始限制；自己班強制開啟。<strong>每個來源可各自設定章節</strong>（章節清單來自「書籍/章節」主檔）。只影響隨機綜合測驗與專項練習，錯題本不受限。</p>
+          <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:14px">
+            <div class="form-group" style="margin-bottom:0;min-width:200px">
+              <label>設定目標班級</label>
+              <select id="faucet-target"><option value="">請選班級...</option></select>
+            </div>
+            <button class="btn btn-green" id="btn-faucet-save">💾 儲存授權</button>
+            <span id="faucet-save-msg" style="font-size:13px"></span>
+          </div>
+          <div id="faucet-body"><div class="loading">⏳ 請先選「設定目標班級」</div></div>
+        </div>
         <div class="card" id="qm-corr-card" style="display:none;border:1px solid #f59e0b">
           <h2><span>⚠️ 待處理勘誤</span></h2>
           <div id="qm-corr-list"></div>
@@ -1088,7 +1117,7 @@ TP18,新北 TP18,2026"></textarea>
         if (btn.dataset.tab === 'books') loadBooksPage();
         if (btn.dataset.tab === 'exams') loadExamsPage();
         if (btn.dataset.tab === 'schedule') loadSchedulePage();
-        if (btn.dataset.tab === 'questions') loadQuestionsPage();
+        if (btn.dataset.tab === 'questions') { loadQuestionsPage(); loadFaucetPage(); }
         if (btn.dataset.tab === 'announcements') loadAnnouncementsPage();
         if (btn.dataset.tab === 'settings') loadSettings();
       });
@@ -4302,7 +4331,7 @@ TP18,新北 TP18,2026"></textarea>
     let qmCache = [];
     let qmBooksCache = [];
     let qmChaptersCache = [];
-    let qmFilters = { bookId: '', dimension: '', visibility: 'visible', scheduledDate: '', classId: '', studentName: '', keyword: '' };
+    let qmFilters = { bookId: '', dimension: '', visibility: 'visible', dateStart: '', dateEnd: '', classId: '', studentName: '', keyword: '' };
     let qmBatchPreview = null;
 
     async function loadQuestionsPage() {
@@ -4327,25 +4356,155 @@ TP18,新北 TP18,2026"></textarea>
     }
     document.getElementById('btn-refresh-questions').addEventListener('click', loadQuestionsPage);
 
+    // ===== 🚰 題目來源水龍頭（每班可抽範圍：來源班 + 各來源章節）=====
+    let _fcClasses = [], _fcBooks = [], _fcChByBook = {}, _fcTarget = null, _fcConfig = { sources: {} };
+    async function loadFaucetPage() {
+      try {
+        const [cSnap, bSnap, chSnap] = await Promise.all([
+          getDocs(collection(db, 'classes')),
+          getDocs(collection(db, 'books')),
+          getDocs(collection(db, 'chapters'))
+        ]);
+        _fcClasses = [];
+        cSnap.forEach(d => { const x = d.data(); if (x.isActive !== false) _fcClasses.push({ id: d.id, displayName: x.displayName || d.id, year: x.year || 0 }); });
+        _fcClasses.sort((a, b) => (a.id > b.id ? 1 : -1));
+        _fcBooks = [];
+        bSnap.forEach(d => { const x = d.data(); if (x.isActive !== false) _fcBooks.push({ id: d.id, displayName: x.displayName || d.id, order: x.displayOrder || 0 }); });
+        _fcBooks.sort((a, b) => (a.order - b.order) || (a.id > b.id ? 1 : -1));
+        _fcChByBook = {};
+        chSnap.forEach(d => { const x = d.data(); if (x.isActive === false) return; const bid = x.bookId; if (!bid || x.chapterNumber == null) return; (_fcChByBook[bid] = _fcChByBook[bid] || []).push({ num: x.chapterNumber, name: x.chapterName || '' }); });
+        Object.values(_fcChByBook).forEach(arr => arr.sort((a, b) => (parseInt(a.num) || 0) - (parseInt(b.num) || 0)));
+        const sel = document.getElementById('faucet-target');
+        const prev = _fcTarget;
+        sel.innerHTML = '<option value="">請選班級...</option>' + _fcClasses.map(c => `<option value="${c.id}">${c.displayName}</option>`).join('');
+        if (prev && _fcClasses.some(c => c.id === prev)) { sel.value = prev; loadFaucetConfig(prev); }
+      } catch (e) { document.getElementById('faucet-body').innerHTML = `<div class="err-msg">載入失敗：${e.message}</div>`; }
+    }
+    document.getElementById('btn-faucet-refresh').addEventListener('click', loadFaucetPage);
+    document.getElementById('faucet-target').addEventListener('change', (e) => { const v = e.target.value; document.getElementById('faucet-save-msg').innerHTML = ''; if (v) loadFaucetConfig(v); else { _fcTarget = null; document.getElementById('faucet-body').innerHTML = '<div class="loading">⏳ 請先選「設定目標班級」</div>'; } });
+
+    async function loadFaucetConfig(cid) {
+      _fcTarget = cid;
+      const body = document.getElementById('faucet-body');
+      body.innerHTML = '<div class="loading">⏳ 載入設定...</div>';
+      try {
+        const cDoc = await getDoc(doc(db, 'classes', cid));
+        const fc = (cDoc.exists() && cDoc.data().settings && cDoc.data().settings.questionFaucet) || null;
+        _fcConfig = fc && fc.sources ? { sources: { ...fc.sources } } : { sources: {} };
+        // 自己班強制開啟（沒設過 → 預設無視章節）
+        if (!_fcConfig.sources[cid]) _fcConfig.sources[cid] = { enabled: true, allMode: true, chapters: [] };
+        _fcConfig.sources[cid].enabled = true;
+        renderFaucet();
+      } catch (e) { body.innerHTML = `<div class="err-msg">載入失敗：${e.message}</div>`; }
+    }
+
+    function _fcSrc(cid) { return _fcConfig.sources[cid] || { enabled: false, allMode: false, chapters: [] }; }
+
+    function renderFaucet() {
+      const body = document.getElementById('faucet-body');
+      if (!_fcTarget) return;
+      const configured = _fcClasses.filter(c => _fcSrc(c.id).enabled).length;
+      let html = `<div style="color:#94a3b8;font-size:12px;margin-bottom:10px">目前已開放 <b style="color:#10b981">${configured}</b> 個來源班。未開放的來源＝該班的題目抽不到。</div>`;
+      html += _fcClasses.map(c => {
+        const cfg = _fcSrc(c.id);
+        const isSelf = c.id === _fcTarget;
+        let inner = '';
+        if (cfg.enabled) {
+          const books = _fcBooks.map(b => {
+            const chs = _fcChByBook[b.id] || [];
+            const wholeOn = (cfg.chapters || []).includes(`${b.id}|*`);
+            const chips = chs.map(ch => {
+              const key = `${b.id}|${ch.num}`;
+              const on = wholeOn || (cfg.chapters || []).includes(key);
+              return `<label class="fc-chip" title="${(ch.name || '').replace(/"/g, '')}"><input type="checkbox" class="fc-ch" data-cid="${c.id}" data-key="${key}" ${on ? 'checked' : ''} ${wholeOn ? 'disabled' : ''}>${ch.num}</label>`;
+            }).join('');
+            const chipsHtml = chs.length ? `<div class="fc-chips">${chips}</div>` : '<div style="color:#475569;font-size:12px">（此書尚未在主檔設定章節）</div>';
+            return `<div class="fc-book">
+              <div class="fc-book-head"><span>📘 ${b.displayName}</span><label><input type="checkbox" class="fc-whole" data-cid="${c.id}" data-book="${b.id}" ${wholeOn ? 'checked' : ''}> 全本</label></div>
+              ${chipsHtml}
+            </div>`;
+          }).join('');
+          inner = `<div class="fc-cfg">
+            <label class="fc-allrow"><input type="checkbox" class="fc-all" data-cid="${c.id}" ${cfg.allMode ? 'checked' : ''}> 🔓 全選（無視章節限制）</label>
+            <div class="fc-books" style="${cfg.allMode ? 'display:none' : ''}">${books}</div>
+          </div>`;
+        }
+        return `<div class="fc-src" data-cid="${c.id}">
+          <div class="fc-src-head">
+            <label><input type="checkbox" class="fc-en" data-cid="${c.id}" ${cfg.enabled ? 'checked' : ''} ${isSelf ? 'disabled' : ''}> ${c.displayName}</label>
+            ${isSelf ? '<span class="fc-self-tag">自己班 · 強制開啟</span>' : ''}
+          </div>
+          ${inner}
+        </div>`;
+      }).join('');
+      body.innerHTML = html;
+      // 綁定
+      body.querySelectorAll('.fc-en').forEach(el => el.addEventListener('change', (e) => {
+        const cid = e.target.dataset.cid;
+        if (!_fcConfig.sources[cid]) _fcConfig.sources[cid] = { enabled: false, allMode: false, chapters: [] };
+        _fcConfig.sources[cid].enabled = e.target.checked;
+        renderFaucet();
+      }));
+      body.querySelectorAll('.fc-all').forEach(el => el.addEventListener('change', (e) => {
+        const cid = e.target.dataset.cid;
+        _fcConfig.sources[cid].allMode = e.target.checked;
+        renderFaucet();
+      }));
+      body.querySelectorAll('.fc-whole').forEach(el => el.addEventListener('change', (e) => {
+        const cid = e.target.dataset.cid, bid = e.target.dataset.book;
+        const cfg = _fcConfig.sources[cid];
+        cfg.chapters = (cfg.chapters || []).filter(k => !k.startsWith(`${bid}|`));   // 清掉此書既有章節鍵
+        if (e.target.checked) cfg.chapters.push(`${bid}|*`);
+        renderFaucet();
+      }));
+      body.querySelectorAll('.fc-ch').forEach(el => el.addEventListener('change', (e) => {
+        const cid = e.target.dataset.cid, key = e.target.dataset.key;
+        const cfg = _fcConfig.sources[cid];
+        cfg.chapters = cfg.chapters || [];
+        const i = cfg.chapters.indexOf(key);
+        if (e.target.checked) { if (i < 0) cfg.chapters.push(key); }
+        else if (i >= 0) cfg.chapters.splice(i, 1);
+      }));
+    }
+
+    document.getElementById('btn-faucet-save').addEventListener('click', async () => {
+      if (!_fcTarget) { alert('請先選設定目標班級'); return; }
+      const btn = document.getElementById('btn-faucet-save'); const msg = document.getElementById('faucet-save-msg');
+      btn.disabled = true; btn.textContent = '⏳ 儲存中...';
+      try {
+        // 整理：只留已開放來源；自己班強制開啟
+        const out = {};
+        Object.keys(_fcConfig.sources).forEach(cid => { const s = _fcConfig.sources[cid]; if (s && s.enabled) out[cid] = { enabled: true, allMode: !!s.allMode, chapters: s.allMode ? [] : (s.chapters || []) }; });
+        if (!out[_fcTarget]) out[_fcTarget] = { enabled: true, allMode: true, chapters: [] };
+        await updateDoc(doc(db, 'classes', _fcTarget), { 'settings.questionFaucet': { sources: out }, settingsUpdatedAt: serverTimestamp(), settingsUpdatedBy: currentUser.email });
+        msg.innerHTML = '<span style="color:#10b981">✅ 已儲存</span>';
+        setTimeout(() => { msg.innerHTML = ''; }, 3000);
+      } catch (e) { msg.innerHTML = `<span style="color:#ef4444">❌ ${e.message}</span>`; }
+      finally { btn.disabled = false; btn.textContent = '💾 儲存授權'; }
+    });
+
+    // 題庫篩選條件（render 與下載共用，下載＝畫面上篩選結果、含出題日範圍）
+    function qmMatch(q) {
+      if (qmFilters.bookId && q.source?.bookId !== qmFilters.bookId) return false;
+      if (qmFilters.dimension && q.derivedDimension !== qmFilters.dimension) return false;
+      if (qmFilters.visibility === 'visible' && q.isVisible === false) return false;
+      if (qmFilters.visibility === 'hidden' && q.isVisible !== false) return false;
+      if (qmFilters.dateStart && (q.scheduledDate || '') < qmFilters.dateStart) return false;
+      if (qmFilters.dateEnd && (q.scheduledDate || '') > qmFilters.dateEnd) return false;
+      if (qmFilters.classId && q.createdByClassId !== qmFilters.classId) return false;
+      if (qmFilters.studentName && q.createdByName !== qmFilters.studentName) return false;
+      if (qmFilters.keyword) {
+        const kw = qmFilters.keyword.toLowerCase();
+        const o = q.options || {};
+        const hay = (q.id + ' ' + (q.questionText || '') + ' ' + (o.A?.text || '') + (o.B?.text || '') + (o.C?.text || '') + (o.D?.text || '')).toLowerCase();
+        if (!hay.includes(kw)) return false;
+      }
+      return true;
+    }
+
     function renderQuestionsPage() {
       const el = document.getElementById('questions-content');
-      // 過濾
-      const filtered = qmCache.filter(q => {
-        if (qmFilters.bookId && q.source?.bookId !== qmFilters.bookId) return false;
-        if (qmFilters.dimension && q.derivedDimension !== qmFilters.dimension) return false;
-        if (qmFilters.visibility === 'visible' && q.isVisible === false) return false;
-        if (qmFilters.visibility === 'hidden' && q.isVisible !== false) return false;
-        if (qmFilters.scheduledDate && q.scheduledDate !== qmFilters.scheduledDate) return false;
-        if (qmFilters.classId && q.createdByClassId !== qmFilters.classId) return false;
-        if (qmFilters.studentName && q.createdByName !== qmFilters.studentName) return false;
-        if (qmFilters.keyword) {
-          const kw = qmFilters.keyword.toLowerCase();
-          const o = q.options || {};
-          const hay = (q.id + ' ' + (q.questionText || '') + ' ' + (o.A?.text || '') + (o.B?.text || '') + (o.C?.text || '') + (o.D?.text || '')).toLowerCase();
-          if (!hay.includes(kw)) return false;
-        }
-        return true;
-      });
+      const filtered = qmCache.filter(qmMatch);
 
       // 班級 / 姓名 下拉（從題庫的出題者，姓名隨班級連動）
       const qmClasses = [...new Set(qmCache.map(q => q.createdByClassId).filter(Boolean))].sort();
@@ -4376,8 +4535,12 @@ TP18,新北 TP18,2026"></textarea>
             </select>
           </div>
           <div class="form-group" style="margin-bottom:0">
-            <label>出題日</label>
-            <input type="date" id="qm-f-date" value="${qmFilters.scheduledDate}" style="padding:6px 8px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:6px;font-family:inherit">
+            <label>出題日(起)</label>
+            <input type="date" id="qm-f-date-start" value="${qmFilters.dateStart}" style="padding:6px 8px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:6px;font-family:inherit">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>出題日(迄)</label>
+            <input type="date" id="qm-f-date-end" value="${qmFilters.dateEnd}" style="padding:6px 8px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:6px;font-family:inherit">
           </div>
           <div class="form-group" style="margin-bottom:0">
             <label>班級</label>
@@ -4436,13 +4599,14 @@ TP18,新北 TP18,2026"></textarea>
       document.getElementById('qm-f-book').addEventListener('change', (e) => { qmFilters.bookId = e.target.value; renderQuestionsPage(); });
       document.getElementById('qm-f-dim').addEventListener('change', (e) => { qmFilters.dimension = e.target.value; renderQuestionsPage(); });
       document.getElementById('qm-f-vis').addEventListener('change', (e) => { qmFilters.visibility = e.target.value; renderQuestionsPage(); });
-      document.getElementById('qm-f-date').addEventListener('change', (e) => { qmFilters.scheduledDate = e.target.value; renderQuestionsPage(); });
+      document.getElementById('qm-f-date-start').addEventListener('change', (e) => { qmFilters.dateStart = e.target.value; renderQuestionsPage(); });
+      document.getElementById('qm-f-date-end').addEventListener('change', (e) => { qmFilters.dateEnd = e.target.value; renderQuestionsPage(); });
       document.getElementById('qm-f-class').addEventListener('change', (e) => { qmFilters.classId = e.target.value; qmFilters.studentName = ''; renderQuestionsPage(); });
       document.getElementById('qm-f-name').addEventListener('change', (e) => { qmFilters.studentName = e.target.value; renderQuestionsPage(); });
       document.getElementById('qm-f-kw').addEventListener('input', (e) => { qmFilters.keyword = e.target.value; });
       document.getElementById('qm-f-kw').addEventListener('keydown', (e) => { if (e.key === 'Enter') renderQuestionsPage(); });
       document.getElementById('qm-f-search').addEventListener('click', renderQuestionsPage);
-      document.getElementById('qm-f-reset').addEventListener('click', () => { qmFilters = { bookId: '', dimension: '', visibility: 'visible', scheduledDate: '', classId: '', studentName: '', keyword: '' }; renderQuestionsPage(); });
+      document.getElementById('qm-f-reset').addEventListener('click', () => { qmFilters = { bookId: '', dimension: '', visibility: 'visible', dateStart: '', dateEnd: '', classId: '', studentName: '', keyword: '' }; renderQuestionsPage(); });
       document.getElementById('btn-qm-bulk-tpl').addEventListener('click', downloadQuestionsTpl);
       document.getElementById('btn-qm-bulk-import').addEventListener('click', () => document.getElementById('qm-bulk-modal').classList.add('active'));
       document.getElementById('btn-qm-export-orig').addEventListener('click', () => exportQuestionsCSV('original'));
@@ -4485,11 +4649,12 @@ TP18,新北 TP18,2026"></textarea>
     }
     // 下載 CSV：mode='original'（學員原版）/ 'current'（校正後或沒改的最新版）
     function exportQuestionsCSV(mode) {
-      if (qmCache.length === 0) { alert('沒有題目可匯出'); return; }
+      const exportList = qmCache.filter(qmMatch);   // 下載＝目前篩選結果（含出題日範圍）
+      if (exportList.length === 0) { alert('目前篩選條件下沒有題目可匯出'); return; }
       const esc = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
       const header = ['題號', '出題日期', '出題者', '出題班級', '難度', '維度', '題目', 'A', 'B', 'C', 'D', '正解', '書', '章', '頁'];
       const lines = [header.map(esc).join(',')];
-      qmCache.forEach(q => {
+      exportList.forEach(q => {
         // 原始版：優先 originalVersion；沒有就用 editHistory 最早一筆（校正前=原始）；再沒有才用現行
         let src = q;
         if (mode === 'original') {

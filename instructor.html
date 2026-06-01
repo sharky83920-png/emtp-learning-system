@@ -354,8 +354,12 @@
           <p style="color:#64748b;font-size:13px;margin-bottom:10px">下載本班學員出的、目前仍可被抽取的題庫（已含勘誤校正、隱藏題不含）。可篩選後下載 CSV。</p>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
             <div>
-              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">出題日期</label>
-              <select id="qdl-date" class="pri-select"><option value="">全部</option></select>
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">出題日期（範圍、留空＝全部）</label>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input type="date" id="qdl-date-start" class="pri-select" style="padding:8px">
+                <span style="color:#94a3b8">~</span>
+                <input type="date" id="qdl-date-end" class="pri-select" style="padding:8px">
+              </div>
             </div>
             <div>
               <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">出題學員</label>
@@ -1972,23 +1976,23 @@
         qdlQuestions = [];
         snap.forEach(d => { const q = d.data(); if (q.isVisible !== false && q.isActive !== false) qdlQuestions.push({ id: d.id, ...q }); });
         // 篩選選項
-        const dates = [...new Set(qdlQuestions.map(q => q.scheduledDate).filter(Boolean))].sort();
         const studs = [...new Set(qdlQuestions.map(q => q.createdByName || q.createdBy).filter(Boolean))].sort();
         const srcs = [...new Set(qdlQuestions.map(q => q.source ? `${q.source.bookId || ''}${q.source.chapterNumber ? ' Ch' + q.source.chapterNumber : ''}`.trim() : '').filter(Boolean))].sort();
-        document.getElementById('qdl-date').innerHTML = '<option value="">全部</option>' + dates.map(d => `<option value="${d}">${d}</option>`).join('');
         document.getElementById('qdl-student').innerHTML = '<option value="">全部</option>' + studs.map(s => `<option value="${s}">${s}</option>`).join('');
         document.getElementById('qdl-source').innerHTML = '<option value="">全部</option>' + srcs.map(s => `<option value="${s}">${s}</option>`).join('');
-        ['qdl-date', 'qdl-student', 'qdl-source'].forEach(id => { const e = document.getElementById(id); if (!e._bound) { e.addEventListener('change', updateQdlCount); e._bound = true; } });
+        ['qdl-date-start', 'qdl-date-end', 'qdl-student', 'qdl-source'].forEach(id => { const e = document.getElementById(id); if (e && !e._bound) { e.addEventListener('change', updateQdlCount); e._bound = true; } });
         updateQdlCount();
       } catch (e) { countEl.textContent = '❌ ' + e.message; }
     }
 
     function filterQdl() {
-      const fd = document.getElementById('qdl-date').value;
+      const fds = document.getElementById('qdl-date-start').value;
+      const fde = document.getElementById('qdl-date-end').value;
       const fs = document.getElementById('qdl-student').value;
       const fsrc = document.getElementById('qdl-source').value;
       return qdlQuestions.filter(q => {
-        if (fd && q.scheduledDate !== fd) return false;
+        if (fds && (q.scheduledDate || '') < fds) return false;
+        if (fde && (q.scheduledDate || '') > fde) return false;
         if (fs && (q.createdByName || q.createdBy) !== fs) return false;
         if (fsrc) { const s = q.source ? `${q.source.bookId || ''}${q.source.chapterNumber ? ' Ch' + q.source.chapterNumber : ''}`.trim() : ''; if (s !== fsrc) return false; }
         return true;
