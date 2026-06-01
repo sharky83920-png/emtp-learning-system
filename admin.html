@@ -94,6 +94,8 @@
     .qr-student-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #334155; color: #cbd5e1; font-size: 13px; }
     .qr-student-row:last-child { border-bottom: none; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
 <body>
 
@@ -167,6 +169,13 @@
             <span style="flex:1"></span>
             <button class="btn" id="btn-add-student">➕ 單筆新增</button>
             <button class="btn btn-green" id="btn-batch-import">📤 批次匯入</button>
+          </div>
+          <div class="toolbar" style="margin-top:6px;align-items:center;flex-wrap:wrap;gap:8px">
+            <span style="font-size:13px;color:#94a3b8">📥 批次下載本班成績圖（PNG 打包 ZIP，排除測試帳號）：</span>
+            <button class="btn" id="btn-batch-radar-first">⬇ 首刷雷達</button>
+            <button class="btn" id="btn-batch-radar-exam">⬇ 考試雷達</button>
+            <button class="btn" id="btn-batch-river">⬇ 河流圖</button>
+            <span id="batch-export-status" style="font-size:13px;color:#94a3b8"></span>
           </div>
           <div id="students-list"><div class="loading">請先選班級...</div></div>
         </div>
@@ -618,6 +627,15 @@
             <div class="form-group"><label>目前密碼（通常免填、系統自動帶入）</label><input type="text" id="se-edit-id-old" maxlength="20" style="font-family:monospace;text-transform:uppercase" placeholder="留空＝用上面的目前密碼"></div>
             <div class="form-group" style="margin-bottom:0"><label>新密碼（至少 6 碼、填了才會改）</label><input type="text" id="se-edit-id-set" maxlength="20" style="font-family:monospace;text-transform:uppercase" placeholder="留空＝不改密碼"></div>
           </div>
+        </div>
+        <div style="border-top:1px solid #334155;margin-top:14px;padding-top:12px">
+          <label style="display:block;font-size:13px;color:#94a3b8;margin-bottom:8px">📊 下載成績圖（PNG、目前完整資料）</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" class="btn" id="se-dl-radar-first">⬇ 首刷雷達</button>
+            <button type="button" class="btn" id="se-dl-radar-exam">⬇ 考試雷達</button>
+            <button type="button" class="btn" id="se-dl-river">⬇ 河流圖</button>
+          </div>
+          <div id="se-dl-status" style="font-size:12px;color:#94a3b8;margin-top:6px"></div>
         </div>
         <div id="se-edit-error"></div>
       </div>
@@ -1555,12 +1573,137 @@ TP18,新北 TP18,2026"></textarea>
         document.getElementById('se-edit-pw-current').value = (s.idNumber || '').toUpperCase() || '（無記錄、請用下方重設）';
         document.getElementById('se-edit-id-old').value = '';
         document.getElementById('se-edit-id-set').value = '';
+        document.getElementById('se-dl-status').textContent = '';
+        // 考試雷達沒資料 → 反灰該鈕
+        const exBtn = document.getElementById('se-dl-radar-exam');
+        if (exBtn) { exBtn.disabled = true; exBtn.title = '檢查考試資料中…'; getDocs(query(collection(db, 'exam_scores_radar'), where('studentId', '==', id))).then(es => { exBtn.disabled = es.empty; exBtn.title = es.empty ? '此學員無考試雷達資料' : ''; }).catch(() => { exBtn.disabled = false; exBtn.title = ''; }); }
         document.getElementById('student-edit-modal').classList.add('active');
       } catch (e) { alert('❌ ' + e.message); }
     }
     document.getElementById('se-edit-close').addEventListener('click', () => document.getElementById('student-edit-modal').classList.remove('active'));
     document.getElementById('se-edit-cancel').addEventListener('click', () => document.getElementById('student-edit-modal').classList.remove('active'));
     document.getElementById('student-edit-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('student-edit-modal').classList.remove('active'); });
+
+    // ===== 成績圖匯出（後台：雷達/河流 → PNG / 批次 ZIP）=====
+    const EX_DIMS = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'];
+    const EX_DIM_NAMES = ['緊急救護系統', '基礎醫學含評估', '創傷', '非創傷', '特殊族群', '災難及特殊情境'];
+    const exWhiteBg = { id: 'exWhiteBg', beforeDraw(c) { const { ctx, width, height } = c; ctx.save(); ctx.globalCompositeOperation = 'destination-over'; ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height); ctx.restore(); } };
+    const exSafe = s => String(s == null ? '' : s).replace(/[\\/:*?"<>|]/g, '_');
+    function exPct(sorted, p) { if (!sorted.length) return null; if (sorted.length === 1) return sorted[0]; const idx = (p / 100) * (sorted.length - 1); const lo = Math.floor(idx), hi = Math.ceil(idx), w = idx - lo; return sorted[lo] * (1 - w) + sorted[hi] * w; }
+    function exDimAcc10(records) { const sums = {}; EX_DIMS.forEach(d => sums[d] = { c: 0, t: 0 }); records.forEach(r => { if (sums[r.dim]) { sums[r.dim].t++; if (r.isCorrect) sums[r.dim].c++; } }); return EX_DIMS.map(d => sums[d].t === 0 ? 0 : (sums[d].c / sums[d].t) * 10); }
+    function exCalcExam(exams) { const sums = {}; EX_DIMS.forEach(d => sums[d] = { c: 0, t: 0 }); exams.forEach(e => { if (!e.dimensions) return; EX_DIMS.forEach(d => { const s = e.dimensions[d]; if (s) { sums[d].c += s.correct || 0; sums[d].t += s.total || 0; } }); }); return EX_DIMS.map(d => sums[d].t === 0 ? 0 : (sums[d].c / sums[d].t) * 10); }
+
+    async function exClassFirstAvg(classId) { try { const d = await getDoc(doc(db, 'class_radar', classId)); if (d.exists() && d.data().first) { const f = d.data().first; return EX_DIMS.map(k => { const o = f[k]; return (o && o.t) ? (o.c / o.t) * 10 : 0; }); } } catch (e) {} return EX_DIMS.map(() => 0); }
+    async function exStudentFirst(sid) { const snap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', sid))); const first = {}; snap.forEach(d => { const a = d.data(); if (!a.questionId || !a.dimension) return; const t = a.attemptedAt?.seconds || 0; if (!first[a.questionId] || t < first[a.questionId].t) first[a.questionId] = { dim: a.dimension, isCorrect: a.isCorrect, t }; }); const recs = Object.values(first); return { scores: exDimAcc10(recs), has: recs.length > 0 }; }
+    async function exClassExamRadar(classId) { const snap = await getDocs(query(collection(db, 'exam_scores_radar'), where('classId', '==', classId))); const byStudent = {}, all = []; snap.forEach(d => { const x = d.data(); all.push(x); (byStudent[x.studentId] = byStudent[x.studentId] || []).push(x); }); return { classAvg: exCalcExam(all), byStudent }; }
+    async function exRiverBase(classId) { const snap = await getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', classId))); const byExam = {}; snap.forEach(d => { const x = d.data(); if (x.status !== 'scored' || x.totalScore == null) return; const k = x.examName; if (!byExam[k]) byExam[k] = { name: k, date: x.examDate || '', scores: [], my: {} }; byExam[k].scores.push(x.totalScore); if (x.examDate) byExam[k].date = x.examDate; byExam[k].my[x.studentId] = x.totalScore; }); return byExam; }
+    function exBuildRiver(byExam, sid) { const exams = Object.values(byExam).filter(e => e.my[sid] != null).sort((a, b) => (a.date || '').localeCompare(b.date || '')); return exams.map(e => { const arr = e.scores.slice().sort((a, b) => a - b); const n = arr.length, enough = n >= 5; const mean = n ? arr.reduce((x, y) => x + y, 0) / n : null; const P = p => enough ? exPct(arr, p) : null; const dt = e.date ? new Date(e.date) : null; return { label: dt ? `${dt.getMonth() + 1}/${dt.getDate()}` : e.name, my: e.my[sid], mean, p25: P(25), p75: P(75) }; }); }
+
+    async function exRenderPNG(config, w, h) {
+      if (typeof Chart === 'undefined') throw new Error('圖表元件未載入（請重整頁面）');
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.style.cssText = 'position:fixed;left:-99999px;top:0'; document.body.appendChild(cv);
+      const ch = new Chart(cv.getContext('2d'), config);
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const url = cv.toDataURL('image/png'); ch.destroy(); cv.remove(); return url;
+    }
+    function exRadarConfig(my, cls, title) {
+      return { type: 'radar', data: { labels: EX_DIM_NAMES, datasets: [
+        { label: '學員得分', data: my, backgroundColor: 'rgba(59,130,246,0.25)', borderColor: 'rgba(59,130,246,1)', pointBackgroundColor: 'rgba(59,130,246,1)', pointBorderColor: '#fff', borderWidth: 2 },
+        { label: '班級平均', data: cls, backgroundColor: 'rgba(239,68,68,0)', borderColor: 'rgba(239,68,68,0.7)', borderDash: [6, 4], pointBackgroundColor: 'rgba(239,68,68,0.7)', pointRadius: 3, borderWidth: 1.5 } ] },
+        options: { responsive: false, maintainAspectRatio: false, animation: false, devicePixelRatio: 1,
+          plugins: { title: { display: true, text: title, font: { size: 18, weight: '700' }, color: '#1e293b', padding: 14 }, legend: { position: 'bottom', labels: { font: { size: 13 }, padding: 12 } } },
+          scales: { r: { min: 0, max: 10, ticks: { stepSize: 2, color: '#94a3b8', backdropColor: 'transparent' }, pointLabels: { font: { size: 14, weight: '600' }, color: '#1e293b' }, grid: { color: 'rgba(148,163,184,0.3)' }, angleLines: { color: 'rgba(148,163,184,0.35)' } } } },
+        plugins: [exWhiteBg] };
+    }
+    function exRiverConfig(stats, title) {
+      const labels = stats.map(s => s.label);
+      const datasets = [
+        { label: '河道 (P25–P75)_lo', data: stats.map(s => s.p25), borderColor: 'transparent', backgroundColor: 'transparent', pointRadius: 0, fill: false, tension: 0.3 },
+        { label: '河道 (P25–P75)', data: stats.map(s => s.p75), borderColor: 'transparent', backgroundColor: 'rgba(148,163,184,0.3)', pointRadius: 0, fill: '-1', tension: 0.3 },
+        { label: '班級平均', data: stats.map(s => s.mean != null ? Math.round(s.mean * 10) / 10 : null), borderColor: 'rgba(148,163,184,0.9)', pointRadius: 3, borderWidth: 2, borderDash: [4, 4], fill: false, tension: 0.3, spanGaps: true },
+        { label: '及格 75', data: stats.map(() => 75), borderColor: 'rgba(239,68,68,0.8)', pointRadius: 0, borderWidth: 1.5, borderDash: [6, 4], fill: false },
+        { label: '學員得分', data: stats.map(s => s.my), borderColor: 'rgba(37,99,235,1)', backgroundColor: 'rgba(37,99,235,0.12)', pointBackgroundColor: 'rgba(37,99,235,1)', pointBorderColor: '#fff', pointRadius: 5, borderWidth: 3, fill: true, tension: 0.3, spanGaps: true } ];
+      return { type: 'line', data: { labels, datasets },
+        options: { responsive: false, maintainAspectRatio: false, animation: false, devicePixelRatio: 1,
+          plugins: { title: { display: true, text: title, font: { size: 18, weight: '700' }, color: '#1e293b', padding: 14 }, legend: { position: 'bottom', labels: { font: { size: 13 }, padding: 10, filter: it => !/_lo$/.test(it.text) } } },
+          scales: { y: { min: 30, max: 100, ticks: { stepSize: 10, color: '#64748b' }, grid: { color: 'rgba(148,163,184,0.2)' } }, x: { ticks: { color: '#64748b', font: { size: 12 } }, grid: { color: 'rgba(148,163,184,0.1)' } } } },
+        plugins: [exWhiteBg] };
+    }
+    function exDl(url, filename) { const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 120); }
+    const exStatus = (t) => { const e = document.getElementById('se-dl-status'); if (e) e.textContent = t; };
+
+    async function exStudentRadar(stu, mode) {
+      try {
+        exStatus('產生中…');
+        const title = `${stu.classId} ${stu.studentNo}號 ${stu.name}　${mode === 'exam' ? '考試雷達' : '首刷雷達'}`;
+        let my, cls;
+        if (mode === 'exam') { const ex = await exClassExamRadar(stu.classId); const mine = ex.byStudent[stu.id] || []; if (!mine.length) { exStatus('此學員無考試雷達資料'); return; } my = exCalcExam(mine); cls = ex.classAvg; }
+        else { cls = await exClassFirstAvg(stu.classId); const f = await exStudentFirst(stu.id); if (!f.has) { exStatus('此學員無刷題首刷資料'); return; } my = f.scores; }
+        const url = await exRenderPNG(exRadarConfig(my, cls, title), 760, 760);
+        exDl(url, `${exSafe(stu.classId)}-${stu.studentNo}-${exSafe(stu.name)}-${mode === 'exam' ? '考試雷達' : '首刷雷達'}.png`);
+        exStatus('✅ 已下載');
+      } catch (e) { exStatus('❌ ' + e.message); }
+    }
+    async function exStudentRiver(stu) {
+      try {
+        exStatus('產生中…');
+        const base = await exRiverBase(stu.classId);
+        const stats = exBuildRiver(base, stu.id);
+        if (!stats.length) { exStatus('此學員無已評分考試、無法產生河流圖'); return; }
+        const w = Math.max(900, Math.min(2800, stats.length * 90 + 200));
+        const url = await exRenderPNG(exRiverConfig(stats, `${stu.classId} ${stu.studentNo}號 ${stu.name}　成績河流圖`), w, 500);
+        exDl(url, `${exSafe(stu.classId)}-${stu.studentNo}-${exSafe(stu.name)}-河流圖.png`);
+        exStatus('✅ 已下載');
+      } catch (e) { exStatus('❌ ' + e.message); }
+    }
+
+    async function exBatch(type) {
+      const classId = document.getElementById('student-class-filter').value;
+      const statusEl = document.getElementById('batch-export-status');
+      if (!classId) { alert('請先選班級'); return; }
+      if (typeof JSZip === 'undefined') { alert('打包元件未載入（請重整頁面）'); return; }
+      const btns = ['btn-batch-radar-first', 'btn-batch-radar-exam', 'btn-batch-river'].map(i => document.getElementById(i));
+      btns.forEach(b => b && (b.disabled = true));
+      try {
+        statusEl.textContent = '讀取學員…';
+        const snap = await getDocs(query(collection(db, 'students'), where('classId', '==', classId)));
+        const studs = []; snap.forEach(d => { const x = d.data(); if (x.isActive !== false && !String(x.name || '').includes('測試')) studs.push({ id: d.id, classId, studentNo: x.studentNo, name: x.name || d.id }); });
+        studs.sort((a, b) => (a.studentNo || 0) - (b.studentNo || 0));
+        if (!studs.length) { statusEl.textContent = ''; alert('本班無學員'); return; }
+        let classFirstAvg = null, classExam = null, riverBase = null;
+        if (type === 'radar-first') classFirstAvg = await exClassFirstAvg(classId);
+        else if (type === 'radar-exam') classExam = await exClassExamRadar(classId);
+        else riverBase = await exRiverBase(classId);
+        const typeName = type === 'radar-first' ? '首刷雷達' : type === 'radar-exam' ? '考試雷達' : '河流圖';
+        const zip = new JSZip(); let made = 0, skip = 0;
+        for (let i = 0; i < studs.length; i++) {
+          const s = studs[i]; statusEl.textContent = `產生中 ${i + 1}/${studs.length}（${s.name}）`;
+          try {
+            const noStr = String(s.studentNo).padStart(2, '0');
+            let url = null;
+            if (type === 'radar-first') { const f = await exStudentFirst(s.id); if (!f.has) { skip++; continue; } url = await exRenderPNG(exRadarConfig(f.scores, classFirstAvg, `${s.classId} ${s.studentNo}號 ${s.name}　首刷雷達`), 760, 760); }
+            else if (type === 'radar-exam') { const mine = classExam.byStudent[s.id] || []; if (!mine.length) { skip++; continue; } url = await exRenderPNG(exRadarConfig(exCalcExam(mine), classExam.classAvg, `${s.classId} ${s.studentNo}號 ${s.name}　考試雷達`), 760, 760); }
+            else { const stats = exBuildRiver(riverBase, s.id); if (!stats.length) { skip++; continue; } const w = Math.max(900, Math.min(2800, stats.length * 90 + 200)); url = await exRenderPNG(exRiverConfig(stats, `${s.classId} ${s.studentNo}號 ${s.name}　成績河流圖`), w, 500); }
+            zip.file(`${exSafe(s.classId)}-${noStr}-${exSafe(s.name)}-${typeName}.png`, url.split(',')[1], { base64: true }); made++;
+          } catch (e) { skip++; }
+        }
+        if (made === 0) { statusEl.textContent = ''; alert(`沒有可產生的「${typeName}」（該類型全部無資料）`); return; }
+        statusEl.textContent = '打包中…';
+        const blob = await zip.generateAsync({ type: 'blob' });
+        exDl(URL.createObjectURL(blob), `${exSafe(classId)}-${typeName}.zip`);
+        statusEl.textContent = `✅ 完成 ${made} 張${skip ? `（略過 ${skip} 無資料）` : ''}`;
+      } catch (e) { statusEl.textContent = ''; alert('❌ ' + e.message); }
+      finally { btns.forEach(b => b && (b.disabled = false)); }
+    }
+
+    // 綁定：單人（編輯視窗）
+    document.getElementById('se-dl-radar-first').addEventListener('click', () => { if (editingStudent) exStudentRadar(editingStudent, 'first'); });
+    document.getElementById('se-dl-radar-exam').addEventListener('click', () => { if (editingStudent) exStudentRadar(editingStudent, 'exam'); });
+    document.getElementById('se-dl-river').addEventListener('click', () => { if (editingStudent) exStudentRiver(editingStudent); });
+    // 綁定：批次（學員管理）
+    document.getElementById('btn-batch-radar-first').addEventListener('click', () => exBatch('radar-first'));
+    document.getElementById('btn-batch-radar-exam').addEventListener('click', () => exBatch('radar-exam'));
+    document.getElementById('btn-batch-river').addEventListener('click', () => exBatch('river'));
 
     document.getElementById('se-edit-save').addEventListener('click', async () => {
       if (!editingStudent) return;
