@@ -559,9 +559,13 @@
             <div class="form-group" style="margin-bottom:0"><label>登入密碼（建帳號用、至少 6 碼）</label><input type="text" id="se-edit-id-new" maxlength="20" style="font-family:monospace;text-transform:uppercase"></div>
           </div>
           <div id="se-edit-pw-hasacct" style="display:none">
-            <p style="color:#94a3b8;font-size:12px;margin-bottom:8px">⚠️ 已建帳號。要改登入密碼需輸入「目前密碼」驗證、再設新的。</p>
-            <div class="form-group"><label>目前密碼（舊密碼）</label><input type="text" id="se-edit-id-old" maxlength="20" style="font-family:monospace;text-transform:uppercase" placeholder="留空＝不改密碼"></div>
-            <div class="form-group" style="margin-bottom:0"><label>新密碼（至少 6 碼）</label><input type="text" id="se-edit-id-set" maxlength="20" style="font-family:monospace;text-transform:uppercase" placeholder="留空＝不改密碼"></div>
+            <div class="form-group">
+              <label>目前登入密碼（系統記錄）</label>
+              <input type="text" id="se-edit-pw-current" readonly style="font-family:monospace;font-size:17px;font-weight:700;color:#34d399;background:#0a0f1f;letter-spacing:1px">
+            </div>
+            <p style="color:#94a3b8;font-size:12px;margin-bottom:8px">💡 只想查看密碼看上面即可。要改密碼才填下面——「目前密碼」可留空、系統會自動用上面這組驗證。</p>
+            <div class="form-group"><label>目前密碼（通常免填、系統自動帶入）</label><input type="text" id="se-edit-id-old" maxlength="20" style="font-family:monospace;text-transform:uppercase" placeholder="留空＝用上面的目前密碼"></div>
+            <div class="form-group" style="margin-bottom:0"><label>新密碼（至少 6 碼、填了才會改）</label><input type="text" id="se-edit-id-set" maxlength="20" style="font-family:monospace;text-transform:uppercase" placeholder="留空＝不改密碼"></div>
           </div>
         </div>
         <div id="se-edit-error"></div>
@@ -1497,6 +1501,7 @@ TP18,新北 TP18,2026"></textarea>
         document.getElementById('se-edit-pw-noacct').style.display = hasAcct ? 'none' : 'block';
         document.getElementById('se-edit-pw-hasacct').style.display = hasAcct ? 'block' : 'none';
         document.getElementById('se-edit-id-new').value = s.idNumber || '';
+        document.getElementById('se-edit-pw-current').value = (s.idNumber || '').toUpperCase() || '（無記錄、請用下方重設）';
         document.getElementById('se-edit-id-old').value = '';
         document.getElementById('se-edit-id-set').value = '';
         document.getElementById('student-edit-modal').classList.add('active');
@@ -1522,11 +1527,12 @@ TP18,新北 TP18,2026"></textarea>
           const idn = document.getElementById('se-edit-id-new').value.trim().toUpperCase();
           if (idn) update.idNumber = idn;
         } else {
-          const oldId = document.getElementById('se-edit-id-old').value.trim().toUpperCase();
+          let oldId = document.getElementById('se-edit-id-old').value.trim().toUpperCase();
           const newId = document.getElementById('se-edit-id-set').value.trim().toUpperCase();
-          if (oldId || newId) {
-            if (!oldId) { errEl.innerHTML = '<div class="err-msg">❌ 請填「目前密碼」來驗證身分</div>'; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+          if (newId) {   // 只有填了「新密碼」才改密碼
             if (newId.length < 6) { errEl.innerHTML = '<div class="err-msg">❌ 新密碼至少 6 碼</div>'; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
+            if (!oldId) oldId = (s.idNumber || '').toUpperCase();   // 沒填＝自動用系統記錄的目前密碼
+            if (!oldId) { errEl.innerHTML = '<div class="err-msg">❌ 找不到目前密碼、請手動填「目前密碼」</div>'; btn.disabled = false; btn.textContent = '💾 儲存'; return; }
             const fakeEmail = `${s.classId.toLowerCase()}-${s.studentNo}@emtp.local`;
             try {
               btn.textContent = '⏳ 重設密碼...';
@@ -1535,7 +1541,7 @@ TP18,新北 TP18,2026"></textarea>
               await signOut(secondaryAuth);
               update.idNumber = newId;
             } catch (authErr) {
-              const m = (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/wrong-password') ? '「目前身分證」不正確（與現有登入密碼不符）' : authErr.message;
+              const m = (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/wrong-password') ? '目前密碼與實際登入密碼不符（此學員可能自行改過密碼）、請手動填正確的「目前密碼」' : authErr.message;
               errEl.innerHTML = `<div class="err-msg">❌ 重設密碼失敗：${m}</div>`;
               btn.disabled = false; btn.textContent = '💾 儲存'; return;
             }
