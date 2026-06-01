@@ -628,15 +628,6 @@
             <div class="form-group" style="margin-bottom:0"><label>新密碼（至少 6 碼、填了才會改）</label><input type="text" id="se-edit-id-set" maxlength="20" style="font-family:monospace;text-transform:uppercase" placeholder="留空＝不改密碼"></div>
           </div>
         </div>
-        <div style="border-top:1px solid #334155;margin-top:14px;padding-top:12px">
-          <label style="display:block;font-size:13px;color:#94a3b8;margin-bottom:8px">📊 下載成績圖（PNG、目前完整資料）</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button type="button" class="btn" id="se-dl-radar-first">⬇ 首刷雷達</button>
-            <button type="button" class="btn" id="se-dl-radar-exam">⬇ 考試雷達</button>
-            <button type="button" class="btn" id="se-dl-river">⬇ 河流圖</button>
-          </div>
-          <div id="se-dl-status" style="font-size:12px;color:#94a3b8;margin-top:6px"></div>
-        </div>
         <div id="se-edit-error"></div>
       </div>
       <div class="modal-footer">
@@ -1519,7 +1510,7 @@ TP18,新北 TP18,2026"></textarea>
           const accountCell = hasAccount
             ? '<span class="tag-pill">✅ 已建</span>'
             : (s.email ? `<button class="btn" data-create-auth="${s.id}">🔑 建帳號</button>` : '<span class="tag-pill gray">需先填 Email</span>');
-          html += `<tr><td class="num">${s.studentNo}</td><td>${s.name || '—'}</td><td style="color:#94a3b8;font-size:13px">${s.email || '—'}</td><td>${accountCell}</td><td>${stateTag}</td><td style="white-space:nowrap"><button class="btn btn-ghost" data-edit-s="${s.id}">✏️</button>${isArchived ? `<button class="btn btn-ghost" data-unarchive-s="${s.id}">📂 恢復</button>` : `<button class="btn btn-orange" data-archive-s="${s.id}">📦 封存</button>`}<button class="btn btn-red" data-del-s="${s.id}" title="刪除">🗑</button></td></tr>`;
+          html += `<tr><td class="num">${s.studentNo}</td><td>${s.name || '—'}</td><td style="color:#94a3b8;font-size:13px">${s.email || '—'}</td><td>${accountCell}</td><td>${stateTag}</td><td style="white-space:nowrap"><button class="btn btn-ghost" data-dl-rf="${s.id}" title="下載首刷雷達">🕸️</button><button class="btn btn-ghost" data-dl-re="${s.id}" title="下載考試雷達">🎯</button><button class="btn btn-ghost" data-dl-rv="${s.id}" title="下載河流圖">🌊</button><button class="btn btn-ghost" data-edit-s="${s.id}" title="編輯">✏️</button>${isArchived ? `<button class="btn btn-ghost" data-unarchive-s="${s.id}">📂 恢復</button>` : `<button class="btn btn-orange" data-archive-s="${s.id}" title="封存">📦</button>`}<button class="btn btn-red" data-del-s="${s.id}" title="刪除">🗑</button></td></tr>`;
         });
         html += '</tbody></table>';
         listEl.innerHTML = html;
@@ -1528,6 +1519,11 @@ TP18,新北 TP18,2026"></textarea>
         listEl.querySelectorAll('button[data-unarchive-s]').forEach(b => b.addEventListener('click', () => unarchiveStudent(b.dataset.unarchiveS)));
         listEl.querySelectorAll('button[data-edit-s]').forEach(b => b.addEventListener('click', () => openStudentEdit(b.dataset.editS)));
         listEl.querySelectorAll('button[data-del-s]').forEach(b => b.addEventListener('click', () => deleteStudent(b.dataset.delS)));
+        // 成績圖下載（動作欄）
+        const stuById = {}; filtered.forEach(s => stuById[s.id] = { id: s.id, classId: s.classId || classId, studentNo: s.studentNo, name: s.name || s.id });
+        listEl.querySelectorAll('button[data-dl-rf]').forEach(b => b.addEventListener('click', () => exRowRadar(stuById[b.dataset.dlRf], 'first', b)));
+        listEl.querySelectorAll('button[data-dl-re]').forEach(b => b.addEventListener('click', () => exRowRadar(stuById[b.dataset.dlRe], 'exam', b)));
+        listEl.querySelectorAll('button[data-dl-rv]').forEach(b => b.addEventListener('click', () => exRowRiver(stuById[b.dataset.dlRv], b)));
       } catch (e) { listEl.innerHTML = `<div class="err-msg">${e.message}</div>`; }
     }
 
@@ -1573,10 +1569,6 @@ TP18,新北 TP18,2026"></textarea>
         document.getElementById('se-edit-pw-current').value = (s.idNumber || '').toUpperCase() || '（無記錄、請用下方重設）';
         document.getElementById('se-edit-id-old').value = '';
         document.getElementById('se-edit-id-set').value = '';
-        document.getElementById('se-dl-status').textContent = '';
-        // 考試雷達沒資料 → 反灰該鈕
-        const exBtn = document.getElementById('se-dl-radar-exam');
-        if (exBtn) { exBtn.disabled = true; exBtn.title = '檢查考試資料中…'; getDocs(query(collection(db, 'exam_scores_radar'), where('studentId', '==', id))).then(es => { exBtn.disabled = es.empty; exBtn.title = es.empty ? '此學員無考試雷達資料' : ''; }).catch(() => { exBtn.disabled = false; exBtn.title = ''; }); }
         document.getElementById('student-edit-modal').classList.add('active');
       } catch (e) { alert('❌ ' + e.message); }
     }
@@ -1630,31 +1622,28 @@ TP18,新北 TP18,2026"></textarea>
         plugins: [exWhiteBg] };
     }
     function exDl(url, filename) { const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 120); }
-    const exStatus = (t) => { const e = document.getElementById('se-dl-status'); if (e) e.textContent = t; };
-
-    async function exStudentRadar(stu, mode) {
+    async function exRowRadar(stu, mode, btn) {
+      if (!stu) return; const orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳';
       try {
-        exStatus('產生中…');
-        const title = `${stu.classId} ${stu.studentNo}號 ${stu.name}　${mode === 'exam' ? '考試雷達' : '首刷雷達'}`;
         let my, cls;
-        if (mode === 'exam') { const ex = await exClassExamRadar(stu.classId); const mine = ex.byStudent[stu.id] || []; if (!mine.length) { exStatus('此學員無考試雷達資料'); return; } my = exCalcExam(mine); cls = ex.classAvg; }
-        else { cls = await exClassFirstAvg(stu.classId); const f = await exStudentFirst(stu.id); if (!f.has) { exStatus('此學員無刷題首刷資料'); return; } my = f.scores; }
+        if (mode === 'exam') { const ex = await exClassExamRadar(stu.classId); const mine = ex.byStudent[stu.id] || []; if (!mine.length) { alert(`${stu.name} 無考試雷達資料`); return; } my = exCalcExam(mine); cls = ex.classAvg; }
+        else { cls = await exClassFirstAvg(stu.classId); const f = await exStudentFirst(stu.id); if (!f.has) { alert(`${stu.name} 無刷題首刷資料`); return; } my = f.scores; }
+        const title = `${stu.classId} ${stu.studentNo}號 ${stu.name}　${mode === 'exam' ? '考試雷達' : '首刷雷達'}`;
         const url = await exRenderPNG(exRadarConfig(my, cls, title), 760, 760);
         exDl(url, `${exSafe(stu.classId)}-${stu.studentNo}-${exSafe(stu.name)}-${mode === 'exam' ? '考試雷達' : '首刷雷達'}.png`);
-        exStatus('✅ 已下載');
-      } catch (e) { exStatus('❌ ' + e.message); }
+      } catch (e) { alert('❌ ' + e.message); }
+      finally { btn.textContent = orig; btn.disabled = false; }
     }
-    async function exStudentRiver(stu) {
+    async function exRowRiver(stu, btn) {
+      if (!stu) return; const orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳';
       try {
-        exStatus('產生中…');
-        const base = await exRiverBase(stu.classId);
-        const stats = exBuildRiver(base, stu.id);
-        if (!stats.length) { exStatus('此學員無已評分考試、無法產生河流圖'); return; }
+        const base = await exRiverBase(stu.classId); const stats = exBuildRiver(base, stu.id);
+        if (!stats.length) { alert(`${stu.name} 無已評分考試、無法產生河流圖`); return; }
         const w = Math.max(900, Math.min(2800, stats.length * 90 + 200));
         const url = await exRenderPNG(exRiverConfig(stats, `${stu.classId} ${stu.studentNo}號 ${stu.name}　成績河流圖`), w, 500);
         exDl(url, `${exSafe(stu.classId)}-${stu.studentNo}-${exSafe(stu.name)}-河流圖.png`);
-        exStatus('✅ 已下載');
-      } catch (e) { exStatus('❌ ' + e.message); }
+      } catch (e) { alert('❌ ' + e.message); }
+      finally { btn.textContent = orig; btn.disabled = false; }
     }
 
     async function exBatch(type) {
@@ -1696,10 +1685,6 @@ TP18,新北 TP18,2026"></textarea>
       finally { btns.forEach(b => b && (b.disabled = false)); }
     }
 
-    // 綁定：單人（編輯視窗）
-    document.getElementById('se-dl-radar-first').addEventListener('click', () => { if (editingStudent) exStudentRadar(editingStudent, 'first'); });
-    document.getElementById('se-dl-radar-exam').addEventListener('click', () => { if (editingStudent) exStudentRadar(editingStudent, 'exam'); });
-    document.getElementById('se-dl-river').addEventListener('click', () => { if (editingStudent) exStudentRiver(editingStudent); });
     // 綁定：批次（學員管理）
     document.getElementById('btn-batch-radar-first').addEventListener('click', () => exBatch('radar-first'));
     document.getElementById('btn-batch-radar-exam').addEventListener('click', () => exBatch('radar-exam'));
