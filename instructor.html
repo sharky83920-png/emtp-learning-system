@@ -58,6 +58,34 @@
     .qr-student-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 13px; }
     .qr-student-row:last-child { border-bottom: none; }
     .pri-select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 14px; background: white; }
+    /* === RWD 防超框：手機上不再硬塞、不橫向捲動 === */
+    html, body { overflow-x: hidden; max-width: 100%; }
+    main { width: 100%; }
+    .card { overflow: hidden; }
+    .card input, .card select, .card textarea, .pri-select { max-width: 100%; min-width: 0; }
+    .card [style*="grid"] > * { min-width: 0; }   /* 1fr 1fr 的子項可縮、不撐爆 */
+    textarea { resize: vertical; }
+    img, canvas { max-width: 100%; }
+    /* 可收折卡片標題 */
+    details > summary { cursor: pointer; list-style: none; user-select: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    .fold-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 16px; font-weight: 700; color: #1e293b; }
+    .fold-summary .fold-ic { font-size: 13px; color: #94a3b8; font-weight: 500; transition: transform 0.2s; }
+    details[open] > .fold-summary .fold-ic { transform: rotate(180deg); }
+    /* 出題排程：收合灰條 + 膠囊格（依使用者範例樣式）*/
+    .sched-fold-bar { display: block; width: 100%; background: #64748b; color: #fff; text-align: center; padding: 11px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 4px; }
+    .sched-fold .when-open { display: none; }
+    .sched-fold[open] .when-open { display: inline; }
+    .sched-fold[open] .when-closed { display: none; }
+    .sched-pillbox { border: 1px solid #dbe3ee; border-radius: 12px; padding: 14px; margin-top: 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .sched-pill { background: #2563eb; color: #fff; padding: 7px 6px; border-radius: 16px; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .sched-pill button { background: rgba(255,255,255,0.9); border: none; color: #2563eb; width: 18px; height: 18px; border-radius: 50%; cursor: pointer; font-size: 11px; line-height: 1; flex-shrink: 0; }
+    @media (max-width: 480px) { .sched-pillbox { grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px; } }
+    @media (max-width: 480px) {
+      main { padding: 12px; }
+      .card { padding: 14px; border-radius: 12px; margin-bottom: 12px; }
+      .card h2 { font-size: 15px; }
+    }
     .sv-river-tab { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; padding: 5px 12px; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; }
     .sv-river-tab.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
   </style>
@@ -122,7 +150,7 @@
               <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">每人題數</label>
               <input type="number" id="sched-per" value="1" min="1" max="10" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit">
             </div>
-            <button id="sched-add" style="background:#10b981;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600">＋ 新增</button>
+            <button id="sched-add" style="background:#10b981;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600;white-space:nowrap">＋ 新增排程</button>
           </div>
           <div id="sched-list"><div class="placeholder" style="padding:20px"><div class="icon">⏳</div></div></div>
         </div>
@@ -263,7 +291,10 @@
               </div>
             </div>
             <div id="sv-river-empty" style="display:none;color:#94a3b8;font-size:13px;text-align:center;padding:24px">這位學員尚無已評分的考試成績</div>
-            <div style="position:relative;height:300px"><canvas id="sv-river-chart"></canvas></div>
+            <div id="sv-river-scroll" style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;border-radius:10px">
+              <div id="sv-river-wrap" style="position:relative;height:300px;min-width:100%"><canvas id="sv-river-chart"></canvas></div>
+            </div>
+            <div id="sv-river-scroll-hint" style="display:none;text-align:center;color:#94a3b8;font-size:11px;margin-top:6px">← 左右滑動看更多考試 →</div>
           </div>
 
           <div id="sv-momentum-card" style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:14px">
@@ -300,9 +331,11 @@
         </div>
 
         <div class="card" id="scoremanage-card">
-          <h2>📋 成績查詢 / 管理</h2>
-          <p style="color:#64748b;font-size:13px;margin-bottom:10px">本班所有考試。可查看明細、或整場刪除（清掉錯誤上傳）。</p>
-          <div id="sm-list"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
+          <details>
+            <summary class="fold-summary">📋 成績查詢 / 管理 <span class="fold-ic">▾ 點此展開/收合</span></summary>
+            <p style="color:#64748b;font-size:13px;margin:12px 0 10px">本班所有考試。可查看明細、或整場刪除（清掉錯誤上傳）。</p>
+            <div id="sm-list"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
+          </details>
         </div>
 
         <div class="card" id="scoreedit-card">
@@ -925,15 +958,14 @@
           el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">尚未設定應繳出題日</div>';
           return;
         }
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        el.innerHTML = `<div style="font-size:13px;color:#475569;margin-bottom:8px">已設定 ${schedCache.length} 個應繳日</div><div style="display:flex;gap:8px;flex-wrap:wrap">` +
-          schedCache.map(s => {
-            const past = new Date(s.scheduledDate) < today;
-            return `<div style="background:${past ? '#e2e8f0' : '#dbeafe'};color:${past ? '#64748b' : '#1e40af'};padding:6px 12px;border-radius:18px;font-size:13px;display:flex;align-items:center;gap:8px">
-              <span>${s.scheduledDate}${s.questionsPerStudent > 1 ? `（${s.questionsPerStudent}題）` : ''}</span>
-              <button data-del="${s.id}" style="background:rgba(0,0,0,0.15);border:none;color:inherit;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:11px;line-height:1">×</button>
-            </div>`;
-          }).join('') + '</div>';
+        const n = schedCache.length;
+        const pad = v => String(v).padStart(2, '0');
+        const fmtMD = iso => { const dt = new Date(iso); return isNaN(dt) ? iso : `${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`; };
+        el.innerHTML = `<details class="sched-fold">
+            <summary class="sched-fold-bar"><span class="when-closed">∨ 展開已設定日期 (${n})</span><span class="when-open">∧ 收合已設定日期 (${n})</span></summary>
+            <div class="sched-pillbox">` +
+          schedCache.map(s => `<div class="sched-pill"><span>${fmtMD(s.scheduledDate)}${s.questionsPerStudent > 1 ? `(${s.questionsPerStudent})` : ''}</span><button data-del="${s.id}">×</button></div>`).join('') +
+          `</div></details>`;
         el.querySelectorAll('button[data-del]').forEach(b => b.addEventListener('click', () => removeScheduleDate(b.dataset.del)));
       } catch (e) {
         el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`;
@@ -1494,28 +1526,49 @@
       const myData = S.map(s => s.my);
       const avgData = S.map(s => s.mean != null ? Math.round(s.mean * 10) / 10 : null);
       const passLine = S.map(() => 75);
+
+      // 考試多時改為可橫向滑動：每場固定寬度、標籤不再擠成一團（與學員端一致）
+      const scroll = document.getElementById('sv-river-scroll');
+      const wrap = document.getElementById('sv-river-wrap');
+      const PER = 56;
+      const avail = scroll ? scroll.clientWidth : 0;
+      const need = labels.length * PER;
+      const scrollable = avail > 0 && need > avail;
+      if (wrap) wrap.style.width = scrollable ? need + 'px' : '100%';
+      const hintEl = document.getElementById('sv-river-scroll-hint');
+      if (hintEl) hintEl.style.display = scrollable ? 'block' : 'none';
+
+      // 得分線下方漸層填色（只在河流模式）
+      const cv = ctx.getContext('2d');
+      const grad = cv.createLinearGradient(0, 0, 0, 300);
+      grad.addColorStop(0, 'rgba(37,99,235,0.22)');
+      grad.addColorStop(1, 'rgba(37,99,235,0.01)');
+
       let datasets = [];
       if (svRiverMode === 'river') {
-        datasets.push(..._svBand('河道', S.map(s => s.p75), S.map(s => s.p25), 'rgba(148,163,184,0.30)'));
+        datasets.push(..._svBand('河道', S.map(s => s.p75), S.map(s => s.p25), 'rgba(148,163,184,0.28)'));
       } else {
         datasets.push(..._svBand('全班', S.map(s => s.p90), S.map(s => s.p10), 'rgba(239,68,68,0.10)'));
         datasets.push(..._svBand('穩定', S.map(s => s.p80), S.map(s => s.p20), 'rgba(239,68,68,0.10)'));
         datasets.push(..._svBand('主力', S.map(s => s.p70), S.map(s => s.p30), 'rgba(239,68,68,0.12)'));
         datasets.push(..._svBand('核心', S.map(s => s.p60), S.map(s => s.p40), 'rgba(239,68,68,0.15)'));
       }
-      datasets.push({ label: '班級平均', data: avgData, borderColor: 'rgba(148,163,184,0.9)', pointBackgroundColor: 'rgba(148,163,184,0.9)', pointRadius: 3, borderWidth: 2, borderDash: [4, 4], fill: false, tension: 0.3, spanGaps: true });
+      datasets.push({ label: '班級平均', data: avgData, borderColor: 'rgba(148,163,184,0.9)', pointBackgroundColor: 'rgba(148,163,184,0.9)', pointRadius: 3, pointHoverRadius: 5, borderWidth: 2, borderDash: [4, 4], fill: false, tension: 0.35, cubicInterpolationMode: 'monotone', spanGaps: true });
       datasets.push({ label: '及格門檻 (75)', data: passLine, borderColor: 'rgba(239,68,68,0.8)', pointRadius: 0, borderWidth: 1.5, borderDash: [6, 4], fill: false });
-      datasets.push({ label: '學員得分', data: myData, borderColor: 'rgba(37,99,235,1)', backgroundColor: 'rgba(37,99,235,0.1)', pointBackgroundColor: 'rgba(37,99,235,1)', pointBorderColor: '#fff', pointRadius: 5, pointHoverRadius: 7, borderWidth: 3, fill: false, tension: 0.3, spanGaps: true });
+      datasets.push({ label: '學員得分', data: myData, borderColor: 'rgba(37,99,235,1)', backgroundColor: svRiverMode === 'river' ? grad : 'transparent', pointBackgroundColor: 'rgba(37,99,235,1)', pointBorderColor: '#fff', pointBorderWidth: 2, pointRadius: 5, pointHoverRadius: 8, pointHitRadius: 18, borderWidth: 3, fill: svRiverMode === 'river' ? 'origin' : false, tension: 0.35, cubicInterpolationMode: 'monotone', spanGaps: true });
       if (svRiverChart) svRiverChart.destroy();
       svRiverChart = new Chart(ctx, {
         type: 'line',
         data: { labels, datasets },
         options: {
           responsive: true, maintainAspectRatio: false,
+          animation: { duration: 600 },
+          layout: { padding: { top: 8, right: 10, left: 2 } },
+          elements: { line: { borderJoinStyle: 'round', borderCapStyle: 'round' } },
           interaction: { mode: 'index', intersect: false },
-          scales: { y: { min: 30, max: 100, ticks: { stepSize: 10, color: '#64748b' }, grid: { color: 'rgba(148,163,184,0.2)' } }, x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(148,163,184,0.1)' } } },
+          scales: { y: { min: 30, max: 100, ticks: { stepSize: 10, color: '#64748b', font: { size: 11 } }, grid: { color: 'rgba(148,163,184,0.18)', drawBorder: false } }, x: { ticks: { color: '#64748b', font: { size: 11 }, maxRotation: 0, autoSkip: false }, grid: { display: false } } },
           plugins: {
-            legend: { position: 'bottom', labels: { padding: 10, font: { size: 11 }, filter: it => !/_(lo|hi)$/.test(it.text) } },
+            legend: { position: 'bottom', labels: { padding: 10, font: { size: 11 }, usePointStyle: true, filter: it => !/_(lo|hi)$/.test(it.text) } },
             tooltip: {
               filter: it => !it.dataset._band,
               callbacks: {
@@ -1535,6 +1588,8 @@
           }
         }
       });
+      // 載入後自動捲到最新一場考試（最右側）
+      if (scrollable && scroll) requestAnimationFrame(() => { scroll.scrollLeft = scroll.scrollWidth; });
     }
 
     async function loadSvRadar(studentId) {

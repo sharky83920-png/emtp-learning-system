@@ -269,6 +269,45 @@
             </div>
           </div>
         </div>
+
+        <div class="card">
+          <h2><span>🔎 簽核紀錄查詢 / 修改 / 刪除</span></h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">💡 依班級查詢全班學員的核心技術簽核紀錄。可修改（改項目 / 簽核者 / 時間）或刪除誤簽紀錄；刪除後該學員進度會 −1。</p>
+          <div class="qr-setup-grid">
+            <div class="form-group">
+              <label>選擇班級</label>
+              <select id="sor-class"><option value="">請選班級...</option></select>
+            </div>
+            <div class="form-group">
+              <label>技術項目（篩選）</label>
+              <select id="sor-skill"><option value="">全部項目</option></select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>學員（篩選）</label>
+            <select id="sor-student"><option value="">全部學員</option></select>
+          </div>
+          <button class="btn btn-green" id="btn-sor-query" style="width:100%;padding:12px">🔎 查詢簽核紀錄</button>
+          <div id="sor-result" style="margin-top:14px"></div>
+        </div>
+
+        <!-- 簽核紀錄修改 modal -->
+        <div class="modal-overlay" id="sor-edit-modal">
+          <div class="modal" style="max-width:460px">
+            <div class="modal-header"><h3>✏️ 修改簽核紀錄</h3><button class="modal-close" id="sor-edit-close">×</button></div>
+            <div class="modal-body">
+              <div class="form-group"><label>學員</label><input id="sor-edit-student" type="text" readonly></div>
+              <div class="form-group"><label>技術項目</label><select id="sor-edit-skill"></select></div>
+              <div class="form-group"><label>簽核者姓名</label><input id="sor-edit-by" type="text" placeholder="例：張教官"></div>
+              <div class="form-group"><label>簽核日期時間</label><input id="sor-edit-at" type="datetime-local"></div>
+              <div id="sor-edit-msg"></div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-ghost" id="sor-edit-cancel">取消</button>
+              <button class="btn btn-green" id="sor-edit-save">💾 儲存</button>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section class="tab-content" id="tab-books">
@@ -1041,7 +1080,7 @@ TP18,新北 TP18,2026"></textarea>
         if (btn.dataset.tab === 'students') loadClassDropdown();
         if (btn.dataset.tab === 'instructors') loadInstructors();
         if (btn.dataset.tab === 'milestones') loadMilestonesPage();
-        if (btn.dataset.tab === 'skills') { loadSkillsPage(); loadQrPage(); }
+        if (btn.dataset.tab === 'skills') { loadSkillsPage(); loadQrPage(); loadSignoffRecordsPage(); }
         if (btn.dataset.tab === 'books') loadBooksPage();
         if (btn.dataset.tab === 'exams') loadExamsPage();
         if (btn.dataset.tab === 'schedule') loadSchedulePage();
@@ -3178,6 +3217,113 @@ TP18,新北 TP18,2026"></textarea>
       } catch (e) { alert('❌ ' + e.message); }
       finally { btn.disabled = false; btn.textContent = '🚀 一鍵匯入官方 13 項'; }
     }
+
+    // ===== 簽核紀錄查詢 / 修改 / 刪除（依班級）=====
+    let _sorRecords = [], _sorStudents = {}, _sorSkills = [], _sorEditId = null;
+    async function loadSignoffRecordsPage() {
+      try {
+        const cSnap = await getDocs(collection(db, 'classes'));
+        const classes = [];
+        cSnap.forEach(d => { const x = d.data(); if (x.isActive !== false) classes.push({ id: d.id, ...x }); });
+        classes.sort((a, b) => (b.year || 0) - (a.year || 0));
+        const cSel = document.getElementById('sor-class');
+        if (cSel) cSel.innerHTML = '<option value="">請選班級...</option>' + classes.map(c => `<option value="${c.id}">${c.displayName || c.id}</option>`).join('');
+        const sSnap = await getDocs(collection(db, 'core_skills'));
+        _sorSkills = [];
+        sSnap.forEach(d => { const x = d.data(); _sorSkills.push({ id: d.id, name: x.name || d.id }); });
+        _sorSkills.sort((a, b) => (a.id > b.id ? 1 : -1));
+        const skSel = document.getElementById('sor-skill');
+        if (skSel) skSel.innerHTML = '<option value="">全部項目</option>' + _sorSkills.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+      } catch (e) { console.error('loadSignoffRecordsPage', e); }
+    }
+    document.getElementById('sor-class')?.addEventListener('change', async (e) => {
+      const cid = e.target.value;
+      const stuSel = document.getElementById('sor-student');
+      _sorStudents = {};
+      if (!cid) { stuSel.innerHTML = '<option value="">全部學員</option>'; return; }
+      try {
+        const snap = await getDocs(query(collection(db, 'students'), where('classId', '==', cid)));
+        const studs = [];
+        snap.forEach(d => { const x = d.data(); _sorStudents[d.id] = (x.studentNo ? x.studentNo + '號 ' : '') + (x.name || d.id); if (x.isActive === false) return; studs.push({ id: d.id, no: x.studentNo || '', name: x.name || d.id }); });
+        studs.sort((a, b) => (parseInt(a.no) || 0) - (parseInt(b.no) || 0));
+        stuSel.innerHTML = '<option value="">全部學員</option>' + studs.map(s => `<option value="${s.id}">${s.no ? s.no + '號 ' : ''}${s.name}</option>`).join('');
+      } catch (err) { stuSel.innerHTML = '<option value="">❌ 載入失敗</option>'; }
+    });
+    document.getElementById('btn-sor-query')?.addEventListener('click', loadSignoffRecords);
+
+    async function loadSignoffRecords() {
+      const cid = document.getElementById('sor-class').value;
+      const skid = document.getElementById('sor-skill').value;
+      const sid = document.getElementById('sor-student').value;
+      const box = document.getElementById('sor-result');
+      if (!cid) { box.innerHTML = '<div class="err-msg">請先選班級</div>'; return; }
+      box.innerHTML = '<div class="loading">⏳ 查詢中...</div>';
+      try {
+        const snap = await getDocs(query(collection(db, 'core_skill_signoffs'), where('classId', '==', cid)));
+        _sorRecords = [];
+        snap.forEach(d => { _sorRecords.push({ id: d.id, ...d.data() }); });
+        let recs = _sorRecords;
+        if (skid) recs = recs.filter(r => r.skillId === skid);
+        if (sid) recs = recs.filter(r => r.studentId === sid);
+        recs.sort((a, b) => (b.signedAt?.seconds || 0) - (a.signedAt?.seconds || 0));
+        if (recs.length === 0) { box.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">查無簽核紀錄</div>'; return; }
+        const fmt = sec => { if (!sec) return '—'; const dt = new Date(sec * 1000); const p = n => String(n).padStart(2, '0'); return `${dt.getFullYear()}/${dt.getMonth() + 1}/${dt.getDate()} ${p(dt.getHours())}:${p(dt.getMinutes())}`; };
+        box.innerHTML = `<div style="font-size:13px;color:#cbd5e1;margin-bottom:10px">共 <strong style="color:#10b981">${recs.length}</strong> 筆</div>` + recs.map(r => `
+          <div style="border:1px solid #334155;border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+            <div style="min-width:0">
+              <div style="font-weight:700;color:#f1f5f9">${_sorStudents[r.studentId] || r.studentName || r.studentId}</div>
+              <div style="font-size:12px;color:#94a3b8">🛠️ ${r.skillName || r.skillId} · 簽核者 ${r.signedByName || '—'} · ${fmt(r.signedAt?.seconds)}</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0">
+              <button class="btn btn-ghost" data-sor-edit="${r.id}" style="padding:5px 10px;font-size:13px">✏️</button>
+              <button class="btn btn-red" data-sor-del="${r.id}" style="padding:5px 10px;font-size:13px">🗑</button>
+            </div>
+          </div>`).join('');
+        box.querySelectorAll('[data-sor-del]').forEach(b => b.addEventListener('click', () => deleteSignoff(b.dataset.sorDel)));
+        box.querySelectorAll('[data-sor-edit]').forEach(b => b.addEventListener('click', () => openSorEdit(b.dataset.sorEdit)));
+      } catch (e) { box.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+    }
+
+    async function deleteSignoff(id) {
+      const r = _sorRecords.find(x => x.id === id);
+      if (!r) return;
+      if (!confirm(`確定刪除此簽核紀錄？\n\n${_sorStudents[r.studentId] || r.studentName || ''} · ${r.skillName || r.skillId}\n（不可復原、該學員此項進度會 −1）`)) return;
+      try { await deleteDoc(doc(db, 'core_skill_signoffs', id)); loadSignoffRecords(); }
+      catch (e) { alert('❌ ' + e.message); }
+    }
+
+    function openSorEdit(id) {
+      const r = _sorRecords.find(x => x.id === id);
+      if (!r) return;
+      _sorEditId = id;
+      document.getElementById('sor-edit-student').value = _sorStudents[r.studentId] || r.studentName || r.studentId;
+      document.getElementById('sor-edit-skill').innerHTML = _sorSkills.map(s => `<option value="${s.id}" ${s.id === r.skillId ? 'selected' : ''}>${s.name}</option>`).join('');
+      document.getElementById('sor-edit-by').value = r.signedByName || '';
+      const sec = r.signedAt?.seconds;
+      if (sec) { const dt = new Date(sec * 1000); const p = n => String(n).padStart(2, '0'); document.getElementById('sor-edit-at').value = `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}T${p(dt.getHours())}:${p(dt.getMinutes())}`; }
+      else document.getElementById('sor-edit-at').value = '';
+      document.getElementById('sor-edit-msg').innerHTML = '';
+      document.getElementById('sor-edit-modal').classList.add('active');
+    }
+    document.getElementById('sor-edit-close')?.addEventListener('click', () => document.getElementById('sor-edit-modal').classList.remove('active'));
+    document.getElementById('sor-edit-cancel')?.addEventListener('click', () => document.getElementById('sor-edit-modal').classList.remove('active'));
+    document.getElementById('sor-edit-save')?.addEventListener('click', async () => {
+      if (!_sorEditId) return;
+      const skid = document.getElementById('sor-edit-skill').value;
+      const sk = _sorSkills.find(s => s.id === skid);
+      const by = document.getElementById('sor-edit-by').value.trim();
+      const atStr = document.getElementById('sor-edit-at').value;
+      const msg = document.getElementById('sor-edit-msg');
+      const btn = document.getElementById('sor-edit-save'); btn.disabled = true; btn.textContent = '⏳';
+      try {
+        const upd = { skillId: skid, skillName: sk ? sk.name : skid, signedByName: by };
+        if (atStr) upd.signedAt = Timestamp.fromDate(new Date(atStr));
+        await updateDoc(doc(db, 'core_skill_signoffs', _sorEditId), upd);
+        document.getElementById('sor-edit-modal').classList.remove('active');
+        loadSignoffRecords();
+      } catch (e) { msg.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
+    });
 
     // ===== F10-C: 書籍 / 章節 / 維度 =====
     let bksCurrentSubTab = 'bks-books';
