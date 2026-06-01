@@ -242,7 +242,7 @@
       <section class="tab-content" id="tab-corrections">
         <div class="card">
           <h2>⚠️ 題目勘誤處理</h2>
-          <p style="color:#64748b;font-size:13px;margin-bottom:14px">💡 處理本班學員回報的題目勘誤。可改標答/選項/頁碼、隱藏題目、回覆學員（結案後學員會收到通知）。</p>
+          <p style="color:#64748b;font-size:13px;margin-bottom:14px">💡 處理<strong>全部班級</strong>學員回報的題目勘誤（題目跨班共用、一次結案會關閉所有班的同題回報）。可改標答/選項/頁碼、隱藏題目、回覆學員（結案後學員會收到通知）。</p>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
             <label style="font-size:13px;color:#475569">狀態</label>
             <select id="corr-filter" style="padding:7px 12px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit">
@@ -671,11 +671,11 @@
 
     async function loadCorrections() {
       const el = document.getElementById('corr-list');
-      if (!selectedClassId) { el.innerHTML = '<div class="placeholder"><div class="icon">🏫</div><p>請先選擇班級</p></div>'; return; }
       el.innerHTML = '<div class="placeholder"><div class="icon">⏳</div><p>載入中...</p></div>';
       try {
         const filter = document.getElementById('corr-filter').value;
-        const snap = await getDocs(query(collection(db, 'question_error_reports'), where('reportedByClassId', '==', selectedClassId)));
+        // 勘誤跨班共用：題目全系統共享，指導員看「所有班級」的回報（結案時本來就會一次關閉所有班）
+        const snap = await getDocs(collection(db, 'question_error_reports'));
         corrReports = [];
         snap.forEach(d => corrReports.push({ id: d.id, ...d.data() }));
         if (filter === 'pending') corrReports = corrReports.filter(r => (r.status || 'pending') === 'pending');
@@ -698,7 +698,7 @@
           const q = corrQuestions[g.qid];
           const qtext = q ? (q.questionText || '').slice(0, 60) : '（題目已不存在）';
           const anyPending = g.reports.some(r => (r.status || 'pending') === 'pending');
-          const reportersHtml = g.reports.map(r => `<div style="font-size:13px;color:#78350f;margin-bottom:3px"><strong>${r.reportedByName || '學員'}：</strong>${r.reason || ''}${(r.status && r.status !== 'pending') ? ' <span style="color:#94a3b8">(已處理)</span>' : ''}</div>`).join('');
+          const reportersHtml = g.reports.map(r => `<div style="font-size:13px;color:#78350f;margin-bottom:3px"><strong>${r.reportedByName || '學員'}（${r.reportedByClassId || '—'}）：</strong>${r.reason || ''}${(r.status && r.status !== 'pending') ? ' <span style="color:#94a3b8">(已處理)</span>' : ''}</div>`).join('');
           return `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
               <span style="font-family:monospace;font-size:13px;color:#64748b">${g.qid}</span>
