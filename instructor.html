@@ -74,6 +74,9 @@
     main input:not([type=checkbox]):not([type=radio]):not([type=range]), main select { min-height: 44px; }
     main select { -webkit-appearance: none !important; appearance: none !important; padding-right: 34px !important; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%2394a3b8' stroke-width='1.6' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E") !important; background-repeat: no-repeat !important; background-position: right 12px center !important; }
     main input:focus, main select:focus, main textarea:focus { border-color: #6366f1 !important; background-color: #fff !important; outline: none !important; }
+    /* 日期框單獨處理：iOS 原生 date 元件被固定高度壓壞 → 用 flex 垂直置中、左對齊、不加上下內距 */
+    main input[type=date] { -webkit-appearance: none; appearance: none; display: flex; align-items: center; min-height: 44px; padding: 0 12px !important; color: #1e293b; }
+    main input[type=date]::-webkit-date-and-time-value { text-align: left; margin: 0; }
     .header-right select { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%23ffffff' stroke-width='1.6' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; padding-right: 26px; }
     button { -webkit-tap-highlight-color: transparent; }
     /* === RWD 防超框：手機上不再硬塞、不橫向捲動 === */
@@ -417,6 +420,15 @@
         <div class="form-group"><label>題目</label><textarea id="corr-qtext" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px"></textarea></div>
         <div id="corr-options"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group"><label>書籍 <span style="color:#dc2626">*</span></label>
+            <select id="corr-book" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px"><option value="">—</option></select>
+          </div>
+          <div class="form-group"><label>章節 <span style="color:#dc2626">*</span></label>
+            <select id="corr-chapter" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px"><option value="">先選書籍</option></select>
+          </div>
+        </div>
+        <div id="corr-dim-hint" style="font-size:12px;margin:-2px 0 12px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div class="form-group"><label>正確答案</label>
             <select id="corr-answer" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit">
               <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
@@ -736,7 +748,7 @@
     document.getElementById('corr-filter').addEventListener('change', loadCorrections);
     document.getElementById('corr-refresh').addEventListener('click', loadCorrections);
 
-    function openCorrModal(qid) {
+    async function openCorrModal(qid) {
       const g = corrGroups.find(x => x.qid === qid);
       if (!g) return;
       const q = corrQuestions[qid] || {};
@@ -767,7 +779,18 @@
       document.getElementById('corr-options').innerHTML = ['A','B','C','D'].map(k =>
         `<div class="form-group" style="margin-bottom:8px"><label>選項 ${k}</label><input class="corr-opt" data-k="${k}" value="${(opts[k]?.text || '').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:9px;font-family:inherit;font-size:14px"></div>`
       ).join('');
+      // 書籍 / 章節（可改、存檔時重算維度）：先顯示窗、再帶入現有出處
+      document.getElementById('corr-book').innerHTML = '<option value="">載入中…</option>';
+      document.getElementById('corr-chapter').innerHTML = '<option value="">先選書籍</option>';
+      document.getElementById('corr-dim-hint').innerHTML = '';
       document.getElementById('corr-modal').style.display = 'flex';
+      try {
+        await ensureCorrBooksChapters();
+        const src = q.source || {};
+        populateCorrBook(src.bookId || '');
+        populateCorrChapter(src.bookId || '', src.chapterId || '', src.chapterNumber);
+        updateCorrDimHint();
+      } catch (e) { document.getElementById('corr-dim-hint').innerHTML = `<span style="color:#ef4444">書/章載入失敗：${e.message}</span>`; }
     }
     function closeCorrModal() { document.getElementById('corr-modal').style.display = 'none'; currentCorr = null; }
     document.getElementById('corr-modal-close').addEventListener('click', closeCorrModal);
@@ -775,6 +798,43 @@
     document.getElementById('corr-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeCorrModal(); });
     document.getElementById('corr-resolve-fix').addEventListener('click', () => resolveCorr('fixed'));
     document.getElementById('corr-resolve-reject').addEventListener('click', () => resolveCorr('rejected'));
+
+    // ===== 勘誤：書籍 / 章節（可改、存檔時重算維度）=====
+    let corrBooks = [], corrChapters = [];
+    const CORR_DIM_NAMES = { D1: '緊急救護系統', D2: '基礎醫學含評估', D3: '創傷', D4: '非創傷', D5: '特殊族群', D6: '災難及特殊情境' };
+    async function ensureCorrBooksChapters() {
+      if (corrBooks.length === 0) {
+        const bSnap = await getDocs(collection(db, 'books'));
+        corrBooks = []; bSnap.forEach(d => { const x = d.data(); if (x.isActive !== false) corrBooks.push({ id: d.id, ...x }); });
+        corrBooks.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+      }
+      if (corrChapters.length === 0) {
+        const cSnap = await getDocs(collection(db, 'chapters'));
+        corrChapters = []; cSnap.forEach(d => { const x = d.data(); if (x.isActive !== false) corrChapters.push({ id: d.id, ...x }); });
+      }
+    }
+    function populateCorrBook(selBookId) {
+      const sel = document.getElementById('corr-book');
+      sel.innerHTML = '<option value="">—</option>' + corrBooks.map(b => `<option value="${b.id}">${b.id}</option>`).join('');
+      if (selBookId) sel.value = selBookId;
+    }
+    function populateCorrChapter(bookId, selChapterId, selChapterNumber) {
+      const sel = document.getElementById('corr-chapter');
+      if (!bookId) { sel.innerHTML = '<option value="">先選書籍</option>'; return; }
+      const chs = corrChapters.filter(c => c.bookId === bookId).sort((a, b) => (parseInt(a.chapterNumber) || 0) - (parseInt(b.chapterNumber) || 0));
+      sel.innerHTML = '<option value="">請選章節</option>' + chs.map(c => `<option value="${c.id}" data-dim="${c.dimension || ''}" data-num="${c.chapterNumber}">Ch ${c.chapterNumber} ${String(c.chapterName || '').replace(/"/g, '&quot;')}</option>`).join('');
+      if (selChapterId && chs.some(c => c.id === selChapterId)) sel.value = selChapterId;
+      else if (selChapterNumber != null && selChapterNumber !== '') { const m = chs.find(c => String(c.chapterNumber) === String(selChapterNumber)); if (m) sel.value = m.id; }
+    }
+    function updateCorrDimHint() {
+      const dim = document.getElementById('corr-chapter').selectedOptions[0]?.dataset.dim;
+      const el = document.getElementById('corr-dim-hint');
+      if (!el) return;
+      if (dim) el.innerHTML = `✅ 存檔後此題編入維度 <strong style="color:#059669">${dim} ${CORR_DIM_NAMES[dim] || ''}</strong>`;
+      else el.innerHTML = '<span style="color:#b45309">⚠️ 此章節未設定維度、存檔後此題不會計入雷達</span>';
+    }
+    document.getElementById('corr-book').addEventListener('change', () => { populateCorrChapter(document.getElementById('corr-book').value, '', ''); updateCorrDimHint(); });
+    document.getElementById('corr-chapter').addEventListener('change', updateCorrDimHint);
 
     async function resolveCorr(resolution) {
       if (!currentCorr) return;
@@ -784,6 +844,18 @@
       const msg = document.getElementById('corr-modal-msg');
       const fixBtn = document.getElementById('corr-resolve-fix');
       const rejBtn = document.getElementById('corr-resolve-reject');
+      // 修正結案：強制「書籍 + 章節」都要選（藉勘誤把題目強制編入維度）
+      let _bookId = '', _chapterId = '', _chapterNumber = '', _dimension = null;
+      if (resolution === 'fixed') {
+        const bkSel = document.getElementById('corr-book'), chSel = document.getElementById('corr-chapter');
+        _bookId = bkSel.value; _chapterId = chSel.value;
+        _chapterNumber = chSel.selectedOptions[0]?.dataset.num || '';
+        _dimension = chSel.selectedOptions[0]?.dataset.dim || null;
+        if (!_bookId || !_chapterId) {
+          msg.innerHTML = '<div style="color:#ef4444;font-size:13px">⚠️ 請選擇「書籍」與「章節」才能送出修正（用來把題目編入維度）。</div>';
+          return;
+        }
+      }
       fixBtn.disabled = true; rejBtn.disabled = true;
       try {
         const hide = document.getElementById('corr-hide').checked;
@@ -805,6 +877,10 @@
             options: opts,
             correctAnswer: document.getElementById('corr-answer').value,
             'source.page': document.getElementById('corr-page').value,
+            'source.bookId': _bookId,
+            'source.chapterId': _chapterId,
+            'source.chapterNumber': _chapterNumber || null,
+            derivedDimension: _dimension,   // 依當下書+章重算（章沒改也重編）
             isVisible: !hide,
             updatedAt: serverTimestamp(),
             lastEditedBy: currentInstructor.email,
@@ -840,6 +916,9 @@
     async function loadScheduleTab() {
       if (!selectedClassId) return;
       const perms = classPerms || {};
+      // 日期框預設今天（字串、不做時區換算），避免空白被誤認為壞掉
+      const _sd = document.getElementById('sched-date');
+      if (_sd && !_sd.value) { const _t = new Date(); _sd.value = `${_t.getFullYear()}-${String(_t.getMonth() + 1).padStart(2, '0')}-${String(_t.getDate()).padStart(2, '0')}`; }
       const tasks = [loadScheduleList()];
       if (perms.canEditEnergyBar) tasks.push(loadEnergyBar());   // 沒權限不載、卡片已隱藏
       await Promise.all(tasks);
