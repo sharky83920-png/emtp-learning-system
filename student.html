@@ -1083,7 +1083,9 @@
           return;
         }
         // 寫入 core_skill_signoffs
-        const signoffRef = doc(collection(db, 'core_skill_signoffs'));
+        // 用「場次__學員」當固定 doc id：同一場 QR 即使掃描回呼重複觸發、或 ?qr= 重整多次，
+        // 都只會覆蓋同一筆、不會新增 → 根除「掃一次登錄多筆」的重複寫入（取代原本隨機 doc id）。
+        const signoffRef = doc(db, 'core_skill_signoffs', `${sessionId}__${currentStudent.id}`);
         await setDoc(signoffRef, {
           studentId: currentStudent.id,
           studentName: currentStudent.name,
