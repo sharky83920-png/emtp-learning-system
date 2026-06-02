@@ -2567,10 +2567,19 @@
       return arr;
     }
 
+    // 抽題前重讀最新水龍頭設定：避免「設定後、學員 session 仍用登入當下舊值」而漏抽到別班題
+    async function refreshFaucet() {
+      try {
+        const cd = await getDoc(doc(db, 'classes', currentStudent.classId));
+        _questionFaucet = (cd.exists() && cd.data().settings && cd.data().settings.questionFaucet) || null;
+      } catch (e) { /* 讀失敗就沿用現值 */ }
+    }
+
     async function startQuiz() {
       const btn = document.getElementById('btn-start-quiz');
       btn.disabled = true; btn.textContent = '⏳ 抽題中...';
       try {
+        await refreshFaucet();
         const all = (await loadVisibleQuestions()).filter(faucetAllows);
         if (all.length === 0) { alert('⚠️ 目前可抽範圍內沒有題目（可能本班授權的來源/章節尚無題目，或還沒出題）'); return; }
         const counts = await loadQuizProgress();
@@ -2587,6 +2596,7 @@
       const btns = document.querySelectorAll('.practice-btn');
       btns.forEach(b => b.disabled = true);
       try {
+        await refreshFaucet();
         const all = (await loadVisibleQuestions()).filter(faucetAllows);
         const filtered = all.filter(q => q.derivedDimension === dim);
         if (filtered.length === 0) { alert(`⚠️ 「${dim} ${DIM_NAMES[dim] || ''}」在可抽範圍內目前沒有題目`); return; }

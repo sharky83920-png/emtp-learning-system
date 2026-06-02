@@ -4731,21 +4731,23 @@ TP18,新北 TP18,2026"></textarea>
       const el = document.getElementById('questions-content');
       el.innerHTML = '<div class="loading">⏳ 載入中...</div>';
       try {
-        const [qSnap, bSnap, chSnap, stSnap] = await Promise.all([
+        const [qSnap, bSnap, chSnap] = await Promise.all([
           getDocs(collection(db, 'questions')),
           getDocs(collection(db, 'books')),
-          getDocs(collection(db, 'chapters')),
-          getDocs(collection(db, 'question_stats'))
+          getDocs(collection(db, 'chapters'))
         ]);
         qmCache = [];
         qSnap.forEach(d => qmCache.push({ id: d.id, ...d.data() }));
         qmCache.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-        // 首刷統計彙總（便宜：每題一份小文件，不掃 18.6 萬筆）
+        // 首刷統計彙總（獨立讀取＋失敗降級：規則未發布／尚無資料時，題庫管理照常運作、首刷狀況顯示「—」）
         qmStatsCache = {}; qmStatsUpdatedAt = null;
-        stSnap.forEach(d => {
-          if (d.id === '_meta') { qmStatsUpdatedAt = d.data().updatedAt || null; return; }
-          const x = d.data(); qmStatsCache[d.id] = { n: x.firstN || 0, c: x.firstCorrect || 0 };
-        });
+        try {
+          const stSnap = await getDocs(collection(db, 'question_stats'));
+          stSnap.forEach(d => {
+            if (d.id === '_meta') { qmStatsUpdatedAt = d.data().updatedAt || null; return; }
+            const x = d.data(); qmStatsCache[d.id] = { n: x.firstN || 0, c: x.firstCorrect || 0 };
+          });
+        } catch (e) { console.warn('question_stats 讀取失敗（多半是 firestore.rules 尚未發布），首刷統計暫不顯示。', e); }
         qmBooksCache = [];
         bSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) qmBooksCache.push({ id: d.id, ...data }); });
         qmChaptersCache = [];
