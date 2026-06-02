@@ -183,7 +183,7 @@
         </div>
 
         <div class="card">
-          <h2><span>📊 各維度考題數統計（依班級·同日去重）</span></h2>
+          <h2><span>📊 各維度考題數統計（考試雷達·依班級）</span></h2>
           <div class="toolbar">
             <select id="qexam-class"><option value="">請選班級...</option></select>
             <button class="btn btn-green" id="btn-qexam-calc">📊 計算考題數</button>
@@ -199,8 +199,7 @@
           </div>
           <div class="gauge-sub" id="qexam-sub" style="text-align:center;color:#64748b;margin-top:10px">請選班級後按「計算考題數」</div>
           <div class="gauge-sub" style="margin-top:6px;text-align:left;color:#64748b">
-            ⓘ 同一天、同一維度的同一題，<b>不論幾位學員作答都只算 1 題</b>；不同日期重複出題會分別計入。數字＝該班「(日期×題目) 不重複」的考題數加總。<br>
-            ⚠️ 此統計需掃描該班全部作答紀錄，題量大的班級（如 TP17 數萬筆）會花數秒並耗用較多讀取，請按鈕手動計算、勿頻繁重算。
+            ⓘ 資料來源＝<b>考試雷達（exam_scores_radar）</b>，<b>不含首刷／練習</b>。同一場考試（examName）各維度題數只算一次、<b>不乘以學員人數</b>；不同場考試會分別累加。數字＝該班各場考試各維度題數的加總。
           </div>
         </div>
 
@@ -1305,13 +1304,8 @@ TP18,新北 TP18,2026"></textarea>
       initQExam();
     }
 
-    // === 各維度考題數統計（依班級·同日去重）===
+    // === 各維度考題數統計（考試雷達·依班級）===
     let qExamClassesLoaded = false;
-    function qExamDayKey(ts) {
-      const d = ts && typeof ts.toDate === 'function' ? ts.toDate() : (ts instanceof Date ? ts : null);
-      if (!d) return '?';
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    }
     async function initQExam() {
       const sel = document.getElementById('qexam-class');
       if (!sel) return;
@@ -1345,29 +1339,34 @@ TP18,新北 TP18,2026"></textarea>
       const sub = document.getElementById('qexam-sub');
       const btn = document.getElementById('btn-qexam-calc');
       if (!classId) { if (sub) sub.textContent = '請先選班級'; return; }
-      // 先估規模、量大才提醒（單一 classId 等值計數，便宜）
-      let approx = 0;
-      try { approx = (await getCountFromServer(query(collection(db, 'question_attempts'), where('classId', '==', classId)))).data().count; } catch (e) {}
-      if (approx > 20000 && !confirm(`此班約有 ${approx.toLocaleString()} 筆作答紀錄。計算需全部掃描（約 ${approx.toLocaleString()} 次讀取、可能花數秒）。確定要計算嗎？`)) return;
       if (btn) btn.disabled = true;
-      if (status) status.textContent = '⏳ 掃描計算中...';
+      if (status) status.textContent = '⏳ 計算中...';
       EX_DIMS.forEach(d => { const el = document.getElementById('qe-' + d); if (el) el.textContent = '…'; });
       try {
-        const sets = {}; EX_DIMS.forEach(d => sets[d] = new Set());
-        const snap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', classId)));
+        // 讀考試雷達（每生每場一筆），依 examName 去重：同一場各維度題數只算一次（取最大 total）
+        const snap = await getDocs(query(collection(db, 'exam_scores_radar'), where('classId', '==', classId)));
+        const byExam = {};  // examName -> { D1: maxTotal, ... }
         snap.forEach(docu => {
-          const a = docu.data();
-          if (!a.questionId || !sets[a.dimension]) return;   // 未分類或非 D1-D6 略過
-          sets[a.dimension].add(qExamDayKey(a.attemptedAt) + '|' + a.questionId);
+          const x = docu.data();
+          const key = x.examName || docu.id;
+          const dims = x.dimensions || {};
+          const cur = byExam[key] || (byExam[key] = {});
+          EX_DIMS.forEach(d => {
+            const t = dims[d] && typeof dims[d].total === 'number' ? dims[d].total : 0;
+            if (t > (cur[d] || 0)) cur[d] = t;
+          });
         });
+        const examNames = Object.keys(byExam);
+        const totals = {}; EX_DIMS.forEach(d => totals[d] = 0);
+        examNames.forEach(k => EX_DIMS.forEach(d => totals[d] += (byExam[k][d] || 0)));
         let sum = 0;
-        EX_DIMS.forEach(d => { const n = sets[d].size; sum += n; const el = document.getElementById('qe-' + d); if (el) el.textContent = n.toLocaleString(); });
-        if (sub) sub.innerHTML = `六維加總 <b style="color:#e2e8f0">${sum.toLocaleString()}</b> 題（同日去重、不乘學員人數；掃描 ${snap.size.toLocaleString()} 筆作答）`;
+        EX_DIMS.forEach(d => { sum += totals[d]; const el = document.getElementById('qe-' + d); if (el) el.textContent = totals[d].toLocaleString(); });
+        if (sub) sub.innerHTML = `六維加總 <b style="color:#e2e8f0">${sum.toLocaleString()}</b> 題（考試雷達、依 examName 去重、不乘學員人數；共 ${examNames.length} 場考試 / ${snap.size.toLocaleString()} 筆成績）`;
         if (status) status.textContent = '';
       } catch (e) {
         EX_DIMS.forEach(d => { const el = document.getElementById('qe-' + d); if (el) el.textContent = '—'; });
         if (status) status.textContent = '';
-        if (sub) sub.textContent = '計算失敗（權限或資料量過大）';
+        if (sub) sub.textContent = '計算失敗（權限或無考試雷達資料）';
         console.warn('calcQExam', e);
       } finally { if (btn) btn.disabled = false; }
     }
