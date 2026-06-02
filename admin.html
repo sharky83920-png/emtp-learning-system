@@ -2,8 +2,21 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>🛠 EMTP 管理後台</title>
+  <link rel="manifest" href="manifest-admin.webmanifest">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="EMTP 後台">
+  <link rel="apple-touch-icon" href="icon-admin-180.png">
+  <link rel="icon" type="image/png" href="icon-admin-192.png">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    }
+  </script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; line-height: 1.6; }
@@ -5306,7 +5319,15 @@ TP18,新北 TP18,2026"></textarea>
     }
 
     // 勘誤分頁徽章：顯示「待處理勘誤的題目數」（distinct questionId，1~99+）
+    // PWA App 圖示角標（需裝成 APP 才有效；未裝/不支援會無聲略過）
+    function updateAppBadge(n) {
+      try {
+        if (!('setAppBadge' in navigator)) return;
+        if (n > 0) navigator.setAppBadge(n); else navigator.clearAppBadge();
+      } catch (e) {}
+    }
     function setCorrectionBadge(n) {
+      updateAppBadge(n);
       const badge = document.getElementById('qm-badge'); if (!badge) return;
       if (n > 0) { badge.textContent = n > 99 ? '99+' : String(n); badge.style.display = 'inline-flex'; }
       else { badge.style.display = 'none'; }

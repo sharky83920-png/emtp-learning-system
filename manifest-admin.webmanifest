@@ -1,0 +1,16 @@
+{
+  "id": "/emtp-learning-system/admin",
+  "name": "EMTP 管理後台",
+  "short_name": "EMTP 後台",
+  "description": "高級救護技術員學習系統 — 管理後台",
+  "start_url": "admin.html",
+  "scope": "./",
+  "display": "standalone",
+  "lang": "zh-TW",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    { "src": "icon-admin-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-admin-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "/emtp-learning-system/instructor",
+  "name": "EMTP 指導員",
+  "short_name": "EMTP 指導員",
+  "description": "高級救護技術員學習系統 — 指導員端",
+  "start_url": "instructor.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "lang": "zh-TW",
+  "background_color": "#eef1f6",
+  "theme_color": "#e11d48",
+  "icons": [
+    { "src": "icon-instructor-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-instructor-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

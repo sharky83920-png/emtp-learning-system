@@ -2,8 +2,21 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="EMTP 學員">
+  <meta name="theme-color" content="#667eea">
   <title>📚 EMTP 學員系統</title>
+  <link rel="manifest" href="manifest-student.webmanifest">
+  <link rel="apple-touch-icon" href="icon-student-180.png">
+  <link rel="icon" type="image/png" href="icon-student-192.png">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    }
+  </script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; background: #f1f5f9; color: #1e293b; min-height: 100vh; line-height: 1.6; }
@@ -917,7 +930,15 @@
       }
     }
 
+    // PWA App 圖示角標（需裝成 APP 才有效；未裝/不支援會無聲略過）
+    function updateAppBadge(n) {
+      try {
+        if (!('setAppBadge' in navigator)) return;
+        if (n > 0) navigator.setAppBadge(n); else navigator.clearAppBadge();
+      } catch (e) {}
+    }
     function updateBellBadge(count) {
+      updateAppBadge(count);
       const badge = document.getElementById('bell-badge');
       if (!badge) return;
       if (count > 0) { badge.textContent = count > 99 ? '99+' : count; badge.style.display = 'block'; }
