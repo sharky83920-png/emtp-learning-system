@@ -170,6 +170,17 @@
         </div>
 
         <div class="card">
+          <h2><span>⬡ 題庫平衡度（六維題數分布）</span></h2>
+          <div style="position:relative;height:420px;max-width:560px;margin:4px auto 0">
+            <canvas id="qbalance-radar"></canvas>
+          </div>
+          <div class="gauge-sub" id="qbalance-sub" style="text-align:center;color:#64748b;margin-top:8px">⏳ 載入中...</div>
+          <div class="gauge-sub" style="margin-top:6px;text-align:left;color:#64748b">
+            ⓘ 六邊形每一邊為一個雷達維度（D1-D6）的題庫題數。六維加總 ＋ 未分類 ＝ 題庫總量（與上方「題目」一致）。
+          </div>
+        </div>
+
+        <div class="card">
           <h2><span>🚦 系統負載</span>
             <a class="btn btn-ghost" href="https://console.firebase.google.com/project/emtp-learning-system/usage" target="_blank" rel="noopener">📊 查看 Firebase 真實用量／帳單</a>
           </h2>
@@ -1262,6 +1273,48 @@ TP18,新北 TP18,2026"></textarea>
       } catch (e) {
         renderGauge('gauge-load', 0, { valueText: '—' });
         setTxt('gauge-load-sub', '查詢失敗（attemptedAt 索引或權限）');
+      }
+
+      // ⬡ 題庫平衡度：六維題數（各一次聚合計數、便宜；不掃 question_attempts）
+      await loadQBalance(counts.questions);
+    }
+
+    // === 題庫平衡度六邊形雷達 ===
+    let qBalanceChart = null;
+    async function loadQBalance(totalQ) {
+      const sub = document.getElementById('qbalance-sub');
+      try {
+        const nums = [];
+        for (const d of EX_DIMS) {
+          const c = (await getCountFromServer(query(collection(db, 'questions'), where('derivedDimension', '==', d)))).data().count;
+          nums.push(c);
+        }
+        const sum = nums.reduce((a, b) => a + b, 0);
+        const total = (typeof totalQ === 'number' && isFinite(totalQ)) ? totalQ : sum;
+        const unclassified = Math.max(0, total - sum);
+        const labels = EX_DIMS.map((d, i) => `${d} ${EX_DIM_NAMES[i]}（${nums[i]}）`);
+        if (qBalanceChart) { qBalanceChart.destroy(); qBalanceChart = null; }
+        const cv = document.getElementById('qbalance-radar');
+        if (cv && typeof Chart !== 'undefined') {
+          qBalanceChart = new Chart(cv.getContext('2d'), {
+            type: 'radar',
+            data: { labels, datasets: [{ label: '題數', data: nums, fill: true,
+              backgroundColor: 'rgba(37,99,235,0.18)', borderColor: 'rgba(37,99,235,0.9)', borderWidth: 2,
+              pointBackgroundColor: 'rgba(37,99,235,1)', pointBorderColor: '#fff', pointBorderWidth: 1.5, pointRadius: 4 }] },
+            options: { responsive: true, maintainAspectRatio: false, animation: false,
+              plugins: { legend: { display: false }, tooltip: { enabled: true, callbacks: { label: ctx => `${ctx.parsed.r.toLocaleString()} 題` } } },
+              scales: { r: { beginAtZero: true,
+                ticks: { color: '#64748b', backdropColor: 'transparent' },
+                grid: { color: 'rgba(148,163,184,0.25)' },
+                angleLines: { color: 'rgba(148,163,184,0.25)' },
+                pointLabels: { font: { size: 13, weight: '600' }, color: '#cbd5e1' } } } }
+          });
+        }
+        sub.innerHTML = `六維加總 <b style="color:#e2e8f0">${sum.toLocaleString()}</b> 題`
+          + (unclassified > 0 ? ` ＋ 未分類 <b style="color:#f59e0b">${unclassified.toLocaleString()}</b> 題` : '')
+          + ` ＝ 題庫總量 <b style="color:#e2e8f0">${total.toLocaleString()}</b> 題`;
+      } catch (e) {
+        if (sub) sub.textContent = '查詢失敗（derivedDimension 索引或權限）';
       }
     }
     document.getElementById('btn-refresh-stats').addEventListener('click', loadOverviewStats);
