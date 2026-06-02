@@ -1,0 +1,14 @@
+{
+  "name": "emtp-push-functions",
+  "description": "EMTP 學習系統推播發送端（公告 / 勘誤待處理 / 勘誤被回覆）",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^6.1.0"
+  }
+}

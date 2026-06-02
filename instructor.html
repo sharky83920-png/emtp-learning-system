@@ -14,7 +14,7 @@
   <link rel="icon" type="image/png" href="icon-instructor-192.png">
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+      window.addEventListener('load', () => navigator.serviceWorker.register('firebase-messaging-sw.js').catch(() => {}));
     }
   </script>
   <style>
@@ -172,6 +172,7 @@
       <h1>🧑‍🏫 指導員儀表板</h1>
       <div class="header-right">
         <select id="class-select"><option value="">載入中...</option></select>
+        <button id="push-enable-btn" style="display:none;padding:8px 12px;background:#10b981;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🔔 開啟推播</button>
         <button class="btn-logout" id="btn-logout">登出</button>
       </div>
     </header>
@@ -470,6 +471,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
     import { getFirestore, collection, query, where, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp, onSnapshot, Timestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getMessaging, getToken, onMessage, isSupported as fcmSupported } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-messaging.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -627,6 +629,7 @@
     });
 
     document.getElementById('btn-logout').addEventListener('click', () => { if (confirm('確定登出？')) signOut(auth); });
+    document.getElementById('push-enable-btn').addEventListener('click', () => setupPush(true));
 
     // ===== 進入後台 =====
     function enterDashboard() {
@@ -637,6 +640,8 @@
       // 權限改成「班級共用」：實際閘門在選定班級後由 applyClassPermissions() 套用
       // 班級下拉（只有自己負責的班）
       loadOwnClasses();
+      updatePushBtn();
+      setupPush(false);
     }
 
     // 讀取目前所選班級的「指導員權限」（班級共用），並套用顯示閘門
@@ -753,6 +758,37 @@
         const s = new Set(); snap.forEach(d => s.add(d.data().questionId));
         setCorrectionBadge(s.size);
       } catch (e) {}
+    }
+
+    // ===== 手機推播（FCM）：指導員收「勘誤待處理」=====
+    // VAPID 公鑰：Firebase Console → 專案設定 → Cloud Messaging → 網頁推播憑證
+    const VAPID_PUBLIC_KEY = 'BCRPh5pwUruMhMy63-3UOioZOvHmvyawIJer-lMpvyb2Vu96Cp2wPYI03KMBK676StrI3FpicfXAxqRbbr6pDnA';
+    let fcmMessaging = null;
+    function updatePushBtn() {
+      const btn = document.getElementById('push-enable-btn');
+      const granted = ('Notification' in window) && Notification.permission === 'granted';
+      if (btn) { btn.style.display = granted ? 'none' : 'inline-block'; }
+    }
+    async function setupPush(interactive) {
+      try {
+        if (VAPID_PUBLIC_KEY === 'REPLACE_WITH_VAPID_KEY') return;
+        if (!(await fcmSupported())) { if (interactive) alert('此瀏覽器不支援推播。iPhone 請先用 Safari「加入主畫面」開啟。'); return; }
+        if (!('Notification' in window)) return;
+        let perm = Notification.permission;
+        if (perm === 'default' && interactive) perm = await Notification.requestPermission();
+        if (perm !== 'granted') { if (interactive) alert('未允許通知，無法接收推播。'); updatePushBtn(); return; }
+        const reg = await navigator.serviceWorker.ready;
+        fcmMessaging = fcmMessaging || getMessaging(app);
+        const token = await getToken(fcmMessaging, { vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: reg });
+        if (!token || !currentInstructor) return;
+        await setDoc(doc(db, 'push_tokens', token), {
+          token, role: 'instructor', userId: currentInstructor.id, name: currentInstructor.name || '',
+          ua: (navigator.userAgent || '').slice(0, 180), updatedAt: serverTimestamp()
+        }, { merge: true });
+        onMessage(fcmMessaging, () => { refreshCorrectionBadge(); });
+        updatePushBtn();
+        if (interactive) alert('✅ 已開啟手機推播！之後有新勘誤待處理會主動通知你。');
+      } catch (e) { console.warn('[push]', e); if (interactive) alert('開啟推播失敗：' + (e.message || e)); }
     }
 
     async function loadCorrections() {

@@ -79,6 +79,9 @@ service cloud.firestore {
     match /announcements/{id} { allow read: if authed(); allow write: if authed(); }
     match /notifications/{id} { allow read: if authed(); allow create: if authed(); allow update: if authed(); allow delete: if isMaster(); }
 
+    // ── 推播 token（FCM）：登入者可寫入/更新自己裝置的 token；Cloud Function 用 Admin SDK 讀（不受規則限制）──
+    match /push_tokens/{id} { allow read: if isMaster(); allow create, update, delete: if authed(); }
+
     // ── 其餘一律拒絕 ──
     match /{document=**} { allow read, write: if false; }
   }

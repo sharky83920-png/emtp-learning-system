@@ -14,7 +14,7 @@
   <link rel="icon" type="image/png" href="icon-admin-192.png">
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+      window.addEventListener('load', () => navigator.serviceWorker.register('firebase-messaging-sw.js').catch(() => {}));
     }
   </script>
   <style>
@@ -135,6 +135,7 @@
       <h1>🛠 EMTP 管理後台</h1>
       <div class="user-info">
         <span id="user-email">—</span>
+        <button id="push-enable-btn" style="display:none;padding:6px 12px;background:#10b981;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px">🔔 開啟推播</button>
         <button class="btn-logout" id="btn-logout">登出</button>
       </div>
     </header>
@@ -1115,6 +1116,7 @@ TP18,新北 TP18,2026"></textarea>
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, updatePassword } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
     import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, where, writeBatch, onSnapshot, Timestamp, arrayUnion, increment, runTransaction, getCountFromServer } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
+    import { getMessaging, getToken, onMessage, isSupported as fcmSupported } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-messaging.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -1149,6 +1151,8 @@ TP18,新北 TP18,2026"></textarea>
         loadOverviewStats();
         loadClasses();
         refreshCorrectionBadge();
+        updatePushBtn();
+        setupPush(false);
       } else if (user) {
         // 非 Master user 登入（可能是學員在別的 tab）、不要在這裡 signOut、會踢到學員
         currentUser = null;
@@ -1178,6 +1182,7 @@ TP18,新北 TP18,2026"></textarea>
     });
     document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('btn-login').click(); });
     document.getElementById('btn-logout').addEventListener('click', () => { if (confirm('確定要登出嗎？')) signOut(auth); });
+    document.getElementById('push-enable-btn').addEventListener('click', () => setupPush(true));
 
     document.querySelectorAll('.tab-button').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -5338,6 +5343,37 @@ TP18,新北 TP18,2026"></textarea>
         const s = new Set(); snap.forEach(d => s.add(d.data().questionId));
         setCorrectionBadge(s.size);
       } catch (e) {}
+    }
+
+    // ===== 手機推播（FCM）：後台收「勘誤待處理」=====
+    // VAPID 公鑰：Firebase Console → 專案設定 → Cloud Messaging → 網頁推播憑證
+    const VAPID_PUBLIC_KEY = 'BCRPh5pwUruMhMy63-3UOioZOvHmvyawIJer-lMpvyb2Vu96Cp2wPYI03KMBK676StrI3FpicfXAxqRbbr6pDnA';
+    let fcmMessaging = null;
+    function updatePushBtn() {
+      const btn = document.getElementById('push-enable-btn');
+      const granted = ('Notification' in window) && Notification.permission === 'granted';
+      if (btn) { btn.style.display = granted ? 'none' : 'inline-block'; }
+    }
+    async function setupPush(interactive) {
+      try {
+        if (VAPID_PUBLIC_KEY === 'REPLACE_WITH_VAPID_KEY') return;
+        if (!(await fcmSupported())) { if (interactive) alert('此瀏覽器不支援推播。'); return; }
+        if (!('Notification' in window)) return;
+        let perm = Notification.permission;
+        if (perm === 'default' && interactive) perm = await Notification.requestPermission();
+        if (perm !== 'granted') { if (interactive) alert('未允許通知，無法接收推播。'); updatePushBtn(); return; }
+        const reg = await navigator.serviceWorker.ready;
+        fcmMessaging = fcmMessaging || getMessaging(app);
+        const token = await getToken(fcmMessaging, { vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: reg });
+        if (!token || !currentUser) return;
+        await setDoc(doc(db, 'push_tokens', token), {
+          token, role: 'admin', userId: 'master', name: currentUser.email || 'master',
+          ua: (navigator.userAgent || '').slice(0, 180), updatedAt: serverTimestamp()
+        }, { merge: true });
+        onMessage(fcmMessaging, () => { refreshCorrectionBadge(); });
+        updatePushBtn();
+        if (interactive) alert('✅ 已開啟手機推播！之後有新勘誤待處理會主動通知你。');
+      } catch (e) { console.warn('[push]', e); if (interactive) alert('開啟推播失敗：' + (e.message || e)); }
     }
 
     async function loadAdminCorrections() {

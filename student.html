@@ -14,7 +14,7 @@
   <link rel="icon" type="image/png" href="icon-student-192.png">
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+      window.addEventListener('load', () => navigator.serviceWorker.register('firebase-messaging-sw.js').catch(() => {}));
     }
   </script>
   <style>
@@ -179,8 +179,10 @@
         <div id="notice-modal-body" style="padding:18px 22px;max-height:65vh;overflow-y:auto">
           <div style="text-align:center;color:#94a3b8;padding:30px">載入中...</div>
         </div>
-        <div style="padding:14px 22px;border-top:1px solid #e2e8f0;text-align:right">
-          <button id="notice-mark-all" class="btn-primary" style="width:auto;padding:10px 20px">全部已讀並關閉</button>
+        <div style="padding:14px 22px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <button id="push-enable-btn" style="display:none;width:auto;padding:10px 16px;background:#10b981;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🔔 開啟手機推播通知</button>
+          <span id="push-on-hint" style="display:none;color:#10b981;font-size:12px">✅ 已開啟手機推播</span>
+          <button id="notice-mark-all" class="btn-primary" style="width:auto;padding:10px 20px;margin-left:auto">全部已讀並關閉</button>
         </div>
       </div>
     </div>
@@ -594,6 +596,7 @@
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
     import { getFirestore, collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, arrayUnion, runTransaction, orderBy, limit, increment } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
+    import { getMessaging, getToken, onMessage, isSupported as fcmSupported } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-messaging.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -806,6 +809,8 @@
         document.getElementById('student-name').textContent = currentStudent.name || '同學';
         document.getElementById('student-no').textContent = currentStudent.studentNo || '—';
         await loadDashboard();
+        updatePushBtn();
+        setupPush(false);   // 已授權者靜默更新 token；未授權者由通知中心按鈕開啟
       } catch (e) {
         console.error('[Auth] error:', e);
         // ⭐ 不要 signOut、避免無限循環、只顯示錯誤
@@ -963,6 +968,44 @@
       else { badge.style.display = 'none'; }
     }
 
+    // ===== 手機推播（FCM）=====
+    // VAPID 公鑰：Firebase Console → 專案設定 → Cloud Messaging → 網頁推播憑證 → 產生金鑰組
+    const VAPID_PUBLIC_KEY = 'BCRPh5pwUruMhMy63-3UOioZOvHmvyawIJer-lMpvyb2Vu96Cp2wPYI03KMBK676StrI3FpicfXAxqRbbr6pDnA';
+    let fcmMessaging = null;
+
+    function updatePushBtn() {
+      const btn = document.getElementById('push-enable-btn');
+      const hint = document.getElementById('push-on-hint');
+      const granted = ('Notification' in window) && Notification.permission === 'granted';
+      if (btn) btn.style.display = granted ? 'none' : 'inline-block';
+      if (hint) hint.style.display = granted ? 'inline' : 'none';
+    }
+
+    // interactive=true 代表使用者按了按鈕（可跳權限請求）；false 代表登入後靜默嘗試
+    async function setupPush(interactive) {
+      try {
+        if (VAPID_PUBLIC_KEY === 'REPLACE_WITH_VAPID_KEY') return;        // 尚未填金鑰
+        if (!(await fcmSupported())) { if (interactive) alert('此瀏覽器不支援推播。iPhone 請先用 Safari「加入主畫面」開啟。'); return; }
+        if (!('Notification' in window)) return;
+        let perm = Notification.permission;
+        if (perm === 'default' && interactive) perm = await Notification.requestPermission();
+        if (perm !== 'granted') { if (interactive) alert('未允許通知，無法接收推播。'); updatePushBtn(); return; }
+        const reg = await navigator.serviceWorker.ready;
+        fcmMessaging = fcmMessaging || getMessaging(app);
+        const token = await getToken(fcmMessaging, { vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: reg });
+        if (!token || !currentStudent) return;
+        await setDoc(doc(db, 'push_tokens', token), {
+          token, role: 'student', userId: currentStudent.id,
+          classId: currentStudent.classId, name: currentStudent.name || '',
+          ua: (navigator.userAgent || '').slice(0, 180), updatedAt: serverTimestamp()
+        }, { merge: true });
+        // 前景收到推播 → 重算鈴鐺/角標
+        onMessage(fcmMessaging, () => { loadNotices(); });
+        updatePushBtn();
+        if (interactive) alert('✅ 已開啟手機推播！之後有新公告或勘誤回覆會主動通知你。');
+      } catch (e) { console.warn('[push] setup failed:', e); if (interactive) alert('開啟推播失敗：' + (e.message || e)); }
+    }
+
     function renderNotices() {
       const body = document.getElementById('notice-modal-body');
       const { announcements, notifications } = noticeData;
@@ -1049,6 +1092,7 @@
     }
 
     document.getElementById('btn-bell').addEventListener('click', openNoticeModal);
+    document.getElementById('push-enable-btn').addEventListener('click', () => setupPush(true));
     // 勘誤回饋檢視（可反覆開、讀 question_error_reports 教官回覆）
     async function openFeedbackModal() {
       const modal = document.getElementById('feedback-modal');
