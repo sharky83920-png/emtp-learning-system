@@ -53,8 +53,9 @@
     .build-box h3 { color: #64748b; font-size: 16px; margin-bottom: 6px; }
     /* 底部固定 tab（像學員端）*/
     .bottom-tabs { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,0.9); backdrop-filter: saturate(180%) blur(16px); -webkit-backdrop-filter: saturate(180%) blur(16px); border-top: 1px solid #e8edf3; display: flex; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 20px rgba(0,0,0,0.06); z-index: 90; }
-    .bottom-tabs button { flex: 1; background: transparent; border: none; padding: 8px 4px; color: #94a3b8; font-size: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; font-family: inherit; border-radius: 8px; }
+    .bottom-tabs button { position: relative; flex: 1; background: transparent; border: none; padding: 8px 4px; color: #94a3b8; font-size: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; font-family: inherit; border-radius: 8px; }
     .bottom-tabs button .bt-icon { font-size: 21px; }
+    .tab-badge { position: absolute; top: 2px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #e11d48; color: #fff; font-size: 10px; font-weight: bold; display: flex; align-items: center; justify-content: center; line-height: 1; box-shadow: 0 0 0 2px #fff; }
     .bottom-tabs button.active { color: #e11d48; background: #fff1f2; font-weight: 600; }
     /* QR 簽核 */
     .qr-active-box { background: #f0fdfa; border: 2px solid #14b8a6; border-radius: 14px; padding: 20px; text-align: center; }
@@ -398,7 +399,7 @@
     <nav class="bottom-tabs">
       <button data-tab="schedule" class="active"><span class="bt-icon">📝</span><span>出題追蹤</span></button>
       <button data-tab="signoff" id="tabbtn-signoff"><span class="bt-icon">✅</span><span>教官簽核</span></button>
-      <button data-tab="corrections" id="tabbtn-corrections"><span class="bt-icon">⚠️</span><span>題目勘誤</span></button>
+      <button data-tab="corrections" id="tabbtn-corrections"><span class="bt-icon">⚠️</span><span>題目勘誤</span><span class="tab-badge" id="corr-badge" style="display:none"></span></button>
       <button data-tab="other"><span class="bt-icon">⚙️</span><span>其他</span></button>
     </nav>
   </div>
@@ -622,6 +623,7 @@
       // 分頁層級：沒權限整個分頁鈕藏掉（點不過去）
       document.getElementById('tabbtn-corrections').style.display = p.canHandleCorrections ? '' : 'none';
       document.getElementById('tabbtn-signoff').style.display = p.canQRSignoff ? '' : 'none';
+      if (p.canHandleCorrections) refreshCorrectionBadge(); else setCorrectionBadge(0);
       // 卡片層級：出題追蹤頁內的能量條 / 各班出題戰力
       document.getElementById('energy-card').style.display = p.canEditEnergyBar ? '' : 'none';
       document.getElementById('classpower-card').style.display = p.canViewClassPower ? '' : 'none';
@@ -697,6 +699,20 @@
       } catch (e) { console.error('createNotification', e); }
     }
 
+    // 勘誤分頁徽章：待處理勘誤的題目數（distinct questionId，1~99+）
+    function setCorrectionBadge(n) {
+      const badge = document.getElementById('corr-badge'); if (!badge) return;
+      if (n > 0) { badge.textContent = n > 99 ? '99+' : String(n); badge.style.display = 'flex'; }
+      else { badge.style.display = 'none'; }
+    }
+    async function refreshCorrectionBadge() {
+      try {
+        const snap = await getDocs(query(collection(db, 'question_error_reports'), where('status', '==', 'pending')));
+        const s = new Set(); snap.forEach(d => s.add(d.data().questionId));
+        setCorrectionBadge(s.size);
+      } catch (e) {}
+    }
+
     async function loadCorrections() {
       const el = document.getElementById('corr-list');
       el.innerHTML = '<div class="placeholder"><div class="icon">⏳</div><p>載入中...</p></div>';
@@ -706,6 +722,8 @@
         const snap = await getDocs(collection(db, 'question_error_reports'));
         corrReports = [];
         snap.forEach(d => corrReports.push({ id: d.id, ...d.data() }));
+        // 同步徽章：全系統 distinct 待處理題數
+        { const s = new Set(); corrReports.forEach(r => { if ((r.status || 'pending') === 'pending') s.add(r.questionId); }); setCorrectionBadge(s.size); }
         if (filter === 'pending') corrReports = corrReports.filter(r => (r.status || 'pending') === 'pending');
         corrReports.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
         if (corrReports.length === 0) {

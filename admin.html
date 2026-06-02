@@ -52,6 +52,13 @@
     .stat-card { background: #273449; padding: 18px; border-radius: 8px; border: 1px solid #334155; }
     .stat-card .label { color: #94a3b8; font-size: 12px; text-transform: uppercase; }
     .stat-card .value { color: #60a5fa; font-size: 32px; font-weight: bold; margin-top: 4px; }
+    .gauge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; align-items: stretch; }
+    .gauge-card { background: #273449; padding: 16px; border-radius: 8px; border: 1px solid #334155; text-align: center; }
+    .gauge-card .gauge-title { color: #cbd5e1; font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .gauge-card svg { width: 100%; max-width: 260px; height: auto; }
+    .gauge-card .gauge-val { color: #e2e8f0; font-size: 24px; font-weight: bold; }
+    .gauge-card .gauge-sub { color: #94a3b8; font-size: 12px; margin-top: 2px; line-height: 1.5; }
+    .tab-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; background: #dc2626; color: #fff; font-size: 11px; font-weight: bold; line-height: 1; vertical-align: middle; }
     .table { width: 100%; border-collapse: collapse; margin-top: 8px; }
     .table th, .table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #2d3a52; font-size: 14px; }
     .table th { color: #94a3b8; font-weight: 500; font-size: 12px; text-transform: uppercase; background: #172033; }
@@ -127,7 +134,7 @@
       <button class="tab-button" data-tab="exams">📊 成績管理</button>
       <button class="tab-button" data-tab="books">📚 書籍 / 章節</button>
       <button class="tab-button" data-tab="schedule">📅 出題排程</button>
-      <button class="tab-button" data-tab="questions">❓ 題庫管理 / 勘誤</button>
+      <button class="tab-button" data-tab="questions">❓ 題庫管理 / 勘誤<span class="tab-badge" id="qm-badge" style="display:none"></span></button>
       <button class="tab-button" data-tab="skills">🛠️ 核心技術簽核</button>
       <button class="tab-button" data-tab="milestones">🎯 Milestone 主檔</button>
       <button class="tab-button" data-tab="announcements">📢 公告管理</button>
@@ -143,6 +150,29 @@
             <div class="stat-card"><div class="label">學員</div><div class="value" id="stat-students">—</div></div>
             <div class="stat-card"><div class="label">指導員</div><div class="value" id="stat-instructors">—</div></div>
             <div class="stat-card"><div class="label">題目</div><div class="value" id="stat-questions">—</div></div>
+            <div class="stat-card"><div class="label">作答紀錄總筆數</div><div class="value" id="stat-attempts">—</div></div>
+            <div class="stat-card"><div class="label">首刷紀錄總筆數</div><div class="value" id="stat-firsts">—</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2><span>🚦 系統負載</span>
+            <a class="btn btn-ghost" href="https://console.firebase.google.com/project/emtp-learning-system/usage" target="_blank" rel="noopener">📊 查看 Firebase 真實用量／帳單</a>
+          </h2>
+          <div class="gauge-grid">
+            <div class="gauge-card">
+              <div class="gauge-title">💾 儲存量（估算）</div>
+              <div id="gauge-storage"><div class="loading">⏳</div></div>
+              <div class="gauge-sub" id="gauge-storage-sub">—</div>
+            </div>
+            <div class="gauge-card">
+              <div class="gauge-title">⚡ 運算負擔（過去 24 小時作答）</div>
+              <div id="gauge-load"><div class="loading">⏳</div></div>
+              <div class="gauge-sub" id="gauge-load-sub">—</div>
+            </div>
+          </div>
+          <div class="gauge-sub" style="margin-top:12px;text-align:left;color:#64748b">
+            ⓘ 儲存量為「筆數 × 平均文件大小」<b>估算值</b>（非 Firebase 帳單實值）；運算負擔取過去 24 小時實際作答筆數，反映即時寫入負載。真實帳單請按右上角連結至 Console。
           </div>
         </div>
       </section>
@@ -1070,7 +1100,7 @@ TP18,新北 TP18,2026"></textarea>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, updatePassword } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, where, writeBatch, onSnapshot, Timestamp, arrayUnion, increment, runTransaction } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, where, writeBatch, onSnapshot, Timestamp, arrayUnion, increment, runTransaction, getCountFromServer } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
 
     const firebaseConfig = {
@@ -1105,6 +1135,7 @@ TP18,新北 TP18,2026"></textarea>
         document.getElementById('user-email').textContent = user.email;
         loadOverviewStats();
         loadClasses();
+        refreshCorrectionBadge();
       } else if (user) {
         // 非 Master user 登入（可能是學員在別的 tab）、不要在這裡 signOut、會踢到學員
         currentUser = null;
@@ -1155,12 +1186,64 @@ TP18,新北 TP18,2026"></textarea>
       });
     });
 
+    // === 系統負載：半圓儀表 ===
+    function renderGauge(targetId, frac, opts) {
+      opts = Object.assign({ redFrom: 0.8, yellowFrom: 0.6, valueText: '' }, opts || {});
+      const cx = 100, cy = 100, r = 80, sw = 16;
+      frac = Math.max(0, Math.min(isFinite(frac) ? frac : 0, 1));
+      const polar = (f, rr) => { const a = Math.PI * (1 - f); return [cx + rr * Math.cos(a), cy - rr * Math.sin(a)]; };
+      const arc = (f0, f1, rr) => { const [x0, y0] = polar(f0, rr), [x1, y1] = polar(f1, rr); return `M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${rr} ${rr} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`; };
+      const np = polar(frac, r);
+      let col = '#10b981';
+      if (frac >= opts.redFrom) col = '#dc2626'; else if (frac >= opts.yellowFrom) col = '#f59e0b';
+      const svg = `<svg viewBox="0 0 200 132" role="img" aria-label="gauge">`
+        + `<path d="${arc(0, 1, r)}" fill="none" stroke="#1e293b" stroke-width="${sw}" stroke-linecap="round"/>`
+        + `<path d="${arc(opts.redFrom, 1, r + 10)}" fill="none" stroke="#dc2626" stroke-width="4" stroke-linecap="round" opacity="0.85"/>`
+        + (frac > 0 ? `<path d="${arc(0, frac, r)}" fill="none" stroke="${col}" stroke-width="${sw}" stroke-linecap="round"/>` : '')
+        + `<line x1="${cx}" y1="${cy}" x2="${np[0].toFixed(1)}" y2="${np[1].toFixed(1)}" stroke="#f8fafc" stroke-width="3" stroke-linecap="round"/>`
+        + `<circle cx="${cx}" cy="${cy}" r="6" fill="#f8fafc"/>`
+        + `<text x="${cx}" y="126" text-anchor="middle" fill="#e2e8f0" font-size="22" font-weight="bold">${opts.valueText}</text>`
+        + `</svg>`;
+      const el = document.getElementById(targetId); if (el) el.innerHTML = svg;
+    }
+
     async function loadOverviewStats() {
-      const cols = ['classes', 'students', 'instructors', 'questions'];
-      const map = { classes: 'stat-classes', students: 'stat-students', instructors: 'stat-instructors', questions: 'stat-questions' };
-      for (const col of cols) {
-        try { document.getElementById(map[col]).textContent = (await getDocs(collection(db, col))).size; }
-        catch (e) { document.getElementById(map[col]).textContent = '0'; }
+      const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      // 數字卡：用聚合計數 getCountFromServer（18.6 萬筆 attempts 也只算約 187 次讀取、瞬間回）
+      const counts = {};
+      const countCols = { classes: 'stat-classes', students: 'stat-students', instructors: 'stat-instructors', questions: 'stat-questions', question_attempts: 'stat-attempts' };
+      for (const col in countCols) {
+        try { const c = (await getCountFromServer(collection(db, col))).data().count; counts[col] = c; setTxt(countCols[col], c.toLocaleString()); }
+        catch (e) { counts[col] = 0; setTxt(countCols[col], '—'); }
+      }
+      // 首刷總數＝各生刷過的「不重複題數」加總（讀 student_quiz_progress，即時、約 388 筆）
+      let firsts = 0;
+      try {
+        const snap = await getDocs(collection(db, 'student_quiz_progress'));
+        snap.forEach(d => { const c = d.data().counts; if (c) firsts += Object.keys(c).length; });
+        setTxt('stat-firsts', firsts.toLocaleString());
+      } catch (e) { setTxt('stat-firsts', '—'); }
+
+      // 💾 儲存量估算（筆數 × 平均文件大小，bytes；非帳單實值）
+      const AVG = { question_attempts: 280, questions: 1200, students: 260, instructors: 260, classes: 850 };
+      let bytes = 8 * 1024 * 1024; // 其餘彙總/主檔固定估量 ~8MB
+      for (const k in AVG) bytes += (counts[k] || 0) * AVG[k];
+      bytes += firsts * 16; // student_quiz_progress 內各題計數項
+      const mb = bytes / (1024 * 1024);
+      const STORAGE_MAX_MB = 1024; // 1GB 參考線
+      renderGauge('gauge-storage', mb / STORAGE_MAX_MB, { valueText: (mb >= 1000 ? (mb / 1024).toFixed(2) + ' GB' : mb.toFixed(0) + ' MB') });
+      setTxt('gauge-storage-sub', `估算 ≈ ${mb.toFixed(0)} MB ／ 1 GB 參考線（未含索引開銷，僅供趨勢參考）`);
+
+      // ⚡ 運算負擔＝過去 24 小時作答筆數（Timestamp 毫秒相減，不碰日期字串）
+      const LOAD_FULL = 5000; // 滿載視覺基準，覺得太鬆/太緊改這個常數即可
+      try {
+        const since = Timestamp.fromMillis(Date.now() - 24 * 60 * 60 * 1000);
+        const c24 = (await getCountFromServer(query(collection(db, 'question_attempts'), where('attemptedAt', '>=', since)))).data().count;
+        renderGauge('gauge-load', c24 / LOAD_FULL, { valueText: c24.toLocaleString() });
+        setTxt('gauge-load-sub', `過去 24h ${c24.toLocaleString()} 筆作答 ／ 滿載參考 ${LOAD_FULL.toLocaleString()} 筆`);
+      } catch (e) {
+        renderGauge('gauge-load', 0, { valueText: '—' });
+        setTxt('gauge-load-sub', '查詢失敗（attemptedAt 索引或權限）');
       }
     }
     document.getElementById('btn-refresh-stats').addEventListener('click', loadOverviewStats);
@@ -2013,6 +2096,9 @@ TP18,新北 TP18,2026"></textarea>
         const instructors = [];
         snapshot.forEach(d => instructors.push({ id: d.id, ...d.data() }));
         const filtered = showArchivedInstructors ? instructors : instructors.filter(i => i.isActive !== false);
+        // 依班級排序（多班取排序後第一個為鍵；無班級排最後），同班再按姓名
+        const insSortKey = (i) => { const arr = (i.managedClassIds || []).slice().sort(); return arr.length ? arr.join(',') : '￿'; };
+        filtered.sort((a, b) => insSortKey(a).localeCompare(insSortKey(b)) || (a.name || '').localeCompare(b.name || ''));
         if (filtered.length === 0) {
           listEl.innerHTML = '<div class="placeholder"><div class="icon">📭</div><h3>還沒有指導員</h3><p>點「➕ 新增指導員」</p></div>';
           return;
@@ -2021,7 +2107,7 @@ TP18,新北 TP18,2026"></textarea>
         filtered.forEach(ins => {
           const isArchived = ins.isActive === false;
           const stateTag = isArchived ? '<span class="tag-pill gray">📦 封存</span>' : '<span class="tag-pill">✅</span>';
-          const classes = (ins.managedClassIds || []).join(', ') || '—';
+          const classes = (ins.managedClassIds || []).slice().sort().join(', ') || '—';
           html += `<tr>
             <td style="font-family:monospace;font-size:13px">${ins.email || '—'}</td>
             <td>${ins.name || '—'}</td>
@@ -2489,6 +2575,9 @@ TP18,新北 TP18,2026"></textarea>
           mSnap.forEach(d => epaMilestonesCache.push({ id: d.id, ...d.data() }));
           epaMilestonesCache.sort((a, b) => a.id.localeCompare(b.id));
         }
+        // 身分 / 單位主檔：攤開全部供逐一勾選（不再只列該班出現過的）
+        if (!msRolesCache.length) { try { await loadMsRoles(); } catch (e) {} }
+        if (!msUnitsCache.length) { try { await loadMsUnits(); } catch (e) {} }
         // 現有設定
         const cls = epaClassesCache.find(c => c.id === classId) || {};
         const cfg = (cls.settings && cls.settings.epaScoring) || {};
@@ -2502,12 +2591,22 @@ TP18,新北 TP18,2026"></textarea>
             <input type="checkbox" class="epa-${group}" value="${val.replace(/"/g, '&quot;')}" ${checked ? 'checked' : ''} style="width:auto;margin:0"> ${label}${count != null ? ` <span style="color:#64748b">(${count})</span>` : ''}
           </label>`;
 
-        const rolesHtml = Object.keys(roleCount).length
-          ? Object.keys(roleCount).sort().map(r => chk('role', r, r, roleCount[r], exRoles.includes(r))).join('')
-          : '<span style="color:#64748b;font-size:13px">（該班尚無評核資料）</span>';
-        const unitsHtml = Object.keys(unitCount).length
-          ? Object.keys(unitCount).sort().map(u => chk('unit', u, u, unitCount[u], exUnits.includes(u))).join('')
-          : '<span style="color:#64748b;font-size:13px">（該班尚無評核資料）</span>';
+        // 清單＝主檔啟用項（依序）∪ 該班資料出現的值 ∪ 已設定排除的值（確保已勾的可見可改）
+        const buildList = (cache, countMap, existing) => {
+          const out = [], seen = new Set();
+          cache.forEach(i => { if (i.isActive === false) return; const nm = i.name; if (nm && !seen.has(nm)) { seen.add(nm); out.push(nm); } });
+          Object.keys(countMap).sort().forEach(nm => { if (!seen.has(nm)) { seen.add(nm); out.push(nm); } });
+          (existing || []).forEach(nm => { if (!seen.has(nm)) { seen.add(nm); out.push(nm); } });
+          return out;
+        };
+        const roleList = buildList(msRolesCache, roleCount, exRoles);
+        const unitList = buildList(msUnitsCache, unitCount, exUnits);
+        const rolesHtml = roleList.length
+          ? roleList.map(r => chk('role', r, r, roleCount[r] || 0, exRoles.includes(r))).join('')
+          : '<span style="color:#64748b;font-size:13px">（尚未建立評核者身分主檔，且該班無評核資料）</span>';
+        const unitsHtml = unitList.length
+          ? unitList.map(u => chk('unit', u, u, unitCount[u] || 0, exUnits.includes(u))).join('')
+          : '<span style="color:#64748b;font-size:13px">（尚未建立單位主檔，且該班無評核資料）</span>';
         const evalsHtml = Object.keys(evaluatorCount).length
           ? Object.keys(evaluatorCount).sort((a, b) => evaluatorCount[b] - evaluatorCount[a]).map(n => chk('evaluator', n, n, evaluatorCount[n], exEvals.includes(n))).join('')
           : '<span style="color:#64748b;font-size:13px">（該班尚無評核資料）</span>';
@@ -2515,11 +2614,11 @@ TP18,新北 TP18,2026"></textarea>
 
         body.innerHTML = `
           <div style="margin-bottom:16px">
-            <label style="display:block;color:#94a3b8;font-size:12px;text-transform:uppercase;margin-bottom:8px">🧑‍🏫 排除身分（含「學員」＝排除自評/學員互評）</label>
+            <label style="display:block;color:#94a3b8;font-size:12px;margin-bottom:8px">🧑‍🏫 排除身分（評核者身分主檔全部攤開；含「學員」＝排除自評/學員互評。括號＝該班筆數，0 筆也可預先排除）</label>
             <div>${rolesHtml}</div>
           </div>
           <div style="margin-bottom:16px">
-            <label style="display:block;color:#94a3b8;font-size:12px;text-transform:uppercase;margin-bottom:8px">🏥 排除單位</label>
+            <label style="display:block;color:#94a3b8;font-size:12px;margin-bottom:8px">🏥 排除單位（單位主檔全部攤開；括號＝該班筆數，0 筆也可預先排除）</label>
             <div>${unitsHtml}</div>
           </div>
           <div style="margin-bottom:16px">
@@ -5120,15 +5219,30 @@ TP18,新北 TP18,2026"></textarea>
       finally { saveBtn.disabled = false; rejBtn.disabled = false; }
     }
 
+    // 勘誤分頁徽章：顯示「待處理勘誤的題目數」（distinct questionId，1~99+）
+    function setCorrectionBadge(n) {
+      const badge = document.getElementById('qm-badge'); if (!badge) return;
+      if (n > 0) { badge.textContent = n > 99 ? '99+' : String(n); badge.style.display = 'inline-flex'; }
+      else { badge.style.display = 'none'; }
+    }
+    async function refreshCorrectionBadge() {
+      try {
+        const snap = await getDocs(query(collection(db, 'question_error_reports'), where('status', '==', 'pending')));
+        const s = new Set(); snap.forEach(d => s.add(d.data().questionId));
+        setCorrectionBadge(s.size);
+      } catch (e) {}
+    }
+
     async function loadAdminCorrections() {
       const card = document.getElementById('qm-corr-card');
       const el = document.getElementById('qm-corr-list');
       try {
         const snap = await getDocs(query(collection(db, 'question_error_reports'), where('status', '==', 'pending')));
         const reports = []; snap.forEach(d => reports.push({ id: d.id, ...d.data() }));
-        if (reports.length === 0) { card.style.display = 'none'; return; }
+        if (reports.length === 0) { card.style.display = 'none'; setCorrectionBadge(0); return; }
         const groups = {};
         reports.forEach(r => { (groups[r.questionId] = groups[r.questionId] || []).push(r); });
+        setCorrectionBadge(Object.keys(groups).length);
         card.style.display = 'block';
         el.innerHTML = Object.entries(groups).map(([qid, rs]) => {
           const q = qmCache.find(x => x.id === qid);
