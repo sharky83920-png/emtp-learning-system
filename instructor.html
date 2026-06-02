@@ -39,6 +39,11 @@
     .info-msg { background: #eff6ff; color: #1e40af; padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-top: 14px; }
     /* 後台（手機 App 版型）*/
     .dashboard { display: none; padding-bottom: calc(82px + env(safe-area-inset-bottom)); }
+    /* 開機畫面：裝成 App 後打開、在驗證登入狀態時先蓋住，避免閃過登入表單（App 感） */
+    .boot-splash { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; background: linear-gradient(135deg, #fb7185 0%, #e11d48 100%); color: #fff; }
+    .boot-splash img { width: 84px; height: 84px; filter: drop-shadow(0 4px 12px rgba(0,0,0,.25)); }
+    .boot-splash .spin { width: 34px; height: 34px; border: 3px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: bootspin .8s linear infinite; }
+    @keyframes bootspin { to { transform: rotate(360deg); } }
     .header { background: linear-gradient(135deg,#e11d48,#be123c); color: white; padding: calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 12px calc(16px + env(safe-area-inset-left)); display: flex; justify-content: space-between; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 50; box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
     .header h1 { font-size: 17px; font-weight: 700; }
     .header-right { display: flex; align-items: center; gap: 8px; }
@@ -125,6 +130,10 @@
 <body>
 
   <!-- ===== 登入 ===== -->
+  <div class="boot-splash" id="boot-splash">
+    <img src="icon-instructor-192.png" alt="EMTP">
+    <div class="spin"></div>
+  </div>
   <div class="login-screen" id="login-screen">
     <div class="login-card">
       <h1>EMTP 學習歷程</h1>
@@ -459,7 +468,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
     import { getFirestore, collection, query, where, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp, onSnapshot, Timestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -473,8 +482,9 @@
     };
     const app = initializeApp(firebaseConfig, 'instructor-app');
     const auth = getAuth(app);
-    // 取消自動登陸：用記憶體保存（與學員端一致）→ 重開 / 重整就要重新登入，不記住上次帳號
-    setPersistence(auth, inMemoryPersistence);
+    // browserLocalPersistence：登入狀態存裝置 → 裝成 App 後「打開就是我」、不用每次重登（與學員端一致）。
+    // 教室共用電腦可用登出鍵清除。setPersistence 是非同步，先擋住登入流程避免搶在設定前送出。
+    const authReady = setPersistence(auth, browserLocalPersistence).catch(() => {});
     const db = getFirestore(app);
 
     let currentInstructor = null;   // { id, email, name, managedClassIds }
@@ -500,6 +510,7 @@
 
     // ===== 登入 UI =====
     function showLogin(errMsg) {
+      const sp = document.getElementById('boot-splash'); if (sp) sp.style.display = 'none';
       document.getElementById('login-screen').style.display = 'flex';
       document.getElementById('dashboard').style.display = 'none';
       // 重設登入按鈕（登出後可能還停在「登入中...」）
@@ -585,6 +596,7 @@
       const btn = document.getElementById('btn-login');
       btn.disabled = true; btn.textContent = '⏳ 登入中...';
       try {
+        await authReady;   // 確保 persistence 設定完成後再登入
         await signInWithEmailAndPassword(auth, email, pw);
         // onAuthStateChanged 接手
       } catch (e) {
@@ -595,6 +607,9 @@
     }
 
     // ===== Auth 狀態 =====
+    // 保險：萬一驗證一直沒回（離線等），6 秒後也把開機畫面收掉、退回登入畫面
+    setTimeout(() => { const sp = document.getElementById('boot-splash'); if (sp && sp.style.display !== 'none') showLogin(); }, 6000);
+
     onAuthStateChanged(auth, async (user) => {
       if (!user) { currentInstructor = null; showLogin(); return; }
       try {
@@ -615,6 +630,7 @@
 
     // ===== 進入後台 =====
     function enterDashboard() {
+      const sp = document.getElementById('boot-splash'); if (sp) sp.style.display = 'none';
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('dashboard').style.display = 'block';
 
