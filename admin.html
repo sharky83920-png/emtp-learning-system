@@ -183,17 +183,24 @@
         </div>
 
         <div class="card">
-          <h2><span>📡 各維度考題數雷達（依班級）</span></h2>
+          <h2><span>📊 各維度考題數統計（依班級·同日去重）</span></h2>
           <div class="toolbar">
             <select id="qexam-class"><option value="">請選班級...</option></select>
+            <button class="btn btn-green" id="btn-qexam-calc">📊 計算考題數</button>
             <span id="qexam-status" style="font-size:13px;color:#94a3b8"></span>
           </div>
-          <div style="position:relative;height:440px;max-width:600px;margin:8px auto 0">
-            <canvas id="qexam-radar"></canvas>
+          <div class="stat-grid" id="qexam-grid" style="grid-template-columns:repeat(6,1fr);margin-top:10px">
+            <div class="stat-card"><div class="label">D1 緊急救護系統</div><div class="value" id="qe-D1">—</div></div>
+            <div class="stat-card"><div class="label">D2 基礎醫學含評估</div><div class="value" id="qe-D2">—</div></div>
+            <div class="stat-card"><div class="label">D3 創傷</div><div class="value" id="qe-D3">—</div></div>
+            <div class="stat-card"><div class="label">D4 非創傷</div><div class="value" id="qe-D4">—</div></div>
+            <div class="stat-card"><div class="label">D5 特殊族群</div><div class="value" id="qe-D5">—</div></div>
+            <div class="stat-card"><div class="label">D6 災難及特殊情境</div><div class="value" id="qe-D6">—</div></div>
           </div>
-          <div class="gauge-sub" id="qexam-sub" style="text-align:center;color:#64748b;margin-top:8px">請先選擇班級</div>
+          <div class="gauge-sub" id="qexam-sub" style="text-align:center;color:#64748b;margin-top:10px">請選班級後按「計算考題數」</div>
           <div class="gauge-sub" style="margin-top:6px;text-align:left;color:#64748b">
-            ⓘ 六邊分別為該班在各維度（D1-D6）的<b>作答總筆數</b>（含複習重複作答）。空白＝該班尚未在該維度作答。
+            ⓘ 同一天、同一維度的同一題，<b>不論幾位學員作答都只算 1 題</b>；不同日期重複出題會分別計入。數字＝該班「(日期×題目) 不重複」的考題數加總。<br>
+            ⚠️ 此統計需掃描該班全部作答紀錄，題量大的班級（如 TP17 數萬筆）會花數秒並耗用較多讀取，請按鈕手動計算、勿頻繁重算。
           </div>
         </div>
 
@@ -1294,13 +1301,18 @@ TP18,新北 TP18,2026"></textarea>
 
       // ⬡ 題庫平衡度：六維題數（各一次聚合計數、便宜；不掃 question_attempts）
       await loadQBalance(counts.questions);
-      // 📡 各維度考題數雷達：只填班級下拉，選班級才查（避免每次開總覽都查大表）
-      initQExamRadar();
+      // 📊 各維度考題數統計：只填班級下拉，按按鈕才掃描（避免每次開總覽都掃大表）
+      initQExam();
     }
 
-    // === 各維度考題數雷達（依班級）===
-    let qExamChart = null, qExamClassesLoaded = false;
-    async function initQExamRadar() {
+    // === 各維度考題數統計（依班級·同日去重）===
+    let qExamClassesLoaded = false;
+    function qExamDayKey(ts) {
+      const d = ts && typeof ts.toDate === 'function' ? ts.toDate() : (ts instanceof Date ? ts : null);
+      if (!d) return '?';
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+    async function initQExam() {
       const sel = document.getElementById('qexam-class');
       if (!sel) return;
       if (!qExamClassesLoaded) {
@@ -1313,53 +1325,51 @@ TP18,新北 TP18,2026"></textarea>
           arr.forEach(c => { html += `<option value="${c.id}">${c.displayName || c.id}</option>`; });
           sel.innerHTML = html;
           qExamClassesLoaded = true;
-        } catch (e) { console.warn('initQExamRadar 班級載入失敗', e); }
+        } catch (e) { console.warn('initQExam 班級載入失敗', e); }
       }
-      if (!sel._bound) { sel.addEventListener('change', () => loadQExamRadar(sel.value)); sel._bound = true; }
+      const btn = document.getElementById('btn-qexam-calc');
+      if (btn && !btn._bound) { btn.addEventListener('click', calcQExam); btn._bound = true; }
+      if (sel && !sel._bound) {
+        sel.addEventListener('change', () => {
+          EX_DIMS.forEach(d => { const el = document.getElementById('qe-' + d); if (el) el.textContent = '—'; });
+          const sub = document.getElementById('qexam-sub'); if (sub) sub.textContent = '請選班級後按「計算考題數」';
+        });
+        sel._bound = true;
+      }
     }
 
-    async function loadQExamRadar(classId) {
-      const sub = document.getElementById('qexam-sub');
+    async function calcQExam() {
+      const sel = document.getElementById('qexam-class');
+      const classId = sel ? sel.value : '';
       const status = document.getElementById('qexam-status');
-      if (!classId) {
-        if (qExamChart) { qExamChart.destroy(); qExamChart = null; }
-        if (sub) sub.textContent = '請先選擇班級';
-        if (status) status.textContent = '';
-        return;
-      }
-      if (status) status.textContent = '⏳ 計算中...';
+      const sub = document.getElementById('qexam-sub');
+      const btn = document.getElementById('btn-qexam-calc');
+      if (!classId) { if (sub) sub.textContent = '請先選班級'; return; }
+      // 先估規模、量大才提醒（單一 classId 等值計數，便宜）
+      let approx = 0;
+      try { approx = (await getCountFromServer(query(collection(db, 'question_attempts'), where('classId', '==', classId)))).data().count; } catch (e) {}
+      if (approx > 20000 && !confirm(`此班約有 ${approx.toLocaleString()} 筆作答紀錄。計算需全部掃描（約 ${approx.toLocaleString()} 次讀取、可能花數秒）。確定要計算嗎？`)) return;
+      if (btn) btn.disabled = true;
+      if (status) status.textContent = '⏳ 掃描計算中...';
+      EX_DIMS.forEach(d => { const el = document.getElementById('qe-' + d); if (el) el.textContent = '…'; });
       try {
-        const nums = [];
-        for (const d of EX_DIMS) {
-          const c = (await getCountFromServer(query(collection(db, 'question_attempts'), where('classId', '==', classId), where('dimension', '==', d)))).data().count;
-          nums.push(c);
-        }
-        const sum = nums.reduce((a, b) => a + b, 0);
-        const labels = EX_DIMS.map((d, i) => `${d} ${EX_DIM_NAMES[i]}（${nums[i].toLocaleString()}）`);
-        if (qExamChart) { qExamChart.destroy(); qExamChart = null; }
-        const cv = document.getElementById('qexam-radar');
-        if (cv && typeof Chart !== 'undefined') {
-          qExamChart = new Chart(cv.getContext('2d'), {
-            type: 'radar',
-            data: { labels, datasets: [{ label: '考題數', data: nums, fill: true,
-              backgroundColor: 'rgba(16,185,129,0.18)', borderColor: 'rgba(16,185,129,0.9)', borderWidth: 2,
-              pointBackgroundColor: 'rgba(16,185,129,1)', pointBorderColor: '#fff', pointBorderWidth: 1.5, pointRadius: 4 }] },
-            options: { responsive: true, maintainAspectRatio: false, animation: false,
-              plugins: { legend: { display: false }, tooltip: { enabled: true, callbacks: { label: ctx => `${ctx.parsed.r.toLocaleString()} 筆` } } },
-              scales: { r: { beginAtZero: true,
-                ticks: { color: '#64748b', backdropColor: 'transparent' },
-                grid: { color: 'rgba(148,163,184,0.25)' },
-                angleLines: { color: 'rgba(148,163,184,0.25)' },
-                pointLabels: { font: { size: 13, weight: '600' }, color: '#cbd5e1' } } } }
-          });
-        }
-        if (sub) sub.innerHTML = `此班作答總筆數（六維加總）<b style="color:#e2e8f0">${sum.toLocaleString()}</b> 筆`;
+        const sets = {}; EX_DIMS.forEach(d => sets[d] = new Set());
+        const snap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', classId)));
+        snap.forEach(docu => {
+          const a = docu.data();
+          if (!a.questionId || !sets[a.dimension]) return;   // 未分類或非 D1-D6 略過
+          sets[a.dimension].add(qExamDayKey(a.attemptedAt) + '|' + a.questionId);
+        });
+        let sum = 0;
+        EX_DIMS.forEach(d => { const n = sets[d].size; sum += n; const el = document.getElementById('qe-' + d); if (el) el.textContent = n.toLocaleString(); });
+        if (sub) sub.innerHTML = `六維加總 <b style="color:#e2e8f0">${sum.toLocaleString()}</b> 題（同日去重、不乘學員人數；掃描 ${snap.size.toLocaleString()} 筆作答）`;
         if (status) status.textContent = '';
       } catch (e) {
+        EX_DIMS.forEach(d => { const el = document.getElementById('qe-' + d); if (el) el.textContent = '—'; });
         if (status) status.textContent = '';
-        if (sub) sub.textContent = '查詢失敗（可能需要 classId+dimension 索引或權限）';
-        console.warn('loadQExamRadar', e);
-      }
+        if (sub) sub.textContent = '計算失敗（權限或資料量過大）';
+        console.warn('calcQExam', e);
+      } finally { if (btn) btn.disabled = false; }
     }
 
     // === 題庫平衡度：六維題數（六格） ===
