@@ -4722,21 +4722,30 @@ TP18,新北 TP18,2026"></textarea>
     let qmCache = [];
     let qmBooksCache = [];
     let qmChaptersCache = [];
-    let qmFilters = { bookId: '', dimension: '', visibility: 'visible', dateStart: '', dateEnd: '', classId: '', studentName: '', keyword: '' };
+    let qmStatsCache = {};        // questionId -> { n: 首刷人數, c: 首刷答對數 }
+    let qmStatsUpdatedAt = null;  // 首刷統計上次重算時間
+    let qmFilters = { bookId: '', dimension: '', visibility: 'visible', dateStart: '', dateEnd: '', classId: '', studentName: '', keyword: '', rateMin: '', rateMax: '', minN: '' };
     let qmBatchPreview = null;
 
     async function loadQuestionsPage() {
       const el = document.getElementById('questions-content');
       el.innerHTML = '<div class="loading">⏳ 載入中...</div>';
       try {
-        const [qSnap, bSnap, chSnap] = await Promise.all([
+        const [qSnap, bSnap, chSnap, stSnap] = await Promise.all([
           getDocs(collection(db, 'questions')),
           getDocs(collection(db, 'books')),
-          getDocs(collection(db, 'chapters'))
+          getDocs(collection(db, 'chapters')),
+          getDocs(collection(db, 'question_stats'))
         ]);
         qmCache = [];
         qSnap.forEach(d => qmCache.push({ id: d.id, ...d.data() }));
         qmCache.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        // 首刷統計彙總（便宜：每題一份小文件，不掃 18.6 萬筆）
+        qmStatsCache = {}; qmStatsUpdatedAt = null;
+        stSnap.forEach(d => {
+          if (d.id === '_meta') { qmStatsUpdatedAt = d.data().updatedAt || null; return; }
+          const x = d.data(); qmStatsCache[d.id] = { n: x.firstN || 0, c: x.firstCorrect || 0 };
+        });
         qmBooksCache = [];
         bSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) qmBooksCache.push({ id: d.id, ...data }); });
         qmChaptersCache = [];
@@ -4746,6 +4755,50 @@ TP18,新北 TP18,2026"></textarea>
       } catch (e) { el.innerHTML = `<div class="err-msg">${e.message}</div>`; }
     }
     document.getElementById('btn-refresh-questions').addEventListener('click', loadQuestionsPage);
+
+    // 重算每題首刷統計：掃 question_attempts、每生每題取最早一次、排除測試帳號、只算有作答的 → 寫 question_stats 彙總
+    async function recalcFirstStats() {
+      const btn = document.getElementById('btn-qm-recalc-stats');
+      if (!confirm('⚠️ 重算首刷統計會掃描「全部作答紀錄」（約 18.6 萬筆），花一次較大讀取（約 NT$7）、需數十秒。\n\n建議偶爾按一次即可。確定現在重算？')) return;
+      const old = btn.textContent; btn.disabled = true; btn.textContent = '⏳ 載入學員...';
+      try {
+        // 1. 測試帳號（姓名含「測試」）→ 排除
+        const stuSnap = await getDocs(collection(db, 'students'));
+        const testIds = new Set();
+        stuSnap.forEach(d => { const s = d.data(); if ((s.name || '').includes('測試')) testIds.add(d.id); });
+        // 2. 掃全部作答、每生每題取最早一次（只算有作答的）
+        btn.textContent = '⏳ 掃描作答紀錄...';
+        const atSnap = await getDocs(collection(db, 'question_attempts'));
+        const firstMap = new Map();   // key = studentId|questionId -> { t, correct, qid }
+        atSnap.forEach(d => {
+          const a = d.data();
+          if (!a.questionId || !a.studentId || testIds.has(a.studentId)) return;
+          if (a.answered === false) return;     // 未作答（送出未答）不算「做過」
+          const t = a.attemptedAt?.seconds || 0;
+          const key = a.studentId + '|' + a.questionId;
+          const cur = firstMap.get(key);
+          if (!cur || t < cur.t) firstMap.set(key, { t, correct: !!a.isCorrect, qid: a.questionId });
+        });
+        // 3. 聚合每題：n=首刷人數、c=首刷答對數
+        const stats = {};
+        firstMap.forEach(v => { const s = (stats[v.qid] = stats[v.qid] || { n: 0, c: 0 }); s.n++; if (v.correct) s.c++; });
+        // 4. 寫彙總（分批 ≤ 450）
+        btn.textContent = '⏳ 寫入彙總...';
+        const ids = Object.keys(stats);
+        for (let i = 0; i < ids.length; i += 450) {
+          const batch = writeBatch(db);
+          ids.slice(i, i + 450).forEach(qid => batch.set(doc(db, 'question_stats', qid), { firstN: stats[qid].n, firstCorrect: stats[qid].c, updatedAt: serverTimestamp() }));
+          await batch.commit();
+        }
+        await setDoc(doc(db, 'question_stats', '_meta'), { updatedAt: serverTimestamp() });
+        alert(`✅ 首刷統計重算完成！\n\n涵蓋 ${ids.length} 題、${firstMap.size} 筆首刷（已排除測試帳號、只算有作答）。`);
+        await loadQuestionsPage();
+      } catch (e) {
+        alert('❌ 重算失敗：' + e.message);
+      } finally {
+        btn.disabled = false; btn.textContent = old || '🔄 重算首刷統計';
+      }
+    }
 
     // ===== 🚰 題目來源水龍頭（每班可抽範圍：來源班 + 各來源章節）=====
     let _fcClasses = [], _fcBooks = [], _fcChByBook = {}, _fcTarget = null, _fcConfig = { sources: {} };
@@ -4955,6 +5008,14 @@ TP18,新北 TP18,2026"></textarea>
         const hay = (q.id + ' ' + (q.questionText || '') + ' ' + (o.A?.text || '') + (o.B?.text || '') + (o.C?.text || '') + (o.D?.text || '')).toLowerCase();
         if (!hay.includes(kw)) return false;
       }
+      // 首刷答對率 / 最低首刷人數篩選（用彙總 qmStatsCache）
+      if (qmFilters.rateMin !== '' || qmFilters.rateMax !== '' || qmFilters.minN !== '') {
+        const st = qmStatsCache[q.id]; const n = st ? st.n : 0;
+        const rate = n > 0 ? (st.c / n * 100) : null;
+        if (qmFilters.minN !== '' && n < Number(qmFilters.minN)) return false;
+        if (qmFilters.rateMin !== '' && (rate === null || rate < Number(qmFilters.rateMin))) return false;
+        if (qmFilters.rateMax !== '' && (rate === null || rate > Number(qmFilters.rateMax))) return false;
+      }
       return true;
     }
 
@@ -5010,6 +5071,18 @@ TP18,新北 TP18,2026"></textarea>
             <label>關鍵字</label>
             <input type="text" id="qm-f-kw" value="${qmFilters.keyword}" placeholder="題目/選項/題號" style="padding:6px 8px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:6px;font-family:inherit">
           </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>首刷答對率 %</label>
+            <div style="display:flex;align-items:center;gap:4px">
+              <input type="number" id="qm-f-rate-min" min="0" max="100" value="${qmFilters.rateMin}" placeholder="低" style="width:58px;padding:6px 8px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:6px;font-family:inherit">
+              <span style="color:#64748b">~</span>
+              <input type="number" id="qm-f-rate-max" min="0" max="100" value="${qmFilters.rateMax}" placeholder="高" style="width:58px;padding:6px 8px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:6px;font-family:inherit">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>最低首刷人數</label>
+            <input type="number" id="qm-f-min-n" min="0" value="${qmFilters.minN}" placeholder="如 10" style="width:78px;padding:6px 8px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:6px;font-family:inherit">
+          </div>
           <button class="btn btn-green" id="qm-f-search">🔍 查詢</button>
           <button class="btn btn-ghost" id="qm-f-reset">清除</button>
           <div style="flex:1"></div>
@@ -5017,19 +5090,25 @@ TP18,新北 TP18,2026"></textarea>
           <button class="btn btn-green" id="btn-qm-bulk-import">📤 批次匯入</button>
           <button class="btn btn-ghost" id="btn-qm-export-orig">📦 下載原始版</button>
           <button class="btn" id="btn-qm-export-cur">📥 下載現行版</button>
+          <button class="btn btn-ghost" id="btn-qm-recalc-stats" title="掃描全部作答紀錄、重算每題首刷人數與答對率（會花一次較大讀取、約數十秒）">🔄 重算首刷統計</button>
+          <span style="color:#64748b;font-size:12px;margin-left:4px">統計更新：${qmStatsUpdatedAt ? new Date(qmStatsUpdatedAt.seconds * 1000).toLocaleString('zh-TW') : '尚未重算'}</span>
           <div style="color:#94a3b8;font-size:13px;margin-left:8px;width:100%;text-align:right">符合 ${filtered.length} / 共 ${qmCache.length} 題</div>
         </div>
       `;
       if (filtered.length === 0) {
         html += '<div class="placeholder"><div class="icon">❓</div><h3>沒有符合的題目</h3><p>學員出題後會在這裡顯示</p></div>';
       } else {
-        html += '<table class="table"><thead><tr><th>題號</th><th>出題者</th><th>書籍/章</th><th>維度</th><th>難易度</th><th>題目摘要</th><th>狀態</th><th>動作</th></tr></thead><tbody>';
+        html += '<table class="table"><thead><tr><th>題號</th><th>出題者</th><th>書籍/章</th><th>維度</th><th>難易度</th><th>題目摘要</th><th>首刷狀況</th><th>狀態</th><th>動作</th></tr></thead><tbody>';
         filtered.slice(0, 200).forEach(q => {
           const state = q.isVisible === false ? '<span class="tag-pill gray">🚫 隱藏</span>' : '<span class="tag-pill">✅ 啟用</span>';
           const dim = q.derivedDimension || '—';
           const diff = q.difficulty === 'easy' ? '易' : q.difficulty === 'hard' ? '難' : '中';
           const src = q.source ? `${q.source.bookId || '—'} / Ch${q.source.chapterNumber || '?'}` : '—';
           const text = (q.questionText || '').substring(0, 40);
+          const st = qmStatsCache[q.id]; const sn = st ? st.n : 0;
+          const statCell = sn > 0
+            ? `👥 ${sn}　<span style="color:#15803d">✅ ${Math.round(st.c / sn * 100)}%</span>　<span style="color:#b91c1c">❌ ${Math.round((sn - st.c) / sn * 100)}%</span>`
+            : '<span style="color:#64748b">—</span>';
           html += `<tr>
             <td><code style="background:#0f172a;padding:2px 6px;border-radius:4px;font-size:12px">${q.id}</code></td>
             <td style="font-size:12px;color:#94a3b8">${q.createdByName || '—'}<br><span style="color:#475569">${q.createdByClassId || '—'}</span></td>
@@ -5037,6 +5116,7 @@ TP18,新北 TP18,2026"></textarea>
             <td><span class="tag-pill gray">${dim}</span></td>
             <td>${diff}</td>
             <td style="font-size:13px">${text}${text.length === 40 ? '...' : ''}</td>
+            <td style="font-size:12px;white-space:nowrap">${statCell}</td>
             <td>${state}</td>
             <td style="white-space:nowrap">
               <button class="btn btn-ghost" data-qm-edit="${q.id}" title="修改題目">✏️</button>
@@ -5061,8 +5141,12 @@ TP18,新北 TP18,2026"></textarea>
       document.getElementById('qm-f-name').addEventListener('change', (e) => { qmFilters.studentName = e.target.value; renderQuestionsPage(); });
       document.getElementById('qm-f-kw').addEventListener('input', (e) => { qmFilters.keyword = e.target.value; });
       document.getElementById('qm-f-kw').addEventListener('keydown', (e) => { if (e.key === 'Enter') renderQuestionsPage(); });
+      document.getElementById('qm-f-rate-min').addEventListener('change', (e) => { qmFilters.rateMin = e.target.value; renderQuestionsPage(); });
+      document.getElementById('qm-f-rate-max').addEventListener('change', (e) => { qmFilters.rateMax = e.target.value; renderQuestionsPage(); });
+      document.getElementById('qm-f-min-n').addEventListener('change', (e) => { qmFilters.minN = e.target.value; renderQuestionsPage(); });
       document.getElementById('qm-f-search').addEventListener('click', renderQuestionsPage);
-      document.getElementById('qm-f-reset').addEventListener('click', () => { qmFilters = { bookId: '', dimension: '', visibility: 'visible', dateStart: '', dateEnd: '', classId: '', studentName: '', keyword: '' }; renderQuestionsPage(); });
+      document.getElementById('qm-f-reset').addEventListener('click', () => { qmFilters = { bookId: '', dimension: '', visibility: 'visible', dateStart: '', dateEnd: '', classId: '', studentName: '', keyword: '', rateMin: '', rateMax: '', minN: '' }; renderQuestionsPage(); });
+      document.getElementById('btn-qm-recalc-stats').addEventListener('click', recalcFirstStats);
       document.getElementById('btn-qm-bulk-tpl').addEventListener('click', downloadQuestionsTpl);
       document.getElementById('btn-qm-bulk-import').addEventListener('click', () => document.getElementById('qm-bulk-modal').classList.add('active'));
       document.getElementById('btn-qm-export-orig').addEventListener('click', () => exportQuestionsCSV('original'));
