@@ -506,9 +506,13 @@
     // 身分切換：選學員 → 直接前往學員端（共通入口、不彈窗、帶上已選單位）
     document.getElementById('login-role').addEventListener('change', (e) => {
       if (e.target.value === 'student') {
+        const c = document.getElementById('login-class').value;
+        if (c) sessionStorage.setItem('emtp_switch_class', c);   // 帶班級過去、跳頁後自動選回
         window.location.href = 'student.html';
       }
     });
+    // 修「返回快取(bfcache)」還原舊畫面造成的狀態錯亂：從快取還原時強制重載
+    window.addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });
 
     async function loadLoginClasses() {
       const sel = document.getElementById('login-class');
@@ -524,6 +528,12 @@
         sel.innerHTML = html;
         sel.disabled = false;
         // （已取消）不再依 URL ?class= 自動帶入班級、一律手動選
+        // 但「切身分跳頁」會用 sessionStorage 帶班級過來 → 自動選回並載入指導員名單（一次性、讀完即清）
+        const pend = sessionStorage.getItem('emtp_switch_class');
+        if (pend) {
+          sessionStorage.removeItem('emtp_switch_class');
+          if ([...sel.options].some(o => o.value === pend)) { sel.value = pend; sel.dispatchEvent(new Event('change')); }
+        }
       } catch (e) {
         sel.innerHTML = '<option value="">❌ 載入失敗</option>';
       }

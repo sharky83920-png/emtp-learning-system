@@ -654,6 +654,12 @@
         sel.innerHTML = html;
         sel.disabled = false;
         // （已取消）不再依 URL ?class= 自動帶入班級、一律手動選
+        // 但「切身分跳頁」會用 sessionStorage 帶班級過來 → 自動選回並載入名單（一次性、讀完即清）
+        const pend = sessionStorage.getItem('emtp_switch_class');
+        if (pend) {
+          sessionStorage.removeItem('emtp_switch_class');
+          if ([...sel.options].some(o => o.value === pend)) { sel.value = pend; sel.dispatchEvent(new Event('change')); }
+        }
       } catch (e) {
         console.error('[Init] Failed to load classes:', e);
         sel.innerHTML = `<option value="">❌ 載入失敗</option>`;
@@ -663,9 +669,13 @@
     // 身分切換：選指導員/教官 → 直接前往指導員端（共通入口、不彈窗、帶上已選單位）
     document.getElementById('login-role').addEventListener('change', (e) => {
       if (e.target.value === 'instructor') {
+        const c = document.getElementById('login-class').value;
+        if (c) sessionStorage.setItem('emtp_switch_class', c);   // 帶班級過去、跳頁後自動選回
         window.location.href = 'instructor.html';
       }
     });
+    // 修「返回快取(bfcache)」還原舊畫面造成的狀態錯亂：從快取還原時強制重載
+    window.addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });
 
     document.getElementById('login-class').addEventListener('change', async () => {
       const classId = document.getElementById('login-class').value;
@@ -2319,6 +2329,7 @@
           submittedAt: serverTimestamp()
         });
 
+        _questionsCache = null;   // 清抽題快取：下次抽題重讀、納入剛出的新題
         alert(`✅ 題目已送出！\n\n題號：${questionId}\n出題日：${scheduledDate}`);
         clearNqImages();
         document.getElementById('new-q-modal').style.display = 'none';
@@ -2515,10 +2526,15 @@
       return true;
     }
 
+    // 抽題用題庫：同一次登入只讀一次題庫、之後刷題重用（省讀取）。
+    // 失效時機：出題成功後（要抽得到自己剛出的新題）、或重整頁面。
+    let _questionsCache = null;
     async function loadVisibleQuestions() {
+      if (_questionsCache) return _questionsCache;
       const snap = await getDocs(collection(db, 'questions'));
       const all = [];
       snap.forEach(d => { const data = d.data(); if (data.isVisible !== false && data.isActive !== false) all.push({ id: d.id, ...data }); });
+      _questionsCache = all;
       return all;
     }
 
@@ -2849,19 +2865,33 @@
           html += `<div style="font-size:13px;font-weight:700;color:#1e40af;background:#dbeafe;padding:6px 12px;border-radius:8px;margin:14px 0 8px">${dim}${dimName[dim] ? ' ' + dimName[dim] : ''}（${list.length}）</div>`;
           list.forEach(it => {
             const opts = it.options || {};
-            const correctText = opts[it.correctAnswer]?.text || '';
             const src = it.source || {};
             const srcLine = (src.bookId || src.chapterNumber || src.page)
-              ? `<div style="color:#94a3b8;font-size:11px;margin-top:6px">${src.bookId ? '📖 ' + src.bookId + ' ' : ''}${src.chapterNumber ? '🏷 ' + src.chapterNumber + ' ' : ''}${src.page ? '📄 P.' + src.page : ''}</div>`
-              : '';
+              ? `<div style="color:#64748b;font-size:12px;margin-top:10px">📖 出處：${src.bookId ? src.bookId + ' ' : ''}${src.chapterNumber ? '第 ' + src.chapterNumber + ' 章 ' : ''}${src.page ? 'P.' + src.page : ''}</div>`
+              : '<div style="color:#cbd5e1;font-size:12px;margin-top:10px">📖 出處：（未填）</div>';
+            // 所有選項（標出正解）；資料來自收藏當下的快照、純檢視
+            const optsHtml = ['A', 'B', 'C', 'D', 'E', 'F'].filter(k => opts[k] && opts[k].text != null).map(k => {
+              const isAns = k === it.correctAnswer;
+              return `<div style="display:flex;gap:8px;padding:8px 10px;border-radius:8px;margin-bottom:6px;background:${isAns ? '#dcfce7' : '#f8fafc'};border:1px solid ${isAns ? '#86efac' : '#e2e8f0'}">
+                <span style="font-weight:700;color:${isAns ? '#15803d' : '#475569'}">${k}.</span>
+                <span style="flex:1;color:#1e293b;white-space:pre-wrap">${opts[k].text || ''}</span>
+                ${isAns ? '<span style="color:#15803d;font-weight:700;white-space:nowrap">✔ 正解</span>' : ''}
+              </div>`;
+            }).join('');
             html += `
               <div style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:10px">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
                   <div style="flex:1;color:#1e293b;font-size:14px;line-height:1.6;white-space:pre-wrap">${it.questionText || '(題目內容已不可用)'}</div>
                   <button class="mb-remove-btn" data-qid="${it.questionId}" title="從錯題本移除" style="background:none;border:none;cursor:pointer;font-size:20px;line-height:1">⭐</button>
                 </div>
-                <div style="font-size:13px;color:#065f46;margin-top:8px"><strong>標答：${it.correctAnswer}.</strong> ${correctText}</div>
-                ${srcLine}
+                <details style="margin-top:10px">
+                  <summary style="cursor:pointer;color:#2563eb;font-size:13px;font-weight:600">📖 看完整題目、所有選項與出處</summary>
+                  <div style="margin-top:10px">
+                    ${optsHtml || '<div style="color:#94a3b8;font-size:13px">（此題無選項快照）</div>'}
+                    ${srcLine}
+                    <div style="color:#cbd5e1;font-size:11px;margin-top:8px">🔒 僅供檢視、不可修改</div>
+                  </div>
+                </details>
               </div>`;
           });
         });
