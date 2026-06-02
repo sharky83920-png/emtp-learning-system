@@ -183,6 +183,21 @@
         </div>
 
         <div class="card">
+          <h2><span>📡 各維度考題數雷達（依班級）</span></h2>
+          <div class="toolbar">
+            <select id="qexam-class"><option value="">請選班級...</option></select>
+            <span id="qexam-status" style="font-size:13px;color:#94a3b8"></span>
+          </div>
+          <div style="position:relative;height:440px;max-width:600px;margin:8px auto 0">
+            <canvas id="qexam-radar"></canvas>
+          </div>
+          <div class="gauge-sub" id="qexam-sub" style="text-align:center;color:#64748b;margin-top:8px">請先選擇班級</div>
+          <div class="gauge-sub" style="margin-top:6px;text-align:left;color:#64748b">
+            ⓘ 六邊分別為該班在各維度（D1-D6）的<b>作答總筆數</b>（含複習重複作答）。空白＝該班尚未在該維度作答。
+          </div>
+        </div>
+
+        <div class="card">
           <h2><span>🚦 系統負載</span>
             <a class="btn btn-ghost" href="https://console.firebase.google.com/project/emtp-learning-system/usage" target="_blank" rel="noopener">📊 查看 Firebase 真實用量／帳單</a>
           </h2>
@@ -1279,6 +1294,72 @@ TP18,新北 TP18,2026"></textarea>
 
       // ⬡ 題庫平衡度：六維題數（各一次聚合計數、便宜；不掃 question_attempts）
       await loadQBalance(counts.questions);
+      // 📡 各維度考題數雷達：只填班級下拉，選班級才查（避免每次開總覽都查大表）
+      initQExamRadar();
+    }
+
+    // === 各維度考題數雷達（依班級）===
+    let qExamChart = null, qExamClassesLoaded = false;
+    async function initQExamRadar() {
+      const sel = document.getElementById('qexam-class');
+      if (!sel) return;
+      if (!qExamClassesLoaded) {
+        try {
+          const cSnap = await getDocs(collection(db, 'classes'));
+          const arr = [];
+          cSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) arr.push({ id: d.id, ...data }); });
+          arr.sort((a, b) => (b.year || 0) - (a.year || 0));
+          let html = '<option value="">請選班級...</option>';
+          arr.forEach(c => { html += `<option value="${c.id}">${c.displayName || c.id}</option>`; });
+          sel.innerHTML = html;
+          qExamClassesLoaded = true;
+        } catch (e) { console.warn('initQExamRadar 班級載入失敗', e); }
+      }
+      if (!sel._bound) { sel.addEventListener('change', () => loadQExamRadar(sel.value)); sel._bound = true; }
+    }
+
+    async function loadQExamRadar(classId) {
+      const sub = document.getElementById('qexam-sub');
+      const status = document.getElementById('qexam-status');
+      if (!classId) {
+        if (qExamChart) { qExamChart.destroy(); qExamChart = null; }
+        if (sub) sub.textContent = '請先選擇班級';
+        if (status) status.textContent = '';
+        return;
+      }
+      if (status) status.textContent = '⏳ 計算中...';
+      try {
+        const nums = [];
+        for (const d of EX_DIMS) {
+          const c = (await getCountFromServer(query(collection(db, 'question_attempts'), where('classId', '==', classId), where('dimension', '==', d)))).data().count;
+          nums.push(c);
+        }
+        const sum = nums.reduce((a, b) => a + b, 0);
+        const labels = EX_DIMS.map((d, i) => `${d} ${EX_DIM_NAMES[i]}（${nums[i].toLocaleString()}）`);
+        if (qExamChart) { qExamChart.destroy(); qExamChart = null; }
+        const cv = document.getElementById('qexam-radar');
+        if (cv && typeof Chart !== 'undefined') {
+          qExamChart = new Chart(cv.getContext('2d'), {
+            type: 'radar',
+            data: { labels, datasets: [{ label: '考題數', data: nums, fill: true,
+              backgroundColor: 'rgba(16,185,129,0.18)', borderColor: 'rgba(16,185,129,0.9)', borderWidth: 2,
+              pointBackgroundColor: 'rgba(16,185,129,1)', pointBorderColor: '#fff', pointBorderWidth: 1.5, pointRadius: 4 }] },
+            options: { responsive: true, maintainAspectRatio: false, animation: false,
+              plugins: { legend: { display: false }, tooltip: { enabled: true, callbacks: { label: ctx => `${ctx.parsed.r.toLocaleString()} 筆` } } },
+              scales: { r: { beginAtZero: true,
+                ticks: { color: '#64748b', backdropColor: 'transparent' },
+                grid: { color: 'rgba(148,163,184,0.25)' },
+                angleLines: { color: 'rgba(148,163,184,0.25)' },
+                pointLabels: { font: { size: 13, weight: '600' }, color: '#cbd5e1' } } } }
+          });
+        }
+        if (sub) sub.innerHTML = `此班作答總筆數（六維加總）<b style="color:#e2e8f0">${sum.toLocaleString()}</b> 筆`;
+        if (status) status.textContent = '';
+      } catch (e) {
+        if (status) status.textContent = '';
+        if (sub) sub.textContent = '查詢失敗（可能需要 classId+dimension 索引或權限）';
+        console.warn('loadQExamRadar', e);
+      }
     }
 
     // === 題庫平衡度：六維題數（六格） ===
