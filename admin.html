@@ -1127,8 +1127,14 @@ TP18,新北 TP18,2026"></textarea>
           <div id="qm-edit-reporters-list" style="font-size:13px;color:#fef3c7"></div>
         </div>
         <div style="font-size:12px;color:#64748b;font-family:monospace;margin-bottom:8px">題號 <span id="qm-edit-qid">—</span></div>
+        <div id="qm-edit-meta" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"></div>
         <div class="form-group"><label>題目</label><textarea id="qm-edit-qtext" rows="2"></textarea></div>
         <div id="qm-edit-options"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group"><label>書籍 <span style="color:#f87171">*</span></label><select id="qm-edit-book"><option value="">—</option></select></div>
+          <div class="form-group"><label>章節 <span style="color:#f87171">*</span></label><select id="qm-edit-chapter"><option value="">先選書籍</option></select></div>
+        </div>
+        <div id="qm-edit-dim-hint" style="font-size:12px;margin:-2px 0 12px"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div class="form-group"><label>正確答案</label><select id="qm-edit-answer"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div>
           <div class="form-group"><label>頁碼</label><input id="qm-edit-page"></div>
@@ -5374,6 +5380,29 @@ TP18,新北 TP18,2026"></textarea>
       try { await setDoc(doc(collection(db, 'notifications')), { recipientId, type, title, content, relatedId, isRead: false, createdAt: serverTimestamp(), readAt: null }); } catch (e) { console.error('notify', e); }
     }
 
+    // 勘誤/編輯視窗的書籍·章節下拉（比照指導員端、來源 qmBooksCache/qmChaptersCache、存檔重算維度）
+    const QM_DIM_NAMES = { D1: '緊急救護系統', D2: '基礎醫學含評估', D3: '創傷', D4: '非創傷', D5: '特殊族群', D6: '災難及特殊情境' };
+    function qmEditPopulateBook(selBookId) {
+      const sel = document.getElementById('qm-edit-book');
+      sel.innerHTML = '<option value="">—</option>' + qmBooksCache.map(b => `<option value="${b.id}">${b.id}</option>`).join('');
+      if (selBookId) sel.value = selBookId;
+    }
+    function qmEditPopulateChapter(bookId, selChapterId, selChapterNumber) {
+      const sel = document.getElementById('qm-edit-chapter');
+      if (!bookId) { sel.innerHTML = '<option value="">先選書籍</option>'; return; }
+      const chs = qmChaptersCache.filter(c => c.bookId === bookId).sort((a, b) => (parseInt(a.chapterNumber) || 0) - (parseInt(b.chapterNumber) || 0));
+      sel.innerHTML = '<option value="">請選章節</option>' + chs.map(c => `<option value="${c.id}" data-dim="${c.dimension || ''}" data-num="${c.chapterNumber}">Ch ${c.chapterNumber} ${String(c.chapterName || '').replace(/"/g, '&quot;')}</option>`).join('');
+      if (selChapterId && chs.some(c => c.id === selChapterId)) sel.value = selChapterId;
+      else if (selChapterNumber != null && selChapterNumber !== '') { const m = chs.find(c => String(c.chapterNumber) === String(selChapterNumber)); if (m) sel.value = m.id; }
+    }
+    function qmEditDimHint() {
+      const dim = document.getElementById('qm-edit-chapter').selectedOptions[0]?.dataset.dim;
+      const el = document.getElementById('qm-edit-dim-hint'); if (!el) return;
+      el.innerHTML = dim ? `✅ 存檔後此題編入維度 <strong style="color:#34d399">${dim} ${QM_DIM_NAMES[dim] || ''}</strong>` : '<span style="color:#fbbf24">⚠️ 此章節未設定維度、存檔後不計入雷達</span>';
+    }
+    document.getElementById('qm-edit-book').addEventListener('change', () => { qmEditPopulateChapter(document.getElementById('qm-edit-book').value, '', ''); qmEditDimHint(); });
+    document.getElementById('qm-edit-chapter').addEventListener('change', qmEditDimHint);
+
     function openQmEdit(qid, reports = null) {
       const q = qmCache.find(x => x.id === qid);
       if (!q) return;
@@ -5383,6 +5412,13 @@ TP18,新北 TP18,2026"></textarea>
       document.getElementById('qm-edit-qtext').value = q.questionText || '';
       document.getElementById('qm-edit-answer').value = q.correctAnswer || 'A';
       document.getElementById('qm-edit-page').value = (q.source && q.source.page) || '';
+      // 出題者 + 出處 meta、書/章下拉（比照指導員端）
+      { const s = q.source || {}; const esc = v => String(v == null ? '' : v).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+        const srcTxt = [s.bookName || s.bookId || '', s.chapterNumber ? `第${s.chapterNumber}章` : '', s.page ? `p.${s.page}` : ''].filter(Boolean).join(' ') || '（無出處）';
+        document.getElementById('qm-edit-meta').innerHTML =
+          `<span style="background:#1e293b;color:#a5b4fc;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600">👤 ${esc(q.createdByClassId || '—')} · ${esc(q.createdByName || q.createdBy || '—')}</span>` +
+          `<span style="background:#064e3b;color:#6ee7b7;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600">📖 ${esc(srcTxt)}</span>`;
+        qmEditPopulateBook(s.bookId || ''); qmEditPopulateChapter(s.bookId || '', s.chapterId || '', s.chapterNumber); qmEditDimHint(); }
       document.getElementById('qm-edit-hide').checked = q.isVisible === false;
       document.getElementById('qm-edit-reply').value = '';
       document.getElementById('qm-edit-msg').innerHTML = '';
@@ -5422,11 +5458,22 @@ TP18,新北 TP18,2026"></textarea>
           if (freshUpdated !== qUpdatedAt) { msg.innerHTML = '<div class="warn-msg">⚠️ 這題剛被改過、請關閉重整後再試</div>'; saveBtn.disabled = false; rejBtn.disabled = false; return; }
           const opts = {};
           document.querySelectorAll('.qm-edit-opt').forEach(inp => { opts[inp.dataset.k] = { text: inp.value }; });
+          const chOpt = document.getElementById('qm-edit-chapter').selectedOptions[0];
+          const bookId = document.getElementById('qm-edit-book').value;
+          const chapterId = document.getElementById('qm-edit-chapter').value;
+          // 修正（非隱藏）時強制書+章必填 → 藉勘誤把題目編入正確維度（比照指導員端）
+          if (!hide && (!bookId || !chapterId)) { msg.innerHTML = '<div class="warn-msg">⚠️ 請選「書籍」與「章節」（用來把題目編入正確維度）</div>'; saveBtn.disabled = false; rejBtn.disabled = false; return; }
+          const chapterNumber = chOpt ? (chOpt.dataset.num || null) : null;
+          const dimension = chOpt ? (chOpt.dataset.dim || null) : null;
           await updateDoc(doc(db, 'questions', qid), {
             questionText: document.getElementById('qm-edit-qtext').value,
             options: opts,
             correctAnswer: document.getElementById('qm-edit-answer').value,
             'source.page': document.getElementById('qm-edit-page').value,
+            'source.bookId': bookId || null,
+            'source.chapterId': chapterId || null,
+            'source.chapterNumber': chapterNumber,
+            derivedDimension: dimension,   // 依當下選的書+章重算（章沒改也重編）
             isVisible: !hide,
             updatedAt: serverTimestamp(), lastEditedBy: currentUser.email,
             editHistory: arrayUnion({ questionText: pre.questionText || '', options: pre.options || {}, correctAnswer: pre.correctAnswer || '', source: pre.source || {}, editedBy: 'Master', editedAt: Timestamp.now(), reason: isCorr ? ('勘誤校正：' + (document.getElementById('qm-edit-reply').value.trim() || '')) : 'Master 直接編輯' })
