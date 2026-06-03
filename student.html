@@ -1138,62 +1138,49 @@
 
     // ===== F11-E: 學員掃 QR Code 自動簽核 =====
     async function processQrSignoff(sessionId) {
+      // 用 Firestore transaction 原子寫入：驗證→防重複→寫簽核→更新掃描名單，全成功或全失敗。
+      // transaction 強制走伺服器、不會「樂觀假成功」；失敗會明確提示尚未記錄、請重掃 → 根除「掃了顯示成功卻沒寫進去」。
       try {
-        const sessDoc = await getDoc(doc(db, 'qr_signoff_sessions', sessionId));
-        if (!sessDoc.exists()) {
-          showQrResult('error', '❌ QR Code 無效', '此 QR Code 不存在或已被撤銷');
-          return;
-        }
-        const sess = sessDoc.data();
-        const now = Date.now();
-        const expiresAt = sess.expiresAt?.seconds ? sess.expiresAt.seconds * 1000 : 0;
-        if (sess.isActive === false) {
-          showQrResult('error', '⏹ Session 已結束', '教官已提早結束此 session');
-          return;
-        }
-        if (now > expiresAt) {
-          showQrResult('error', '⏰ QR Code 已過期', '5 分鐘時效已結束、請請教官重新產生 QR Code');
-          return;
-        }
-        if (sess.classId !== currentStudent.classId) {
-          showQrResult('error', '🚫 班級不符', `此 QR Code 限定 ${sess.className || sess.classId} 班使用、你的班級是 ${currentStudent.classId}`);
-          return;
-        }
-        // 檢查已掃過
-        const alreadyScanned = (sess.scannedStudents || []).some(s => s.studentId === currentStudent.id);
-        if (alreadyScanned) {
-          showQrResult('warning', '⚠️ 你已完成此次簽核', `「${sess.skillName}」此 QR 已掃過、不可重複（同 QR 內防重複）`);
-          return;
-        }
-        // 寫入 core_skill_signoffs
-        // 用「場次__學員」當固定 doc id：同一場 QR 即使掃描回呼重複觸發、或 ?qr= 重整多次，
-        // 都只會覆蓋同一筆、不會新增 → 根除「掃一次登錄多筆」的重複寫入（取代原本隨機 doc id）。
+        const sessRef = doc(db, 'qr_signoff_sessions', sessionId);
         const signoffRef = doc(db, 'core_skill_signoffs', `${sessionId}__${currentStudent.id}`);
-        await setDoc(signoffRef, {
-          studentId: currentStudent.id,
-          studentName: currentStudent.name,
-          classId: currentStudent.classId,
-          skillId: sess.skillId,
-          skillName: sess.skillName,
-          signedBy: sess.instructorId,
-          signedByName: sess.instructorName,
-          sessionId,
-          signedAt: serverTimestamp()
-        });
-        // 更新 session.scannedStudents
-        await updateDoc(doc(db, 'qr_signoff_sessions', sessionId), {
-          scannedStudents: arrayUnion({
+        const r = await runTransaction(db, async (tx) => {
+          const sessDoc = await tx.get(sessRef);
+          if (!sessDoc.exists()) return { type: 'error', title: '❌ QR Code 無效', msg: '此 QR Code 不存在或已被撤銷' };
+          const sess = sessDoc.data();
+          const expiresAt = sess.expiresAt?.seconds ? sess.expiresAt.seconds * 1000 : 0;
+          if (sess.isActive === false) return { type: 'error', title: '⏹ Session 已結束', msg: '教官已提早結束此 session' };
+          if (Date.now() > expiresAt) return { type: 'error', title: '⏰ QR Code 已過期', msg: '5 分鐘時效已結束、請請教官重新產生 QR Code' };
+          if (sess.classId !== currentStudent.classId) return { type: 'error', title: '🚫 班級不符', msg: `此 QR Code 限定 ${sess.className || sess.classId} 班使用、你的班級是 ${currentStudent.classId}` };
+          // 防重複：以「簽核紀錄是否已存在」為準（固定 doc id），不再依賴脆弱的 scannedStudents
+          const exist = await tx.get(signoffRef);
+          if (exist.exists()) return { type: 'warning', title: '⚠️ 你已完成此次簽核', msg: `「${sess.skillName}」此 QR 已簽過、不重複計算` };
+          // 原子寫入簽核（缺欄位給預設值、避免 undefined 造成寫入失敗）
+          tx.set(signoffRef, {
             studentId: currentStudent.id,
             studentName: currentStudent.name,
-            scannedAt: Timestamp.now()
-          })
+            classId: currentStudent.classId,
+            skillId: sess.skillId || null,
+            skillName: sess.skillName || '',
+            signedBy: sess.instructorId || null,
+            signedByName: sess.instructorName || '',
+            sessionId,
+            signedAt: serverTimestamp()
+          });
+          // 同場掃描名單（教官即時看誰掃了）：放在同一交易內一起原子更新
+          tx.update(sessRef, {
+            scannedStudents: arrayUnion({ studentId: currentStudent.id, studentName: currentStudent.name, scannedAt: Timestamp.now() })
+          });
+          return { ok: true, skillName: sess.skillName };
         });
-        showQrResult('success', '✅ 簽核成功！', `「${sess.skillName}」+1 次\n核心技術簽核進度已更新`);
-        // 重新載入核心技術簽核
-        await loadCoreSkills();
+        if (r.ok) {
+          showQrResult('success', '✅ 簽核成功！', `「${r.skillName}」+1 次\n核心技術簽核進度已更新`);
+          await loadCoreSkills();
+        } else {
+          showQrResult(r.type, r.title, r.msg);
+        }
       } catch (e) {
         console.error('[F11-E] processQrSignoff:', e);
-        showQrResult('error', '❌ 簽核失敗', e.message);
+        showQrResult('error', '❌ 簽核失敗', '網路不穩或系統忙碌，你的簽核「尚未記錄」，請再掃一次。\n（' + (e.message || e) + '）');
       }
     }
 
