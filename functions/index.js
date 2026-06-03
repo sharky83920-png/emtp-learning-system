@@ -247,21 +247,40 @@ exports.onNotification = functions
 //    學員只收 10 題、不下載整個題庫 → 讀取與「人數 × 題庫」脫鉤。
 //    題庫快取在實例記憶體(多人共用, TTL 5 分)；保留「嚴格輪次」(挑刷最少的)。
 // ───────────────────────────────────────────────────────────
-let _bankCache = null;
-let _bankCacheAt = 0;
-const BANK_TTL_MS = 12 * 60 * 60 * 1000;   // 12 小時（使用者接受新題隔天生效）→ 題庫一天只重載約 2 次、總讀取進免費額度
+// 題庫快取（增量更新）：首次全載 → 之後每 ≤60 秒查「updatedAt 之後的改動」合併（一週才幾百題、幾乎 0 讀取）
+// → 每 12h 全載一次兜底（清真刪除殘留、補抓漏寫 updatedAt 的路徑如批次匯入）。隱藏題會被增量更新進來、由可見過濾排除。
+let _bankMap = null;        // id -> question 物件
+let _bankFullAt = 0;        // 上次全載時間(ms)
+let _bankSyncAt = 0;        // 已同步到的最大 updatedAt(ms)，增量基準
+let _lastIncrAt = 0;        // 上次增量查詢時間(ms)，節流用
+const FULL_RELOAD_MS = 12 * 60 * 60 * 1000;
+const INCR_MIN_MS = 60 * 1000;
+function bankVisibleArray() {
+  const out = [];
+  _bankMap.forEach((q) => { if (q.isVisible !== false && q.isActive !== false) out.push(q); });
+  return out;
+}
 async function getQuestionBank() {
   const now = Date.now();
-  if (_bankCache && now - _bankCacheAt < BANK_TTL_MS) return _bankCache;
-  const snap = await db.collection("questions").get();
-  const all = [];
-  snap.forEach((d) => {
-    const x = d.data();
-    if (x.isVisible !== false && x.isActive !== false) all.push({ id: d.id, ...x });
-  });
-  _bankCache = all;
-  _bankCacheAt = now;
-  return all;
+  if (!_bankMap || now - _bankFullAt > FULL_RELOAD_MS) {        // 首次 / 12h 兜底：全載
+    const snap = await db.collection("questions").get();
+    _bankMap = new Map();
+    let mx = 0;
+    snap.forEach((d) => { const x = d.data(); _bankMap.set(d.id, { id: d.id, ...x }); const u = x.updatedAt && x.updatedAt.toMillis ? x.updatedAt.toMillis() : 0; if (u > mx) mx = u; });
+    _bankFullAt = now; _bankSyncAt = mx || now; _lastIncrAt = now;
+    return bankVisibleArray();
+  }
+  if (now - _lastIncrAt >= INCR_MIN_MS) {                       // 增量：每分鐘最多一次，只讀改動的題
+    _lastIncrAt = now;
+    try {
+      const since = admin.firestore.Timestamp.fromMillis(_bankSyncAt);
+      const snap = await db.collection("questions").where("updatedAt", ">", since).get();
+      let mx = _bankSyncAt;
+      snap.forEach((d) => { const x = d.data(); _bankMap.set(d.id, { id: d.id, ...x }); const u = x.updatedAt && x.updatedAt.toMillis ? x.updatedAt.toMillis() : 0; if (u > mx) mx = u; });
+      _bankSyncAt = mx;
+    } catch (e) { /* 增量查詢失敗（如缺索引）→ 用現有快取、不影響抽題 */ }
+  }
+  return bankVisibleArray();
 }
 // 水龍頭過濾（與 student.html faucetAllows 同邏輯）
 function faucetAllows(q, fc) {
@@ -299,6 +318,7 @@ exports.drawQuiz = functions
     const mode = data && data.mode === "practice" ? "practice" : "scoring";
     const dim = (data && data.dim) || null;
     const count = Math.min(Math.max(parseInt(data && data.count) || 10, 1), 20);
+    const exclude = Array.isArray(data && data.exclude) ? data.exclude.map(String) : [];   // 排除清單（prefetch 傳當前這輪題 id → 下一輪不重複）
     if (!studentId || !classId) throw new functions.https.HttpsError("invalid-argument", "缺少 studentId/classId");
 
     const [bank, clsDoc, progDoc] = await Promise.all([
@@ -311,6 +331,7 @@ exports.drawQuiz = functions
 
     let pool = bank.filter((q) => faucetAllows(q, fc));
     if (mode === "practice" && dim) pool = pool.filter((q) => q.derivedDimension === dim);
+    if (exclude.length) { const ex = new Set(exclude); pool = pool.filter((q) => !ex.has(q.id)); }   // 排除當前輪 → 整輪抽完才重複
     if (pool.length === 0) return { questions: [], poolSize: 0 };
 
     orderByRound(pool, counts);

@@ -2388,7 +2388,8 @@
             reportCount: 0,
             isVisible: true,
             isActive: true,
-            createdAt: serverTimestamp()
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()   // 統一更新時間戳，供 drawQuiz 增量更新偵測新題
           });
           tx.set(counterRef, { date: dateStr, lastNumber: nextNum, updatedAt: serverTimestamp() }, { merge: true });
           return qid;
@@ -2682,11 +2683,11 @@
 
     // ===== 伺服器端抽題：雲端 drawQuiz 抽好題回傳，學員不下載整個題庫（讀取與人數/題庫脫鉤）=====
     // 失敗自動重試；prefetch 預抽下一輪 → 再抽 0 等待。水龍頭/輪次都在 Function 端做。
-    async function drawFromServer(mode, dim, count = 10) {
+    async function drawFromServer(mode, dim, count = 10, exclude = []) {
       let lastErr;
       for (let i = 0; i < 3; i++) {
         try {
-          const res = await _drawQuizFn({ studentId: currentStudent.id, classId: currentStudent.classId, mode, dim: dim || null, count });
+          const res = await _drawQuizFn({ studentId: currentStudent.id, classId: currentStudent.classId, mode, dim: dim || null, count, exclude });
           return (res.data && res.data.questions) || [];
         } catch (e) { lastErr = e; await new Promise(r => setTimeout(r, 500 * (i + 1))); }
       }
@@ -2694,9 +2695,9 @@
     }
     let _prefetched = null;   // { key, questions }
     const _pfKey = (mode, dim) => mode + '|' + (dim || '');
-    function prefetchNext(mode, dim) {
+    function prefetchNext(mode, dim, exclude = []) {
       const key = _pfKey(mode, dim);
-      drawFromServer(mode, dim, 10).then(qs => { _prefetched = { key, questions: qs }; }).catch(() => { _prefetched = null; });
+      drawFromServer(mode, dim, 10, exclude).then(qs => { _prefetched = { key, questions: qs }; }).catch(() => { _prefetched = null; });
     }
     async function getQuizQuestions(mode, dim) {
       const key = _pfKey(mode, dim);
@@ -2713,7 +2714,7 @@
         const all = await getQuizQuestions('scoring', null);
         if (!all || all.length === 0) { alert('⚠️ 目前可抽範圍內沒有題目（可能本班授權的來源/章節尚無題目，或還沒出題）'); return; }
         beginQuiz(all, 'scoring', '🎲 隨機綜合測驗');
-        prefetchNext('scoring', null);   // 背景預抽下一輪
+        prefetchNext('scoring', null, all.map(q => q.id));   // 背景預抽下一輪、排除這輪的題（整輪抽完才重複）
       } catch (e) { alert('❌ 抽題失敗，請再按一次：' + (e.message || e)); }
       finally { btn.disabled = false; btn.textContent = '🎲 隨機綜合測驗'; }
     }
@@ -2728,7 +2729,7 @@
         const filtered = await getQuizQuestions('practice', dim);
         if (!filtered || filtered.length === 0) { alert(`⚠️ 「${dim} ${DIM_NAMES[dim] || ''}」在可抽範圍內目前沒有題目`); return; }
         beginQuiz(filtered, 'practice', `🎯 專項練習 · ${dim} ${DIM_NAMES[dim] || ''}（不計分）`, dim);
-        prefetchNext('practice', dim);   // 背景預抽下一輪
+        prefetchNext('practice', dim, filtered.map(q => q.id));   // 背景預抽下一輪、排除這輪
       } catch (e) { alert('❌ 抽題失敗，請再按一次：' + (e.message || e)); }
       finally { btns.forEach(b => b.disabled = false); }
     }

@@ -991,7 +991,7 @@
             })
           });
         } else if (hide) {
-          await updateDoc(doc(db, 'questions', qid), { isVisible: false, hiddenReason: '勘誤處理', hiddenBy: currentInstructor.email, hiddenAt: serverTimestamp() });
+          await updateDoc(doc(db, 'questions', qid), { isVisible: false, hiddenReason: '勘誤處理', hiddenBy: currentInstructor.email, hiddenAt: serverTimestamp(), updatedAt: serverTimestamp() });
         }
         // 2. 關閉「所有班級」對這題的待處理回報（避免重複改）+ 通知每位回報者
         const allRep = await getDocs(query(collection(db, 'question_error_reports'), where('questionId', '==', qid)));

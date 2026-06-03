@@ -5127,7 +5127,7 @@ TP18,新北 TP18,2026"></textarea>
         for (let i = 0; i < _qmfixPlan.length; i += 400) {
           const chunk = _qmfixPlan.slice(i, i + 400);
           const batch = writeBatch(db);
-          chunk.forEach(p => batch.update(doc(db, 'questions', p.id), { createdByClassId: p.cls, classFixedAt: serverTimestamp(), classFixedBy: currentUser.email }));
+          chunk.forEach(p => batch.update(doc(db, 'questions', p.id), { createdByClassId: p.cls, classFixedAt: serverTimestamp(), classFixedBy: currentUser.email, updatedAt: serverTimestamp() }));
           await batch.commit();
           done += chunk.length;
           btn.textContent = `⏳ ${done}/${_qmfixPlan.length}`;
@@ -5432,7 +5432,7 @@ TP18,新北 TP18,2026"></textarea>
             editHistory: arrayUnion({ questionText: pre.questionText || '', options: pre.options || {}, correctAnswer: pre.correctAnswer || '', source: pre.source || {}, editedBy: 'Master', editedAt: Timestamp.now(), reason: isCorr ? ('勘誤校正：' + (document.getElementById('qm-edit-reply').value.trim() || '')) : 'Master 直接編輯' })
           });
         } else if (hide) {
-          await updateDoc(doc(db, 'questions', qid), { isVisible: false, hiddenReason: '勘誤處理', hiddenBy: currentUser.email, hiddenAt: serverTimestamp() });
+          await updateDoc(doc(db, 'questions', qid), { isVisible: false, hiddenReason: '勘誤處理', hiddenBy: currentUser.email, hiddenAt: serverTimestamp(), updatedAt: serverTimestamp() });
         }
         // 勘誤模式 → 關閉所有班級對此題的待處理回報 + 通知
         if (isCorr) {
