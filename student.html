@@ -1437,6 +1437,7 @@
     const ACAD_DIM_NAMES = ['緊急救護系統', '基礎醫學含評估', '創傷', '非創傷', '特殊族群', '災難及特殊情境'];
     let _radarData = { first: { my: [], cls: [] }, exam: { my: [], cls: [] }, hasExam: false };
     let _radarMode = 'first';
+    let _myAttemptsCache = null;   // 該生作答 session 快取（學科雷達首刷用）：首次讀一次、做完測驗增量 append、不每次重讀全部
 
     function dimAccuracy10(records) {
       // records: [{dim, isCorrect}] → 各維度答對率 *10
@@ -1451,9 +1452,14 @@
         if (!ctx || !window.Chart) return;
 
         // === 首刷雷達（默認）：每題取最早一次作答 ===
-        const mySnap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', currentStudent.id)));
+        // 該生作答用 session 快取：首次讀一次、之後做完測驗 finishQuiz 增量 append → 不每次刷雷達都重讀全部作答（省讀取）
+        if (!_myAttemptsCache) {
+          const mySnap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', currentStudent.id)));
+          _myAttemptsCache = [];
+          mySnap.forEach(d => { const a = d.data(); _myAttemptsCache.push({ questionId: a.questionId, dimension: a.dimension, isCorrect: a.isCorrect, t: a.attemptedAt?.seconds || 0 }); });
+        }
         const myFirst = {};
-        mySnap.forEach(d => { const a = d.data(); if (!a.questionId || !a.dimension) return; const t = a.attemptedAt?.seconds || 0; if (!myFirst[a.questionId] || t < myFirst[a.questionId].t) myFirst[a.questionId] = { dim: a.dimension, isCorrect: a.isCorrect, t }; });
+        _myAttemptsCache.forEach(a => { if (!a.questionId || !a.dimension) return; const t = a.t || 0; if (!myFirst[a.questionId] || t < myFirst[a.questionId].t) myFirst[a.questionId] = { dim: a.dimension, isCorrect: a.isCorrect, t }; });
         const myFirstScores = dimAccuracy10(Object.values(myFirst));
 
         // 全班首刷平均：優先讀彙總 class_radar（避免掃全班 18.5 萬）
@@ -2847,6 +2853,11 @@
           }));
         }
         await Promise.all(wb);
+        // 增量更新學科雷達快取：把這趟作答併入記憶體 → 下次刷雷達用快取算、不重讀全部作答
+        if (_myAttemptsCache) {
+          const nowSec = Math.floor(Date.now() / 1000);
+          quizState.answers.forEach(a => _myAttemptsCache.push({ questionId: a.questionId, dimension: a.dimension, isCorrect: a.isCorrect, t: nowSec }));
+        }
       } catch (e) { console.warn('寫入 attempts:', e); }
 
       // 更新刷次進度（這 10 題各 +1、含未作答的＝沒作答當錯也算刷過）→ 輪次抽題不重複
