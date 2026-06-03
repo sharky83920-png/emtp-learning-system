@@ -241,3 +241,78 @@ exports.onNotification = functions
     });
     return null;
   });
+
+// ───────────────────────────────────────────────────────────
+// 4) 伺服器端抽題 drawQuiz（onCall, asia-east1）
+//    學員只收 10 題、不下載整個題庫 → 讀取與「人數 × 題庫」脫鉤。
+//    題庫快取在實例記憶體(多人共用, TTL 5 分)；保留「嚴格輪次」(挑刷最少的)。
+// ───────────────────────────────────────────────────────────
+let _bankCache = null;
+let _bankCacheAt = 0;
+const BANK_TTL_MS = 5 * 60 * 1000;
+async function getQuestionBank() {
+  const now = Date.now();
+  if (_bankCache && now - _bankCacheAt < BANK_TTL_MS) return _bankCache;
+  const snap = await db.collection("questions").get();
+  const all = [];
+  snap.forEach((d) => {
+    const x = d.data();
+    if (x.isVisible !== false && x.isActive !== false) all.push({ id: d.id, ...x });
+  });
+  _bankCache = all;
+  _bankCacheAt = now;
+  return all;
+}
+// 水龍頭過濾（與 student.html faucetAllows 同邏輯）
+function faucetAllows(q, fc) {
+  if (!fc || !fc.sources) return true;
+  const sources = fc.sources;
+  const enabledIds = Object.keys(sources).filter((k) => sources[k] && sources[k].enabled);
+  if (enabledIds.length === 0) return true;
+  const cfg = q.createdByClassId && sources[q.createdByClassId];
+  if (!cfg || !cfg.enabled) return false;
+  if (cfg.allMode) return true;
+  const bookId = q.source && q.source.bookId;
+  const chNum = q.source && q.source.chapterNumber;
+  const list = cfg.chapters || [];
+  if (bookId && list.includes(bookId + "|*")) return true;
+  if (bookId && chNum != null && chNum !== "" && list.includes(bookId + "|" + chNum)) return true;
+  return false;
+}
+// 輪次排序：先洗牌(同層隨機) → 依刷次升冪(刷少的優先)
+function orderByRound(arr, counts) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  }
+  arr.sort((a, b) => (counts[a.id] || 0) - (counts[b.id] || 0));
+  return arr;
+}
+
+exports.drawQuiz = functions
+  .region("asia-east1")
+  .runWith({ minInstances: 1, memory: "256MB" })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "請先登入");
+    const studentId = String((data && data.studentId) || "");
+    const classId = String((data && data.classId) || "");
+    const mode = data && data.mode === "practice" ? "practice" : "scoring";
+    const dim = (data && data.dim) || null;
+    const count = Math.min(Math.max(parseInt(data && data.count) || 10, 1), 20);
+    if (!studentId || !classId) throw new functions.https.HttpsError("invalid-argument", "缺少 studentId/classId");
+
+    const [bank, clsDoc, progDoc] = await Promise.all([
+      getQuestionBank(),
+      db.collection("classes").doc(classId).get(),
+      db.collection("student_quiz_progress").doc(studentId).get(),
+    ]);
+    const fc = (clsDoc.exists && clsDoc.data().settings && clsDoc.data().settings.questionFaucet) || null;
+    const counts = (progDoc.exists && progDoc.data().counts) || {};
+
+    let pool = bank.filter((q) => faucetAllows(q, fc));
+    if (mode === "practice" && dim) pool = pool.filter((q) => q.derivedDimension === dim);
+    if (pool.length === 0) return { questions: [], poolSize: 0 };
+
+    orderByRound(pool, counts);
+    return { questions: pool.slice(0, count), poolSize: pool.length };
+  });

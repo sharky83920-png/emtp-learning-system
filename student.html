@@ -597,6 +597,7 @@
     import { getFirestore, collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, arrayUnion, runTransaction, orderBy, limit, increment } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
     import { getMessaging, getToken, onMessage, isSupported as fcmSupported } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-messaging.js";
+    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
@@ -615,6 +616,8 @@
     const authReady = setPersistence(auth, browserLocalPersistence).catch(() => {});
     const db = getFirestore(app);
     const storage = getStorage(app);
+    const functions = getFunctions(app, 'asia-east1');          // 伺服器端抽題 drawQuiz（與 Function 部署同區，消跨海延遲）
+    const _drawQuizFn = httpsCallable(functions, 'drawQuiz');
     let currentStudent = null;
 
     // F13-G: 圖片 resize + 上傳到 Firebase Storage
@@ -2401,7 +2404,7 @@
           submittedAt: serverTimestamp()
         });
 
-        _questionsCache = null;   // 清抽題快取：下次抽題重讀、納入剛出的新題
+        clearQBankCache();   // 清抽題快取（含 localStorage）：下次抽題重抓、納入自己剛出的新題
         alert(`✅ 題目已送出！\n\n題號：${questionId}\n出題日：${scheduledDate}`);
         clearNqImages();
         document.getElementById('new-q-modal').style.display = 'none';
@@ -2598,15 +2601,35 @@
       return true;
     }
 
-    // 抽題用題庫：同一次登入只讀一次題庫、之後刷題重用（省讀取）。
-    // 失效時機：出題成功後（要抽得到自己剛出的新題）、或重整頁面。
+    // 抽題用題庫快取（兩層，省 Firestore 讀取）：
+    //  1) 記憶體 _questionsCache：同一次登入只讀一次。
+    //  2) localStorage：跨登入「每天只抓一次」題庫——抓取日期＝今天就用本地、不再重抓整個題庫（省最大宗讀取）。
+    // 失效：跨日自動重抓；出題成功清自己快取（當天抽得到自己出的題）；其他人的新題/勘誤隔天生效（使用者拍板）。
+    const QBANK_KEY = 'emtp_qbank_v1';
+    const QBANK_DATE_KEY = 'emtp_qbank_date';
+    function qbankTodayStr() {
+      const d = new Date();   // 取「當下」本地年月日（非解析 ISO 字串、非日期大小比較）→ 不踩時區雷區
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+    function clearQBankCache() {
+      _questionsCache = null;
+      try { localStorage.removeItem(QBANK_KEY); localStorage.removeItem(QBANK_DATE_KEY); } catch (e) {}
+    }
     let _questionsCache = null;
     async function loadVisibleQuestions() {
-      if (_questionsCache) return _questionsCache;
-      const snap = await getDocs(collection(db, 'questions'));
+      if (_questionsCache) return _questionsCache;                       // 同 session 記憶體快取
+      try {                                                             // 跨登入：當天已抓過就用 localStorage、不重抓題庫
+        if (localStorage.getItem(QBANK_DATE_KEY) === qbankTodayStr()) {
+          const raw = localStorage.getItem(QBANK_KEY);
+          if (raw) { _questionsCache = JSON.parse(raw); return _questionsCache; }
+        }
+      } catch (e) { /* localStorage 讀失敗 → 照常重抓 */ }
+      const snap = await getDocs(collection(db, 'questions'));           // 重抓（每天最多一次 / 跨日 / 出題後）
       const all = [];
       snap.forEach(d => { const data = d.data(); if (data.isVisible !== false && data.isActive !== false) all.push({ id: d.id, ...data }); });
       _questionsCache = all;
+      try { localStorage.setItem(QBANK_KEY, JSON.stringify(all)); localStorage.setItem(QBANK_DATE_KEY, qbankTodayStr()); }
+      catch (e) { /* 題庫太大塞爆 localStorage → 退化為記憶體快取（每登入抓一次），功能不受影響 */ }
       return all;
     }
 
@@ -2647,17 +2670,41 @@
       } catch (e) { /* 讀失敗就沿用現值 */ }
     }
 
+    // ===== 伺服器端抽題：雲端 drawQuiz 抽好題回傳，學員不下載整個題庫（讀取與人數/題庫脫鉤）=====
+    // 失敗自動重試；prefetch 預抽下一輪 → 再抽 0 等待。水龍頭/輪次都在 Function 端做。
+    async function drawFromServer(mode, dim, count = 10) {
+      let lastErr;
+      for (let i = 0; i < 3; i++) {
+        try {
+          const res = await _drawQuizFn({ studentId: currentStudent.id, classId: currentStudent.classId, mode, dim: dim || null, count });
+          return (res.data && res.data.questions) || [];
+        } catch (e) { lastErr = e; await new Promise(r => setTimeout(r, 500 * (i + 1))); }
+      }
+      throw lastErr;
+    }
+    let _prefetched = null;   // { key, questions }
+    const _pfKey = (mode, dim) => mode + '|' + (dim || '');
+    function prefetchNext(mode, dim) {
+      const key = _pfKey(mode, dim);
+      drawFromServer(mode, dim, 10).then(qs => { _prefetched = { key, questions: qs }; }).catch(() => { _prefetched = null; });
+    }
+    async function getQuizQuestions(mode, dim) {
+      const key = _pfKey(mode, dim);
+      if (_prefetched && _prefetched.key === key && _prefetched.questions && _prefetched.questions.length) {
+        const qs = _prefetched.questions; _prefetched = null; return qs;   // 用預抽的、0 等待
+      }
+      return await drawFromServer(mode, dim, 10);
+    }
+
     async function startQuiz() {
       const btn = document.getElementById('btn-start-quiz');
       btn.disabled = true; btn.textContent = '⏳ 抽題中...';
       try {
-        await refreshFaucet();
-        const all = (await loadVisibleQuestions()).filter(faucetAllows);
-        if (all.length === 0) { alert('⚠️ 目前可抽範圍內沒有題目（可能本班授權的來源/章節尚無題目，或還沒出題）'); return; }
-        const counts = await loadQuizProgress();
-        orderByRound(all, counts);
+        const all = await getQuizQuestions('scoring', null);
+        if (!all || all.length === 0) { alert('⚠️ 目前可抽範圍內沒有題目（可能本班授權的來源/章節尚無題目，或還沒出題）'); return; }
         beginQuiz(all, 'scoring', '🎲 隨機綜合測驗');
-      } catch (e) { alert('❌ 抽題失敗：' + e.message); }
+        prefetchNext('scoring', null);   // 背景預抽下一輪
+      } catch (e) { alert('❌ 抽題失敗，請再按一次：' + (e.message || e)); }
       finally { btn.disabled = false; btn.textContent = '🎲 隨機綜合測驗'; }
     }
 
@@ -2668,14 +2715,11 @@
       const btns = document.querySelectorAll('.practice-btn');
       btns.forEach(b => b.disabled = true);
       try {
-        await refreshFaucet();
-        const all = (await loadVisibleQuestions()).filter(faucetAllows);
-        const filtered = all.filter(q => q.derivedDimension === dim);
-        if (filtered.length === 0) { alert(`⚠️ 「${dim} ${DIM_NAMES[dim] || ''}」在可抽範圍內目前沒有題目`); return; }
-        const counts = await loadQuizProgress();
-        orderByRound(filtered, counts);
+        const filtered = await getQuizQuestions('practice', dim);
+        if (!filtered || filtered.length === 0) { alert(`⚠️ 「${dim} ${DIM_NAMES[dim] || ''}」在可抽範圍內目前沒有題目`); return; }
         beginQuiz(filtered, 'practice', `🎯 專項練習 · ${dim} ${DIM_NAMES[dim] || ''}（不計分）`);
-      } catch (e) { alert('❌ 抽題失敗：' + e.message); }
+        prefetchNext('practice', dim);   // 背景預抽下一輪
+      } catch (e) { alert('❌ 抽題失敗，請再按一次：' + (e.message || e)); }
       finally { btns.forEach(b => b.disabled = false); }
     }
 
