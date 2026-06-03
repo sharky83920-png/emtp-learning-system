@@ -505,6 +505,7 @@
           </div>
           <div style="padding:20px;overflow-y:auto;max-height:75vh" id="quiz-result-body"></div>
           <div style="padding:14px;background:#f8fafc;border-top:1px solid #e2e8f0;display:flex;gap:8px;justify-content:flex-end">
+            <button id="btn-quiz-result-again" style="background:#7c3aed;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;margin-right:8px">🔄 再次測驗</button>
             <button id="btn-quiz-result-close" style="background:#14b8a6;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600">關閉</button>
           </div>
         </div>
@@ -2543,7 +2544,8 @@
     let errReportQid = null;             // 目前正在回報勘誤的題號
 
     // ===== F13-E: 答題系統 =====
-    let quizState = null; // { questions, currentIdx, answers, startedAt }
+    let quizState = null; // { questions, currentIdx, answers, startedAt, mode, dim }
+    let _lastQuiz = null; // 記最近一次測驗的 {mode, dim}，給「再次測驗」用（quizState 結算後會被清空）
     // ===== 能量條：本週期完成測驗場次 = 趟數 =====
     let _energyCfg = null;
     function energyPeriodStart(period) {
@@ -2589,12 +2591,20 @@
       try { await loadAcademicRadar(); } catch (e) {}
       if (_energyCfg?.enabled) updateEnergyCount(_energyCfg.period, _energyCfg.target);
     });
+    // 再次測驗：用上一次的 mode/dim 重抽一輪（走 prefetch、幾乎 0 等待）；順手刷雷達/能量條
+    document.getElementById('btn-quiz-result-again').addEventListener('click', async () => {
+      document.getElementById('quiz-result-modal').style.display = 'none';
+      try { await loadAcademicRadar(); } catch (e) {}
+      if (_energyCfg?.enabled) updateEnergyCount(_energyCfg.period, _energyCfg.target);
+      if (_lastQuiz && _lastQuiz.mode === 'practice') startPractice(_lastQuiz.dim);
+      else startQuiz();
+    });
 
     // 已預先排序好的題庫 → 取前 min(QUIZ_SIZE, 數量)（caller 已按輪次排序、不重複）
-    function beginQuiz(orderedQuestions, mode, label) {
+    function beginQuiz(orderedQuestions, mode, label, dim) {
       if (!orderedQuestions || orderedQuestions.length === 0) { alert('⚠️ 此範圍目前沒有題目！'); return false; }
       const picked = orderedQuestions.slice(0, Math.min(QUIZ_SIZE, orderedQuestions.length));
-      quizState = { questions: picked, currentIdx: 0, answers: [], startedAt: Date.now(), mode, sessionId: 'sess_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) };
+      quizState = { questions: picked, currentIdx: 0, answers: [], startedAt: Date.now(), mode, dim: dim || null, sessionId: 'sess_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) };
       document.getElementById('quiz-mode-label').textContent = label;
       document.getElementById('quiz-modal').style.display = 'flex';
       renderQuizQuestion();
@@ -2717,7 +2727,7 @@
       try {
         const filtered = await getQuizQuestions('practice', dim);
         if (!filtered || filtered.length === 0) { alert(`⚠️ 「${dim} ${DIM_NAMES[dim] || ''}」在可抽範圍內目前沒有題目`); return; }
-        beginQuiz(filtered, 'practice', `🎯 專項練習 · ${dim} ${DIM_NAMES[dim] || ''}（不計分）`);
+        beginQuiz(filtered, 'practice', `🎯 專項練習 · ${dim} ${DIM_NAMES[dim] || ''}（不計分）`, dim);
         prefetchNext('practice', dim);   // 背景預抽下一輪
       } catch (e) { alert('❌ 抽題失敗，請再按一次：' + (e.message || e)); }
       finally { btns.forEach(b => b.disabled = false); }
@@ -2857,6 +2867,7 @@
       document.getElementById('quiz-result-meta').textContent = `答對 ${correct} / ${total} 題`;
       renderQuizReview();
       document.getElementById('quiz-result-modal').style.display = 'flex';
+      _lastQuiz = { mode: quizState.mode, dim: quizState.dim };   // 記住給「再次測驗」用
       quizState = null;
     }
 
