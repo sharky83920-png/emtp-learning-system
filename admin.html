@@ -4543,11 +4543,11 @@ TP18,新北 TP18,2026"></textarea>
           for (let i = 1; i <= 6; i++) {
             const correct = parseInt(parts[1 + (i-1)*2]);
             const total = parseInt(parts[2 + (i-1)*2]);
-            if (isNaN(correct) || isNaN(total) || total === 0) { allValid = false; break; }
-            if (correct > total) { allValid = false; break; }
-            dims[`D${i}`] = { correct, total };
+            if (isNaN(correct) || isNaN(total) || total < 0 || correct < 0) { allValid = false; break; }
+            if (correct > total) { allValid = false; break; }   // total=0（該維度沒考）允許：此時 correct 必須也是 0
+            dims[`D${i}`] = { correct, total };   // 0/0 維度照存；雷達計算遇 total=0 自動當 0 分、不計入
           }
-          if (!allValid) { rows.push({ line: idx + 1, no, name: student.name, err: '6 維度數字格式錯誤（答對 > 總題、或 0 / 非數字）' }); return; }
+          if (!allValid) { rows.push({ line: idx + 1, no, name: student.name, err: '6 維度數字格式錯誤（答對 > 總題、或非數字／負數）' }); return; }
           rows.push({ line: idx + 1, no, name: student.name, dimensions: dims, ok: true });
         }
       });
