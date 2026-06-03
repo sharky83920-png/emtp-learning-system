@@ -249,7 +249,7 @@ exports.onNotification = functions
 // ───────────────────────────────────────────────────────────
 let _bankCache = null;
 let _bankCacheAt = 0;
-const BANK_TTL_MS = 5 * 60 * 1000;
+const BANK_TTL_MS = 12 * 60 * 60 * 1000;   // 12 小時（使用者接受新題隔天生效）→ 題庫一天只重載約 2 次、總讀取進免費額度
 async function getQuestionBank() {
   const now = Date.now();
   if (_bankCache && now - _bankCacheAt < BANK_TTL_MS) return _bankCache;
