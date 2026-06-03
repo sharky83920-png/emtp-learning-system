@@ -1516,15 +1516,24 @@
         signSnap.forEach(d => { const sid = d.data().studentId; counts[sid] = (counts[sid] || 0) + 1; });
         if (students.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">此班沒有學員</div>'; return; }
         const done = students.filter(s => (counts[s.id] || 0) >= target).length;
-        el.innerHTML = `<div style="font-size:13px;color:#475569;margin-bottom:10px">達標 <strong style="color:#10b981">${done}</strong> / ${students.length} 人（目標 ${target} 次）</div>` +
+        el.innerHTML = `<div style="font-size:13px;color:#475569;margin-bottom:12px">達標 <strong style="color:#10b981">${done}</strong> / ${students.length} 人（目標 ${target} 次）</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">` +
           students.map(s => {
             const c = counts[s.id] || 0;
             const ok = c >= target;
-            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:14px">
-              <span>${s.studentNo}. ${s.name}</span>
-              <span style="font-weight:700;color:${ok ? '#10b981' : '#f59e0b'}">${ok ? '✅' : ''} ${Math.min(c, target)}/${target}</span>
+            const filled = Math.min(c, target);
+            // 電池：依「目標次數」顯示格數、依「簽核成功數」填滿格
+            let cells = '';
+            for (let i = 0; i < target; i++) cells += `<div style="flex:1;border-radius:2px;background:${i < filled ? (ok ? '#10b981' : '#22c55e') : '#e2e8f0'}"></div>`;
+            return `<div style="border:1.5px solid ${ok ? '#10b981' : '#e2e8f0'};border-radius:10px;padding:10px 11px;background:${ok ? '#f0fdf4' : '#fff'}">
+              <div style="font-size:13px;font-weight:600;color:#1e293b;margin-bottom:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.studentNo}. ${s.name} ${ok ? '✅' : ''}</div>
+              <div style="display:flex;align-items:center;gap:3px">
+                <div style="flex:1;display:flex;gap:2px;border:2px solid ${ok ? '#10b981' : '#cbd5e1'};border-radius:4px;padding:2px;height:20px">${cells}</div>
+                <div style="width:3px;height:9px;background:${ok ? '#10b981' : '#cbd5e1'};border-radius:0 2px 2px 0"></div>
+              </div>
+              <div style="font-size:12px;font-weight:700;color:${ok ? '#10b981' : '#f59e0b'};margin-top:5px;text-align:right">${filled}/${target} 次</div>
             </div>`;
-          }).join('');
+          }).join('') + '</div>';
       } catch (e) {
         el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`;
       }
