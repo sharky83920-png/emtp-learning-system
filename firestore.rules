@@ -73,6 +73,7 @@ service cloud.firestore {
     match /exam_scores_radar/{id} { allow read: if authed(); allow write: if authed(); }
     match /class_radar/{id}       { allow read: if authed(); allow write: if isMaster(); }
     match /question_stats/{id}    { allow read: if authed(); allow write: if isMaster(); }   // 每題首刷統計彙總（後台重算寫入）
+    match /student_first_radar/{id} { allow read: if authed(); allow write: if authed(); }   // 個人首刷雷達彙總（學員交卷時增量更新；雷達讀 1 筆、不掃全部作答）
     match /upload_batches/{id}    { allow read: if authed(); allow write: if authed(); }
 
     // ── 公告 / 通知 ──

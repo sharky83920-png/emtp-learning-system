@@ -1451,16 +1451,19 @@
         const ctx = document.getElementById('academic-radar');
         if (!ctx || !window.Chart) return;
 
-        // === 首刷雷達（默認）：每題取最早一次作答 ===
-        // 該生作答用 session 快取：首次讀一次、之後做完測驗 finishQuiz 增量 append → 不每次刷雷達都重讀全部作答（省讀取）
-        if (!_myAttemptsCache) {
+        // === 首刷雷達（默認）：讀個人彙總 student_first_radar（1 筆）→ 不掃全部作答（省讀取） ===
+        let myFirstScores;
+        const sfrDoc = await getDoc(doc(db, 'student_first_radar', currentStudent.id));
+        if (sfrDoc.exists() && sfrDoc.data().first) {
+          const f = sfrDoc.data().first;
+          myFirstScores = ACAD_DIMS.map(d => { const o = f[d]; return (o && o.t) ? (o.c / o.t) * 10 : 0; });
+        } else {
+          // 沒彙總（極少數未回填/全新學員）→ fallback 掃自己的作答算一次
           const mySnap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', currentStudent.id)));
-          _myAttemptsCache = [];
-          mySnap.forEach(d => { const a = d.data(); _myAttemptsCache.push({ questionId: a.questionId, dimension: a.dimension, isCorrect: a.isCorrect, t: a.attemptedAt?.seconds || 0 }); });
+          const myFirst = {};
+          mySnap.forEach(d => { const a = d.data(); if (!a.questionId || !a.dimension) return; const t = a.attemptedAt?.seconds || 0; if (!myFirst[a.questionId] || t < myFirst[a.questionId].t) myFirst[a.questionId] = { dim: a.dimension, isCorrect: a.isCorrect, t }; });
+          myFirstScores = dimAccuracy10(Object.values(myFirst));
         }
-        const myFirst = {};
-        _myAttemptsCache.forEach(a => { if (!a.questionId || !a.dimension) return; const t = a.t || 0; if (!myFirst[a.questionId] || t < myFirst[a.questionId].t) myFirst[a.questionId] = { dim: a.dimension, isCorrect: a.isCorrect, t }; });
-        const myFirstScores = dimAccuracy10(Object.values(myFirst));
 
         // 全班首刷平均：優先讀彙總 class_radar（避免掃全班 18.5 萬）
         let clsFirstScores;
@@ -2853,19 +2856,29 @@
           }));
         }
         await Promise.all(wb);
-        // 增量更新學科雷達快取：把這趟作答併入記憶體 → 下次刷雷達用快取算、不重讀全部作答
-        if (_myAttemptsCache) {
-          const nowSec = Math.floor(Date.now() / 1000);
-          quizState.answers.forEach(a => _myAttemptsCache.push({ questionId: a.questionId, dimension: a.dimension, isCorrect: a.isCorrect, t: nowSec }));
-        }
       } catch (e) { console.warn('寫入 attempts:', e); }
 
-      // 更新刷次進度（這 10 題各 +1、含未作答的＝沒作答當錯也算刷過）→ 輪次抽題不重複
+      // 更新刷次進度 + 個人首刷雷達彙總（讀 1 筆舊進度判斷哪些題是「首刷」＝之前沒做過）
       try {
+        const progRef = doc(db, 'student_quiz_progress', currentStudent.id);
+        const oldCounts = (await getDoc(progRef)).data()?.counts || {};
+        // 這趟「首刷」的題（舊進度為 0）→ 累計各維度 c/t，increment 進個人雷達彙總
+        const firstCnt = {};
+        quizState.answers.forEach(a => {
+          if (!a.dimension || (oldCounts[a.questionId] || 0) !== 0) return;
+          const d = (firstCnt[a.dimension] = firstCnt[a.dimension] || { c: 0, t: 0 });
+          d.t++; if (a.isCorrect) d.c++;
+        });
+        if (Object.keys(firstCnt).length) {
+          const first = {};
+          Object.keys(firstCnt).forEach(dm => { first[dm] = { t: increment(firstCnt[dm].t) }; if (firstCnt[dm].c) first[dm].c = increment(firstCnt[dm].c); });
+          await setDoc(doc(db, 'student_first_radar', currentStudent.id), { first, updatedAt: serverTimestamp() }, { merge: true });
+        }
+        // 刷次進度（這 10 題各 +1、含未作答的）→ 輪次抽題不重複
         const counts = {};
         quizState.answers.forEach(a => { counts[a.questionId] = increment(1); });
-        await setDoc(doc(db, 'student_quiz_progress', currentStudent.id), { counts, updatedAt: serverTimestamp() }, { merge: true });
-      } catch (e) { console.warn('寫入刷次進度:', e); }
+        await setDoc(progRef, { counts, updatedAt: serverTimestamp() }, { merge: true });
+      } catch (e) { console.warn('寫入進度/雷達彙總:', e); }
 
       // 先載入此學員已收藏的錯題（決定星星狀態）
       if (mistakeBookEnabled) { try { await loadMistakeSet(); } catch (e) {} }
