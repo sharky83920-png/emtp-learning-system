@@ -1472,10 +1472,10 @@
           const f = crDoc.data().first;
           clsFirstScores = ACAD_DIMS.map(d => { const o = f[d]; return (o && o.t) ? (o.c / o.t) * 10 : 0; });
         } else {
-          const clsSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', currentStudent.classId)));
-          const clsFirst = {};
-          clsSnap.forEach(d => { const a = d.data(); if (!a.questionId || !a.dimension) return; const k = a.studentId + '|' + a.questionId; const t = a.attemptedAt?.seconds || 0; if (!clsFirst[k] || t < clsFirst[k].t) clsFirst[k] = { dim: a.dimension, isCorrect: a.isCorrect, t }; });
-          clsFirstScores = dimAccuracy10(Object.values(clsFirst));
+          // ⚠️ 不可在缺 class_radar 時掃全班 question_attempts（每位學員每次開App就整班數萬筆→讀取暴漲）。
+          // 班級彙總缺時（極少數全新班、待後台重算）→ 不顯示全班平均線，顯示 0 即可，由後台「重算寫彙總」補齊。
+          console.warn('[loadAcademicRadar] class_radar 缺彙總，暫不顯示全班首刷平均（避免掃全班）。classId=', currentStudent.classId);
+          clsFirstScores = ACAD_DIMS.map(() => 0);
         }
 
         // === 考試雷達：exam_scores_radar ===

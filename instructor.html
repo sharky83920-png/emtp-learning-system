@@ -1070,13 +1070,23 @@
         try { const f = await getDoc(doc(db, 'formulas', 'weighted_score')); if (f.exists() && f.data().expression) expr = f.data().expression; } catch (e) {}
         const stuSnap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
         const students = {}; stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false) students[d.id] = { name: s.name, no: s.studentNo, attempts: 0, correct: 0 }; });
-        // 有日期 → 伺服器端區間查詢（省讀取）；缺索引或全部期間 → 退回掃全班再前端篩
+        // 有日期 → 伺服器端區間查詢（走 classId+attemptedAt 複合索引，只讀區間、省讀取）
+        // ⚠️ 不可在缺索引時靜默退回掃全班：整班 question_attempts 動輒數萬筆，會把 Firestore 讀取打爆。
         let atSnap, clientFilter = false;
         if (startMs && endMs) {
           try {
             atSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', selectedClassId), where('attemptedAt', '>=', Timestamp.fromMillis(startMs)), where('attemptedAt', '<=', Timestamp.fromMillis(endMs))));
-          } catch (idxErr) { atSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', selectedClassId))); clientFilter = true; }
-        } else { atSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', selectedClassId))); clientFilter = !!startMs; }
+          } catch (idxErr) {
+            // 索引建置中或遺失：明確提示，絕不掃全班（避免讀取暴漲）
+            console.error('[loadPerfRanking] 區間查詢失敗（複合索引 classId+attemptedAt 可能建置中或遺失）：', idxErr?.code || idxErr);
+            el.innerHTML = '<div style="color:#ef4444;font-size:13px;text-align:center;padding:14px;line-height:1.6">成績排行索引建置中或暫時無法查詢<br><span style="color:#94a3b8;font-size:12px">請稍候 1～2 分鐘後重新整理，系統不會掃整班以免讀取暴漲</span></div>';
+            return;
+          }
+        } else {
+          // 全部期間（無區間）：仍需整班，但這是使用者主動選「全部期間」才會發生，非預設
+          atSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', selectedClassId)));
+          clientFilter = !!startMs;
+        }
         atSnap.forEach(d => {
           const a = d.data();
           if (a.examMode === 'practice') return;
