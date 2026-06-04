@@ -1397,31 +1397,46 @@
         const ctx = document.getElementById('score-river-chart');
         if (!ctx || !window.Chart) return;
 
-        // 我的成績（status=scored）
+        // 我的成績（status=scored）— 只讀自己、少筆，不變
         const mySnap = await getDocs(query(collection(db, 'exam_scores_total'), where('studentId', '==', currentStudent.id)));
         const myMap = {};
         mySnap.forEach(d => { const x = d.data(); if (x.status === 'scored' && x.totalScore != null) myMap[x.examName] = { date: x.examDate || '', score: x.totalScore }; });
 
-        // 同班成績（算百分位 / 分布）
-        const classSnap = await getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', currentStudent.classId)));
-        const byExam = {};
-        classSnap.forEach(d => { const x = d.data(); if (x.status !== 'scored' || x.totalScore == null) return; const k = x.examName; if (!byExam[k]) byExam[k] = { name: k, date: x.examDate || '', scores: [] }; byExam[k].scores.push(x.totalScore); if (x.examDate) byExam[k].date = x.examDate; });
-
         const hint = document.getElementById('score-river-empty-hint');
-        const exams = Object.values(byExam).filter(e => myMap[e.name] != null).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-        if (exams.length === 0) { hint.style.display = 'block'; ctx.style.display = 'none'; return; }
-        hint.style.display = 'none'; ctx.style.display = 'block';
 
-        const examStats = exams.map(e => {
-          const arr = e.scores.slice().sort((a, b) => a - b);
-          const n = arr.length, enough = n >= 5;
-          const mean = n ? arr.reduce((x, y) => x + y, 0) / n : null;
-          const P = p => enough ? _pct(arr, p) : null;
-          const dist = { d85: arr.filter(v => v >= 85).length, d76: arr.filter(v => v >= 76 && v < 85).length, d66: arr.filter(v => v >= 66 && v < 76).length, d65: arr.filter(v => v < 66).length };
+        // 班級每場落點：優先讀彙總 class_exam_summary（1 筆、不掃整班）；缺則退回讀整班現算（最壞＝現狀）
+        const _mkStat = (name, e) => {  // e = { date,n,mean,p10..p90,dist }（後台用同算法、同 _pct 算好）
           const dt = e.date ? new Date(e.date) : null;
-          return { name: e.name, date: e.date, label: dt ? `${dt.getMonth() + 1}/${dt.getDate()}` : e.name, n, mean, enough, my: myMap[e.name].score, dist,
-            p10: P(10), p20: P(20), p25: P(25), p30: P(30), p40: P(40), p60: P(60), p70: P(70), p75: P(75), p80: P(80), p90: P(90) };
-        });
+          return { name, date: e.date, label: dt ? `${dt.getMonth() + 1}/${dt.getDate()}` : name, n: e.n, mean: e.mean, enough: e.n >= 5, my: myMap[name].score, dist: e.dist,
+            p10: e.p10, p20: e.p20, p25: e.p25, p30: e.p30, p40: e.p40, p60: e.p60, p70: e.p70, p75: e.p75, p80: e.p80, p90: e.p90 };
+        };
+        let examStats;
+        const cesDoc = await getDoc(doc(db, 'class_exam_summary', currentStudent.classId));
+        if (cesDoc.exists() && cesDoc.data().river) {
+          const river = cesDoc.data().river;
+          examStats = Object.keys(river).filter(name => myMap[name] != null)
+            .map(name => ({ name, e: river[name] }))
+            .sort((a, b) => (a.e.date || '').localeCompare(b.e.date || ''))
+            .map(o => _mkStat(o.name, o.e));
+        } else {
+          // fallback：班彙總缺 → 退回讀整班現算（保證最壞＝現狀，不會更糟）
+          const classSnap = await getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', currentStudent.classId)));
+          const byExam = {};
+          classSnap.forEach(d => { const x = d.data(); if (x.status !== 'scored' || x.totalScore == null) return; const k = x.examName; if (!byExam[k]) byExam[k] = { name: k, date: x.examDate || '', scores: [] }; byExam[k].scores.push(x.totalScore); if (x.examDate) byExam[k].date = x.examDate; });
+          const exams = Object.values(byExam).filter(e => myMap[e.name] != null).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+          examStats = exams.map(e => {
+            const arr = e.scores.slice().sort((a, b) => a - b);
+            const n = arr.length, enough = n >= 5;
+            const mean = n ? arr.reduce((x, y) => x + y, 0) / n : null;
+            const P = p => enough ? _pct(arr, p) : null;
+            const dist = { d85: arr.filter(v => v >= 85).length, d76: arr.filter(v => v >= 76 && v < 85).length, d66: arr.filter(v => v >= 66 && v < 76).length, d65: arr.filter(v => v < 66).length };
+            const dt = e.date ? new Date(e.date) : null;
+            return { name: e.name, date: e.date, label: dt ? `${dt.getMonth() + 1}/${dt.getDate()}` : e.name, n, mean, enough, my: myMap[e.name].score, dist,
+              p10: P(10), p20: P(20), p25: P(25), p30: P(30), p40: P(40), p60: P(60), p70: P(70), p75: P(75), p80: P(80), p90: P(90) };
+          });
+        }
+        if (examStats.length === 0) { hint.style.display = 'block'; ctx.style.display = 'none'; return; }
+        hint.style.display = 'none'; ctx.style.display = 'block';
         _riverStats = { labels: examStats.map(s => s.label), examStats };
         renderRiver();
       } catch (e) {
@@ -1478,21 +1493,31 @@
           clsFirstScores = ACAD_DIMS.map(() => 0);
         }
 
-        // === 考試雷達：exam_scores_radar ===
+        // === 考試雷達：自己讀自己（少筆）；班平均優先讀彙總 class_exam_summary（1 筆、不掃整班）===
         const myExamSnap = await getDocs(query(collection(db, 'exam_scores_radar'), where('studentId', '==', currentStudent.id)));
         const myExams = []; myExamSnap.forEach(d => myExams.push(d.data()));
-        const classExamSnap = await getDocs(query(collection(db, 'exam_scores_radar'), where('classId', '==', currentStudent.classId)));
-        const classExams = []; classExamSnap.forEach(d => classExams.push(d.data()));
         function calcExamDimScores(exams) {
           const sums = {}; ACAD_DIMS.forEach(d => sums[d] = { c: 0, t: 0 });
           exams.forEach(e => { if (!e.dimensions) return; ACAD_DIMS.forEach(d => { const s = e.dimensions[d]; if (s) { sums[d].c += s.correct || 0; sums[d].t += s.total || 0; } }); });
           return ACAD_DIMS.map(d => sums[d].t === 0 ? 0 : (sums[d].c / sums[d].t) * 10);
         }
-        const hasExam = classExams.length > 0;   // 班級已上傳 → 有考試資料
+        let clsExamScores, hasExam;
+        const cesDoc = await getDoc(doc(db, 'class_exam_summary', currentStudent.classId));
+        if (cesDoc.exists() && cesDoc.data().radar) {
+          const r = cesDoc.data().radar;
+          clsExamScores = ACAD_DIMS.map(d => { const o = r[d]; return (o && o.t) ? (o.c / o.t) * 10 : 0; });
+          hasExam = ACAD_DIMS.some(d => r[d] && r[d].t > 0);   // 班有考試雷達成績
+        } else {
+          // fallback：班彙總缺 → 退回讀整班現算（保證最壞＝現狀，不會更糟）
+          const classExamSnap = await getDocs(query(collection(db, 'exam_scores_radar'), where('classId', '==', currentStudent.classId)));
+          const classExams = []; classExamSnap.forEach(d => classExams.push(d.data()));
+          clsExamScores = calcExamDimScores(classExams);
+          hasExam = classExams.length > 0;
+        }
 
         _radarData = {
           first: { my: myFirstScores, cls: clsFirstScores },
-          exam: { my: calcExamDimScores(myExams), cls: calcExamDimScores(classExams) },
+          exam: { my: calcExamDimScores(myExams), cls: clsExamScores },
           hasExam
         };
 
