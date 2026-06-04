@@ -2592,16 +2592,21 @@
     }
     async function updateEnergyCount(period, target) {
       try {
-        const snap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', currentStudent.id)));
         const start = energyPeriodStart(period).getTime();
-        const sessions = new Set();
-        snap.forEach(d => {
-          const a = d.data();
-          const t = a.attemptedAt?.seconds ? a.attemptedAt.seconds * 1000 : 0;
-          // 只算「完成 10 題」的場次（sessionCompleted !== false；舊資料無此欄位視為完成）
-          if (t >= start && a.examSessionId && a.sessionCompleted !== false) sessions.add(a.examSessionId);
-        });
-        const count = sessions.size;
+        let count;
+        const prog = (await getDoc(doc(db, 'student_quiz_progress', currentStudent.id))).data() || {};
+        if (Array.isArray(prog.sessionLog)) {
+          // 讀彙總 1 筆：本週期內 distinct 完成趟數（不再掃全部歷史 attempts）
+          const ids = new Set();
+          prog.sessionLog.forEach(s => { if (s && s.at >= start && s.id) ids.add(s.id); });
+          count = ids.size;
+        } else {
+          // fallback：無 sessionLog（極少數未回填）→ 退回掃自己作答算一次（最壞＝現狀）
+          const snap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', currentStudent.id)));
+          const sessions = new Set();
+          snap.forEach(d => { const a = d.data(); const t = a.attemptedAt?.seconds ? a.attemptedAt.seconds * 1000 : 0; if (t >= start && a.examSessionId && a.sessionCompleted !== false) sessions.add(a.examSessionId); });
+          count = sessions.size;
+        }
         const pct = Math.min(100, target ? (count / target) * 100 : 0);
         const el = document.getElementById('eb-current'); if (el) el.textContent = count;
         const cover = document.getElementById('eb-cover');
@@ -2897,7 +2902,8 @@
       // 更新刷次進度 + 個人首刷雷達彙總（讀 1 筆舊進度判斷哪些題是「首刷」＝之前沒做過）
       try {
         const progRef = doc(db, 'student_quiz_progress', currentStudent.id);
-        const oldCounts = (await getDoc(progRef)).data()?.counts || {};
+        const progData = (await getDoc(progRef)).data() || {};
+        const oldCounts = progData.counts || {};
         // 這趟「首刷」的題（舊進度為 0）→ 累計各維度 c/t，increment 進個人雷達彙總
         const firstCnt = {};
         quizState.answers.forEach(a => {
@@ -2913,7 +2919,15 @@
         // 刷次進度（這 10 題各 +1、含未作答的）→ 輪次抽題不重複
         const counts = {};
         quizState.answers.forEach(a => { counts[a.questionId] = increment(1); });
-        await setDoc(progRef, { counts, updatedAt: serverTimestamp() }, { merge: true });
+        const progUpdate = { counts, updatedAt: serverTimestamp() };
+        // 能量條趟數彙總：完成一趟才記，保留近 70 天的 {id,at}（能量條改讀此 1 筆、不再掃全部 attempts）
+        if (completed === true && quizState.sessionId) {
+          const now = Date.now(), cut = now - 70 * 86400000;
+          const log = (progData.sessionLog || []).filter(s => s && s.at >= cut && s.id !== quizState.sessionId);
+          log.push({ id: quizState.sessionId, at: now });
+          progUpdate.sessionLog = log;
+        }
+        await setDoc(progRef, progUpdate, { merge: true });
       } catch (e) { console.warn('寫入進度/雷達彙總:', e); }
 
       // 先載入此學員已收藏的錯題（決定星星狀態）
