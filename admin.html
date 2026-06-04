@@ -1129,6 +1129,7 @@ TP18,新北 TP18,2026"></textarea>
         <div style="font-size:12px;color:#64748b;font-family:monospace;margin-bottom:8px">題號 <span id="qm-edit-qid">—</span></div>
         <div id="qm-edit-meta" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"></div>
         <div class="form-group"><label>題目</label><textarea id="qm-edit-qtext" rows="2"></textarea></div>
+        <div class="form-group" id="qm-edit-img-wrap" style="display:none"><label>📷 題幹附圖（唯讀，點圖放大）</label><img id="qm-edit-img" alt="題幹附圖" style="display:block;max-width:100%;height:auto;border-radius:8px;border:1px solid #334155;cursor:zoom-in"></div>
         <div id="qm-edit-options"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div class="form-group"><label>書籍 <span style="color:#f87171">*</span></label><select id="qm-edit-book"><option value="">—</option></select></div>
@@ -5410,6 +5411,9 @@ TP18,新北 TP18,2026"></textarea>
       document.getElementById('qm-edit-title').textContent = reports ? '⚠️ 處理勘誤' : '✏️ 編輯題目';
       document.getElementById('qm-edit-qid').textContent = qid;
       document.getElementById('qm-edit-qtext').value = q.questionText || '';
+      { const iw = document.getElementById('qm-edit-img-wrap'), im = document.getElementById('qm-edit-img');
+        if (q.questionImageUrl) { im.src = q.questionImageUrl; im.onclick = () => window.open(im.src, '_blank'); iw.style.display = ''; }
+        else { im.removeAttribute('src'); iw.style.display = 'none'; } }
       document.getElementById('qm-edit-answer').value = q.correctAnswer || 'A';
       document.getElementById('qm-edit-page').value = (q.source && q.source.page) || '';
       // 出題者 + 出處 meta、書/章下拉（比照指導員端）

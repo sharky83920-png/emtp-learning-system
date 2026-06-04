@@ -2743,6 +2743,16 @@
       finally { btns.forEach(b => b.disabled = false); }
     }
 
+    // 題目／選項附圖標籤（點圖→新分頁放大看）。url 為空回空字串。stopClick：在可點選的容器（如選項按鈕）內，點圖不觸發外層
+    function qImgTag(url, opts) {
+      if (!url) return '';
+      const o = opts || {};
+      const mt = o.mt || '12px';
+      const stop = o.stopClick ? "event.stopPropagation();" : "";
+      const safe = String(url).replace(/"/g, '&quot;');
+      return `<img src="${safe}" alt="題目附圖" loading="lazy" onclick="${stop}window.open(this.src,'_blank')" style="display:block;max-width:100%;height:auto;margin:${mt} 0;border-radius:8px;border:1px solid #e2e8f0;cursor:zoom-in">`;
+    }
+
     function renderQuizQuestion() {
       if (!quizState) return;
       const q = quizState.questions[quizState.currentIdx];
@@ -2763,12 +2773,13 @@
           <span style="background:#f1f5f9;color:#475569;padding:3px 10px;border-radius:10px">${diffLabel[q.difficulty] || ''}</span>
           ${q.derivedDimension ? `<span style="background:#dbeafe;color:#1e40af;padding:3px 10px;border-radius:10px">${q.derivedDimension}</span>` : ''}
         </div>
-        <div style="font-size:16px;line-height:1.7;color:#1e293b;margin-bottom:18px;white-space:pre-wrap">${q.questionText || ''}</div>
+        <div style="font-size:16px;line-height:1.7;color:#1e293b;margin-bottom:${q.questionImageUrl ? '6px' : '18px'};white-space:pre-wrap">${q.questionText || ''}</div>
+        ${qImgTag(q.questionImageUrl, { mt: '0 0 18px' })}
         <div id="quiz-opts" style="display:flex;flex-direction:column;gap:10px">
           ${['A','B','C','D'].map(k => `
             <button class="quiz-opt-btn" data-opt="${k}" style="background:white;border:2px solid #e2e8f0;padding:14px 18px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:15px;text-align:left;color:#1e293b;transition:all 0.15s;display:flex;gap:12px;align-items:flex-start">
               <span class="quiz-opt-letter" style="background:#f1f5f9;color:#3b82f6;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">${k}</span>
-              <span style="flex:1;white-space:pre-wrap">${opts[k]?.text || ''}</span>
+              <span style="flex:1;white-space:pre-wrap">${opts[k]?.text || ''}${qImgTag(opts[k]?.imageUrl, { mt: '8px', stopClick: true })}</span>
             </button>
           `).join('')}
         </div>
@@ -2929,11 +2940,12 @@
               <span style="font-weight:700;color:#1e293b;font-size:14px">第 ${idx + 1} 題 ${q.derivedDimension ? `<span style="font-size:11px;background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:8px;margin-left:4px">${q.derivedDimension} ${dimName[q.derivedDimension] || ''}</span>` : ''}</span>
               <span style="color:${color};font-weight:700;font-size:13px">${icon}</span>
             </div>
-            <div style="color:#1e293b;font-size:14px;line-height:1.6;margin-bottom:10px;white-space:pre-wrap">${q.questionText || ''}</div>
-            <div style="font-size:13px;color:#065f46;margin-bottom:3px"><strong>標答：${a.correctAnswer}.</strong> ${correctText}</div>
+            <div style="color:#1e293b;font-size:14px;line-height:1.6;margin-bottom:${q.questionImageUrl ? '4px' : '10px'};white-space:pre-wrap">${q.questionText || ''}</div>
+            ${qImgTag(q.questionImageUrl, { mt: '0 0 10px' })}
+            <div style="font-size:13px;color:#065f46;margin-bottom:3px"><strong>標答：${a.correctAnswer}.</strong> ${correctText}${qImgTag(opts[a.correctAnswer]?.imageUrl, { mt: '6px' })}</div>
             ${a.isCorrect ? '' : (a.selectedAnswer == null
               ? `<div style="font-size:13px;color:#991b1b;margin-bottom:8px"><strong>作答：未作答（算錯）</strong></div>`
-              : `<div style="font-size:13px;color:#991b1b;margin-bottom:8px"><strong>作答：${a.selectedAnswer}.</strong> ${selectedText}</div>`)}
+              : `<div style="font-size:13px;color:#991b1b;margin-bottom:8px"><strong>作答：${a.selectedAnswer}.</strong> ${selectedText}${qImgTag(opts[a.selectedAnswer]?.imageUrl, { mt: '6px' })}</div>`)}
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,0,0,0.06)">
               ${srcHtml}
               <div style="display:flex;align-items:center;gap:6px">
@@ -2978,6 +2990,7 @@
             questionId: qid,
             dimension: q?.derivedDimension || null,
             questionText: q?.questionText || '',
+            questionImageUrl: q?.questionImageUrl || null,
             options: q?.options || {},
             correctAnswer: q?.correctAnswer || '',
             source: q?.source || {},
@@ -3036,7 +3049,7 @@
               const isAns = k === it.correctAnswer;
               return `<div style="display:flex;gap:8px;padding:8px 10px;border-radius:8px;margin-bottom:6px;background:${isAns ? '#dcfce7' : '#f8fafc'};border:1px solid ${isAns ? '#86efac' : '#e2e8f0'}">
                 <span style="font-weight:700;color:${isAns ? '#15803d' : '#475569'}">${k}.</span>
-                <span style="flex:1;color:#1e293b;white-space:pre-wrap">${opts[k].text || ''}</span>
+                <span style="flex:1;color:#1e293b;white-space:pre-wrap">${opts[k].text || ''}${qImgTag(opts[k].imageUrl, { mt: '6px' })}</span>
                 ${isAns ? '<span style="color:#15803d;font-weight:700;white-space:nowrap">✔ 正解</span>' : ''}
               </div>`;
             }).join('');
@@ -3049,6 +3062,7 @@
                 <details style="margin-top:10px">
                   <summary style="cursor:pointer;color:#2563eb;font-size:13px;font-weight:600">📖 看完整題目、所有選項與出處</summary>
                   <div style="margin-top:10px">
+                    ${qImgTag(it.questionImageUrl, { mt: '0 0 10px' })}
                     ${optsHtml || '<div style="color:#94a3b8;font-size:13px">（此題無選項快照）</div>'}
                     ${srcLine}
                     <div style="color:#cbd5e1;font-size:11px;margin-top:8px">🔒 僅供檢視、不可修改</div>

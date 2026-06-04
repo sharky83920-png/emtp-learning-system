@@ -437,6 +437,7 @@
         <div style="font-size:12px;color:#64748b;font-family:monospace;margin-bottom:6px">題號 <span id="corr-qid">—</span></div>
         <div id="corr-meta" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
         <div class="form-group"><label>題目</label><textarea id="corr-qtext" class="corr-grow" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px;line-height:1.55;resize:none;overflow:hidden"></textarea></div>
+        <div class="form-group" id="corr-img-wrap" style="display:none"><label>📷 題幹附圖（唯讀，點圖放大）</label><img id="corr-img" alt="題幹附圖" style="display:block;max-width:100%;height:auto;border-radius:8px;border:1px solid #cbd5e1;cursor:zoom-in"></div>
         <div id="corr-options"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div class="form-group"><label>書籍 <span style="color:#dc2626">*</span></label>
@@ -865,6 +866,9 @@
         `<span style="background:#eef2ff;color:#4338ca;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600">👤 ${_esc(_cls)} · ${_esc(_who)}</span>` +
         `<span style="background:#ecfdf5;color:#065f46;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600">📖 ${_esc(_src)}</span>`;
       document.getElementById('corr-qtext').value = q.questionText || '';
+      { const iw = document.getElementById('corr-img-wrap'), im = document.getElementById('corr-img');
+        if (q.questionImageUrl) { im.src = q.questionImageUrl; im.onclick = () => window.open(im.src, '_blank'); iw.style.display = ''; }
+        else { im.removeAttribute('src'); iw.style.display = 'none'; } }
       document.getElementById('corr-answer').value = q.correctAnswer || 'A';
       document.getElementById('corr-page').value = (q.source && q.source.page) || '';
       document.getElementById('corr-hide').checked = q.isVisible === false;
