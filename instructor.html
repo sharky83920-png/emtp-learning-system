@@ -1245,6 +1245,7 @@
 
     // ===== 各班出題戰力（本週/上週/總累計 + 彩色橫條 + 數字動畫）=====
     let _cpPeriod = 'week';
+    let _qpCache = null, _qpNameCache = {};   // 戰力 session 快取（題目精簡＋班名）：期間切換/重進分頁不重掃題庫
     async function loadQuestionPower() {
       const el = document.getElementById('rank-questions');
       const totalEl = document.getElementById('cp-total');
@@ -1252,22 +1253,21 @@
       try {
         let startMs = 0, endMs = Infinity;
         if (_cpPeriod !== 'all') { const [s, e] = _weekRange(_cpPeriod); startMs = s; endMs = e; }
-        const qSnap = await getDocs(collection(db, 'questions'));
+        // session 快取：題目精簡資料只掃一次，期間(本週/上週/總累計)切換用快取前端過濾、不重掃 3,206 題
+        if (!_qpCache) {
+          const qSnap = await getDocs(collection(db, 'questions'));
+          _qpCache = [];
+          qSnap.forEach(d => { const q = d.data(); if (q.isVisible === false || q.isActive === false) return; _qpCache.push({ c: q.createdByClassId || '其他', t: q.createdAt?.seconds ? q.createdAt.seconds * 1000 : 0 }); });
+        }
         const byClass = {};
-        qSnap.forEach(d => {
-          const q = d.data();
-          if (q.isVisible === false || q.isActive === false) return;
-          const t = q.createdAt?.seconds ? q.createdAt.seconds * 1000 : 0;
-          if (t < startMs || t > endMs) return;
-          const c = q.createdByClassId || '其他'; byClass[c] = (byClass[c] || 0) + 1;
-        });
+        _qpCache.forEach(q => { if (q.t < startMs || q.t > endMs) return; byClass[q.c] = (byClass[q.c] || 0) + 1; });
         const list = Object.entries(byClass).map(([cid, n]) => ({ cid, n })).sort((a, b) => b.n - a.n);
         const total = list.reduce((s, x) => s + x.n, 0);
         totalEl.innerHTML = `該期間全班總出題 <b id="cp-total-num" style="color:#3b82f6;font-size:18px">0</b> 題`;
         if (list.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">此期間尚無出題</div>'; _animateNum(document.getElementById('cp-total-num'), 0, ''); return; }
         const max = list[0].n;
-        const nameCache = {};
-        for (const it of list) { try { const c = await getDoc(doc(db, 'classes', it.cid)); nameCache[it.cid] = c.exists() ? (c.data().displayName || it.cid) : it.cid; } catch (e) { nameCache[it.cid] = it.cid; } }
+        const nameCache = _qpNameCache;   // 班名 session 快取，不每次逐班 getDoc
+        for (const it of list) { if (nameCache[it.cid]) continue; try { const c = await getDoc(doc(db, 'classes', it.cid)); nameCache[it.cid] = c.exists() ? (c.data().displayName || it.cid) : it.cid; } catch (e) { nameCache[it.cid] = it.cid; } }
         el.innerHTML = list.map((it, i) => {
           const mine = it.cid === selectedClassId;
           const color = mine ? '#e11d48' : CP_COLORS[i % CP_COLORS.length];

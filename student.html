@@ -2666,22 +2666,8 @@
       try { localStorage.removeItem(QBANK_KEY); localStorage.removeItem(QBANK_DATE_KEY); } catch (e) {}
     }
     let _questionsCache = null;
-    async function loadVisibleQuestions() {
-      if (_questionsCache) return _questionsCache;                       // 同 session 記憶體快取
-      try {                                                             // 跨登入：當天已抓過就用 localStorage、不重抓題庫
-        if (localStorage.getItem(QBANK_DATE_KEY) === qbankTodayStr()) {
-          const raw = localStorage.getItem(QBANK_KEY);
-          if (raw) { _questionsCache = JSON.parse(raw); return _questionsCache; }
-        }
-      } catch (e) { /* localStorage 讀失敗 → 照常重抓 */ }
-      const snap = await getDocs(collection(db, 'questions'));           // 重抓（每天最多一次 / 跨日 / 出題後）
-      const all = [];
-      snap.forEach(d => { const data = d.data(); if (data.isVisible !== false && data.isActive !== false) all.push({ id: d.id, ...data }); });
-      _questionsCache = all;
-      try { localStorage.setItem(QBANK_KEY, JSON.stringify(all)); localStorage.setItem(QBANK_DATE_KEY, qbankTodayStr()); }
-      catch (e) { /* 題庫太大塞爆 localStorage → 退化為記憶體快取（每登入抓一次），功能不受影響 */ }
-      return all;
-    }
+    // 🧹 已移除死碼 loadVisibleQuestions（第十輪 localStorage 題庫快取）：抽題已改走伺服器端 drawQuiz、
+    //   學員不再前端整表掃 questions(3,206 筆)。移除以免日後被誤接回去變讀取地雷。clearQBankCache 保留無害。
 
     // 水龍頭過濾：依本班 questionFaucet 設定，限定可抽到的「來源班級 + 章節」
     function faucetAllows(q) {
