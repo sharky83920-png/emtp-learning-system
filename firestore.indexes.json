@@ -7,6 +7,14 @@
         { "fieldPath": "classId", "order": "ASCENDING" },
         { "fieldPath": "attemptedAt", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "question_attempts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studentId", "order": "ASCENDING" },
+        { "fieldPath": "attemptedAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

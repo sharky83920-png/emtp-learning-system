@@ -1854,11 +1854,19 @@
       const ctx = document.getElementById('sv-radar-chart');
       try {
         const dimAcc10 = recs => { const sums = {}; SV_DIMS.forEach(d => sums[d] = { c: 0, t: 0 }); recs.forEach(r => { if (sums[r.dim]) { sums[r.dim].t++; if (r.isCorrect) sums[r.dim].c++; } }); return SV_DIMS.map(d => sums[d].t === 0 ? 0 : (sums[d].c / sums[d].t) * 10); };
-        // 首刷：該生 question_attempts，每題取最早一次
-        const mySnap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', studentId)));
-        const myFirst = {};
-        mySnap.forEach(d => { const a = d.data(); if (!a.questionId || !a.dimension) return; const t = a.attemptedAt?.seconds || 0; if (!myFirst[a.questionId] || t < myFirst[a.questionId].t) myFirst[a.questionId] = { dim: a.dimension, isCorrect: a.isCorrect, t }; });
-        const myFirstScores = dimAcc10(Object.values(myFirst));
+        // 首刷：優先讀個人彙總 student_first_radar（1 筆）→ 不掃該生全部作答（省讀取）
+        let myFirstScores;
+        const sfrDoc = await getDoc(doc(db, 'student_first_radar', studentId));
+        if (sfrDoc.exists() && sfrDoc.data().first) {
+          const f = sfrDoc.data().first;
+          myFirstScores = SV_DIMS.map(d => { const o = f[d]; return (o && o.t) ? (o.c / o.t) * 10 : 0; });
+        } else {
+          // 沒彙總（極少數未回填/全新學員）→ fallback 掃該生作答算一次
+          const mySnap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', studentId)));
+          const myFirst = {};
+          mySnap.forEach(d => { const a = d.data(); if (!a.questionId || !a.dimension) return; const t = a.attemptedAt?.seconds || 0; if (!myFirst[a.questionId] || t < myFirst[a.questionId].t) myFirst[a.questionId] = { dim: a.dimension, isCorrect: a.isCorrect, t }; });
+          myFirstScores = dimAcc10(Object.values(myFirst));
+        }
         // 全班首刷平均：讀彙總 class_radar
         let clsFirstScores = SV_DIMS.map(() => 0);
         const crDoc = await getDoc(doc(db, 'class_radar', selectedClassId));
@@ -1902,7 +1910,17 @@
       const ctx = document.getElementById('sv-momentum-chart');
       const stat = document.getElementById('sv-momentum-stat');
       try {
-        const snap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', studentId)));
+        // 動能：只查近 90 天（走 studentId+attemptedAt 索引）→ 不掃該生全部歷史作答（省讀取）
+        const sinceMs = Date.now() - 90 * 86400000;
+        let snap;
+        try {
+          snap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', studentId), where('attemptedAt', '>=', Timestamp.fromMillis(sinceMs))));
+        } catch (idxErr) {
+          console.error('[loadSvMomentum] 區間查詢失敗（studentId+attemptedAt 索引建置中或遺失）：', idxErr?.code || idxErr);
+          empty.style.display = 'block'; empty.textContent = '⏳ 動能索引建置中，請稍候 1–2 分鐘後重新整理'; ctx.style.display = 'none'; stat.textContent = '—';
+          if (svMomentumChart) { svMomentumChart.destroy(); svMomentumChart = null; }
+          return;
+        }
         const byDay = {};
         snap.forEach(d => { const a = d.data(); const sec = a.attemptedAt?.seconds; if (!sec) return; const dt = new Date(sec * 1000); const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`; byDay[key] = (byDay[key] || 0) + 1; });
         const days = Object.keys(byDay).sort();
