@@ -277,7 +277,19 @@
       </section>
 
       <section class="tab-content" id="tab-corrections">
-        <div class="card">
+        <div class="card" id="corr-audit-card" style="display:none">
+          <h2 style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center;gap:8px" id="corr-audit-toggle"><span>🔍 勘誤回覆稽核 <span style="font-size:12px;color:#94a3b8;font-weight:400">看哪個指導員回覆了哪個學員（唯讀、全系統）</span></span><span id="corr-audit-caret" style="font-size:14px;color:#94a3b8">▶ 展開</span></h2>
+          <div id="corr-audit-wrap" style="display:none">
+            <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:10px 0 14px">
+              <label style="font-size:13px;color:#475569;display:flex;flex-direction:column;gap:4px">指導員<select id="corr-audit-f-reviewer"><option value="">全部指導員</option></select></label>
+              <label style="font-size:13px;color:#475569;display:flex;flex-direction:column;gap:4px">回報學員班級<select id="corr-audit-f-class"><option value="">全部班級</option></select></label>
+              <label style="font-size:13px;color:#475569;display:flex;flex-direction:column;gap:4px">處理結果<select id="corr-audit-f-status"><option value="resolved">已處理（全部）</option><option value="fixed">✅ 已修正</option><option value="rejected">❌ 不成立</option><option value="hidden">🚫 已隱藏</option><option value="all">含未處理</option></select></label>
+              <button id="corr-audit-refresh" class="btn-logout">🔄 重新整理</button>
+            </div>
+            <div id="corr-audit-list"><div class="placeholder"><div class="icon">⏳</div><p>展開後載入…</p></div></div>
+          </div>
+        </div>
+        <div class="card" id="corr-handle-card">
           <h2>⚠️ 題目勘誤處理</h2>
           <p style="color:#64748b;font-size:13px;margin-bottom:14px">💡 處理<strong>全部班級</strong>學員回報的題目勘誤（題目跨班共用、一次結案會關閉所有班的同題回報）。可改標答/選項/頁碼、隱藏題目、回覆學員（結案後學員會收到通知）。</p>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
@@ -661,9 +673,12 @@
     function applyClassPermissions() {
       const p = classPerms || {};
       // 分頁層級：沒權限整個分頁鈕藏掉（點不過去）
-      document.getElementById('tabbtn-corrections').style.display = p.canHandleCorrections ? '' : 'none';
+      document.getElementById('tabbtn-corrections').style.display = (p.canHandleCorrections || p.canAuditCorrections) ? '' : 'none';
       document.getElementById('tabbtn-signoff').style.display = p.canQRSignoff ? '' : 'none';
       if (p.canHandleCorrections) refreshCorrectionBadge(); else setCorrectionBadge(0);
+      // 勘誤分頁內：處理卡 / 稽核卡 各自依權限顯示
+      const _hc = document.getElementById('corr-handle-card'); if (_hc) _hc.style.display = p.canHandleCorrections ? '' : 'none';
+      const _ac = document.getElementById('corr-audit-card'); if (_ac) _ac.style.display = p.canAuditCorrections ? '' : 'none';
       // 卡片層級：出題追蹤頁內的能量條 / 各班出題戰力
       document.getElementById('energy-card').style.display = p.canEditEnergyBar ? '' : 'none';
       document.getElementById('classpower-card').style.display = p.canViewClassPower ? '' : 'none';
@@ -703,7 +718,7 @@
       selectedClassId = e.target.value;
       await refreshClassPerms();   // 換班 → 重新套用該班權限（可能切回出題追蹤）
       const active = document.querySelector('.bottom-tabs button.active')?.dataset.tab;
-      if (active === 'corrections') loadCorrections();
+      if (active === 'corrections') { if ((classPerms || {}).canHandleCorrections) loadCorrections(); initCorrAudit(); }
       else if (active === 'schedule') loadScheduleTab();
       else if (active === 'other') loadOtherTab();
       else if (active === 'signoff') { const pl = document.getElementById('prog-list'); if (pl) pl.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">選技術項目查看全班達標狀況</div>'; const ps = document.getElementById('prog-skill'); if (ps) ps.value = ''; }
@@ -716,13 +731,108 @@
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-        if (btn.dataset.tab === 'corrections') loadCorrections();
+        if (btn.dataset.tab === 'corrections') { if ((classPerms || {}).canHandleCorrections) loadCorrections(); initCorrAudit(); }
         if (btn.dataset.tab === 'schedule') loadScheduleTab();
         if (btn.dataset.tab === 'signoff') loadSignoffTab();
         if (btn.dataset.tab === 'other') loadOtherTab();
         window.scrollTo(0, 0);
       });
     });
+
+    // ===== 🔍 勘誤回覆稽核（唯讀：看哪個指導員回覆哪個學員，全系統）=====
+    let _corrAuditReports = null;
+    let _corrAuditQCache = {};
+    const CORR_AUDIT_ST = { fixed: '✅ 已修正', rejected: '❌ 不成立', hidden: '🚫 已隱藏', pending: '⏳ 待處理' };
+    function caEsc(v) { return String(v == null ? '' : v).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])); }
+    function caFmt(ts) { if (!ts || !ts.toDate) return ''; const d = ts.toDate(); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+
+    function initCorrAudit() {
+      const tog = document.getElementById('corr-audit-toggle');
+      if (!tog || tog._bound) return; tog._bound = true;
+      const wrap = document.getElementById('corr-audit-wrap'); const caret = document.getElementById('corr-audit-caret');
+      tog.addEventListener('click', () => {
+        const open = wrap.style.display === 'none';
+        wrap.style.display = open ? 'block' : 'none';
+        caret.textContent = open ? '▼ 收合' : '▶ 展開';
+        if (open && _corrAuditReports === null) loadCorrAudit();   // lazy：第一次展開才讀（省讀取）
+      });
+      document.getElementById('corr-audit-refresh').addEventListener('click', () => loadCorrAudit());
+      ['corr-audit-f-reviewer', 'corr-audit-f-class', 'corr-audit-f-status'].forEach(id => document.getElementById(id).addEventListener('change', renderCorrAudit));
+    }
+
+    async function loadCorrAudit() {
+      const list = document.getElementById('corr-audit-list');
+      list.innerHTML = '<div class="placeholder"><div class="icon">⏳</div><p>載入中…</p></div>';
+      try {
+        const snap = await getDocs(collection(db, 'question_error_reports'));
+        _corrAuditReports = []; snap.forEach(d => _corrAuditReports.push({ id: d.id, ...d.data() }));
+        const revs = [...new Set(_corrAuditReports.filter(r => r.reviewedByName).map(r => r.reviewedByName))].sort();
+        const cls = [...new Set(_corrAuditReports.filter(r => r.reportedByClassId).map(r => r.reportedByClassId))].sort();
+        const fillSel = (id, arr, label) => { const s = document.getElementById(id); const cur = s.value; s.innerHTML = `<option value="">${label}</option>` + arr.map(v => `<option value="${caEsc(v)}">${caEsc(v)}</option>`).join(''); s.value = cur; };
+        fillSel('corr-audit-f-reviewer', revs, '全部指導員'); fillSel('corr-audit-f-class', cls, '全部班級');
+        renderCorrAudit();
+      } catch (e) { list.innerHTML = `<div style="color:#dc2626;padding:12px">❌ ${caEsc(e.message)}</div>`; }
+    }
+
+    function renderCorrAudit() {
+      const list = document.getElementById('corr-audit-list'); if (!_corrAuditReports) return;
+      const fRev = document.getElementById('corr-audit-f-reviewer').value;
+      const fCls = document.getElementById('corr-audit-f-class').value;
+      const fSt = document.getElementById('corr-audit-f-status').value;
+      let rows = _corrAuditReports.slice();
+      if (fSt === 'resolved') rows = rows.filter(r => (r.status || 'pending') !== 'pending');
+      else if (fSt !== 'all') rows = rows.filter(r => (r.status || 'pending') === fSt);
+      if (fRev) rows = rows.filter(r => r.reviewedByName === fRev);
+      if (fCls) rows = rows.filter(r => r.reportedByClassId === fCls);
+      rows.sort((a, b) => (b.reviewedAt?.seconds || b.createdAt?.seconds || 0) - (a.reviewedAt?.seconds || a.createdAt?.seconds || 0));
+      if (rows.length === 0) { list.innerHTML = '<div style="color:#94a3b8;padding:14px;text-align:center">（無符合條件的紀錄）</div>'; return; }
+      list.innerHTML = `<div style="color:#64748b;font-size:12px;margin-bottom:8px">共 ${rows.length} 筆</div>` + rows.map(r => {
+        const st = r.status || 'pending'; const reviewed = st !== 'pending';
+        return `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff">
+          <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+            <span style="font-family:monospace;font-size:12px;color:#64748b">${caEsc(r.questionId)}</span>
+            <span style="font-size:12px;color:#475569">${CORR_AUDIT_ST[st] || st}　${caFmt(r.reviewedAt)}</span>
+          </div>
+          <div style="font-size:13px;color:#1e293b;margin-bottom:4px">👤 學員 <strong>${caEsc(r.reportedByName || '?')}</strong>（${caEsc(r.reportedByClassId || '?')}）回報：<span style="color:#b91c1c">${caEsc(r.reason || '(無內容)')}</span></div>
+          <div style="font-size:13px;color:#1e293b;margin-bottom:8px">🧑‍🏫 指導員 <strong style="color:#15803d">${caEsc(r.reviewedByName || '(未處理)')}</strong> 回覆：<span style="color:#4338ca">${reviewed ? caEsc(r.reviewerNote || '(無回覆內容)') : '—'}</span></div>
+          <button class="btn-logout" style="font-size:12px;padding:5px 10px" onclick="window._corrAuditOpenQ('${caEsc(r.questionId)}', this)">📖 看完整題目</button>
+          <div style="margin-top:10px;display:none"></div>
+        </div>`;
+      }).join('');
+    }
+
+    window._corrAuditOpenQ = async function (qid, btn) {
+      const box = btn.nextElementSibling;
+      if (box.style.display === 'block') { box.style.display = 'none'; btn.textContent = '📖 看完整題目'; return; }
+      box.style.display = 'block'; btn.textContent = '📕 收合題目';
+      if (box.dataset.loaded) return;
+      box.innerHTML = '<div style="color:#94a3b8;font-size:13px;padding:8px">⏳ 載入題目…</div>';
+      try {
+        let q = _corrAuditQCache[qid];
+        if (q === undefined) { const d = await getDoc(doc(db, 'questions', qid)); q = d.exists() ? d.data() : null; _corrAuditQCache[qid] = q; }
+        if (!q) { box.innerHTML = '<div style="color:#94a3b8;font-size:13px">（題目已不存在）</div>'; box.dataset.loaded = '1'; return; }
+        const s = q.source || {};
+        const srcTxt = [s.bookName || s.bookId || '', s.chapterNumber ? `第${s.chapterNumber}章` : '', s.page ? `p.${s.page}` : ''].filter(Boolean).join(' ') || '（無出處）';
+        const opts = q.options || {};
+        const optHtml = ['A', 'B', 'C', 'D', 'E', 'F'].filter(k => opts[k] && opts[k].text != null).map(k => {
+          const isAns = k === q.correctAnswer;
+          return `<div style="display:flex;gap:8px;padding:7px 10px;border-radius:6px;margin-bottom:4px;background:${isAns ? '#dcfce7' : '#f8fafc'};border:1px solid ${isAns ? '#86efac' : '#e2e8f0'}"><span style="font-weight:700;color:${isAns ? '#15803d' : '#475569'}">${k}.</span><span style="flex:1;color:#1e293b;white-space:pre-wrap">${caEsc(opts[k].text)}</span>${isAns ? '<span style="color:#15803d;font-weight:700;white-space:nowrap">✔ 正解</span>' : ''}${opts[k].imageUrl ? `<img src="${caEsc(opts[k].imageUrl)}" style="max-width:90px;border-radius:4px;cursor:zoom-in" onclick="window.open(this.src,'_blank')">` : ''}</div>`;
+        }).join('');
+        box.innerHTML = `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:12px">
+            <span style="background:#eef2ff;color:#4338ca;padding:3px 8px;border-radius:6px">👤 ${caEsc(q.createdByClassId || '—')} · ${caEsc(q.createdByName || q.createdBy || '—')}</span>
+            <span style="background:#ecfdf5;color:#065f46;padding:3px 8px;border-radius:6px">📖 ${caEsc(srcTxt)}</span>
+            ${q.derivedDimension ? `<span style="background:#dbeafe;color:#1e40af;padding:3px 8px;border-radius:6px">${caEsc(q.derivedDimension)}</span>` : ''}
+            ${q.isVisible === false ? '<span style="background:#fee2e2;color:#991b1b;padding:3px 8px;border-radius:6px">🚫 已隱藏</span>' : ''}
+          </div>
+          <div style="color:#1e293b;font-size:14px;white-space:pre-wrap;margin-bottom:${q.questionImageUrl ? '6px' : '10px'}">${caEsc(q.questionText)}</div>
+          ${q.questionImageUrl ? `<img src="${caEsc(q.questionImageUrl)}" style="display:block;max-width:100%;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:10px;cursor:zoom-in" onclick="window.open(this.src,'_blank')">` : ''}
+          ${optHtml}
+          <div style="color:#cbd5e1;font-size:11px;margin-top:8px">🔒 僅供檢視、不可修改</div>
+        </div>`;
+        box.dataset.loaded = '1';
+      } catch (e) { box.innerHTML = `<div style="color:#dc2626;font-size:13px">❌ ${caEsc(e.message)}</div>`; }
+    };
 
     // ===== F16-B: 題目勘誤處理 =====
     let corrReports = [];      // 目前班級的勘誤
