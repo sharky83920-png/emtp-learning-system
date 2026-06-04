@@ -1197,7 +1197,11 @@
             return;
           }
         } else {
-          // 全部期間（無區間）：仍需整班，但這是使用者主動選「全部期間」才會發生，非預設
+          // 全部期間（無區間）：會掃整班 question_attempts（動輒數萬筆）。沒有現成彙總可替代 → 加二次確認，防誤觸爆讀取
+          if (!confirm('「全部期間」會讀取整班的全部作答紀錄，大班可能數萬筆、耗用較多讀取額度。\n建議改用上方日期區間查詢（較省）。\n\n仍要查全部期間嗎？')) {
+            el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">已取消（可改用日期區間查詢，較省讀取）</div>';
+            return;
+          }
           atSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', selectedClassId)));
           clientFilter = !!startMs;
         }

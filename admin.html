@@ -1894,7 +1894,18 @@ TP18,新北 TP18,2026"></textarea>
     function exCalcExam(exams) { const sums = {}; EX_DIMS.forEach(d => sums[d] = { c: 0, t: 0 }); exams.forEach(e => { if (!e.dimensions) return; EX_DIMS.forEach(d => { const s = e.dimensions[d]; if (s) { sums[d].c += s.correct || 0; sums[d].t += s.total || 0; } }); }); return EX_DIMS.map(d => sums[d].t === 0 ? 0 : (sums[d].c / sums[d].t) * 10); }
 
     async function exClassFirstAvg(classId) { try { const d = await getDoc(doc(db, 'class_radar', classId)); if (d.exists() && d.data().first) { const f = d.data().first; return EX_DIMS.map(k => { const o = f[k]; return (o && o.t) ? (o.c / o.t) * 10 : 0; }); } } catch (e) {} return EX_DIMS.map(() => 0); }
-    async function exStudentFirst(sid) { const snap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', sid))); const first = {}; snap.forEach(d => { const a = d.data(); if (!a.questionId || !a.dimension) return; const t = a.attemptedAt?.seconds || 0; if (!first[a.questionId] || t < first[a.questionId].t) first[a.questionId] = { dim: a.dimension, isCorrect: a.isCorrect, t }; }); const recs = Object.values(first); return { scores: exDimAcc10(recs), has: recs.length > 0 }; }
+    async function exStudentFirst(sid) {
+      // 優先讀個人彙總 student_first_radar（1 筆，與學員 App 首刷雷達同源、數字一致）→ 不逐生掃 attempts
+      try {
+        const d = await getDoc(doc(db, 'student_first_radar', sid));
+        if (d.exists() && d.data().first) {
+          const f = d.data().first;
+          return { scores: EX_DIMS.map(k => { const o = f[k]; return (o && o.t) ? (o.c / o.t) * 10 : 0; }), has: EX_DIMS.some(k => f[k] && f[k].t > 0) };
+        }
+      } catch (e) {}
+      // fallback：無彙總（少數未回填）→ 掃該生作答算一次（最壞＝現狀）
+      const snap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', sid))); const first = {}; snap.forEach(d => { const a = d.data(); if (!a.questionId || !a.dimension) return; const t = a.attemptedAt?.seconds || 0; if (!first[a.questionId] || t < first[a.questionId].t) first[a.questionId] = { dim: a.dimension, isCorrect: a.isCorrect, t }; }); const recs = Object.values(first); return { scores: exDimAcc10(recs), has: recs.length > 0 };
+    }
     async function exClassExamRadar(classId) { const snap = await getDocs(query(collection(db, 'exam_scores_radar'), where('classId', '==', classId))); const byStudent = {}, all = []; snap.forEach(d => { const x = d.data(); all.push(x); (byStudent[x.studentId] = byStudent[x.studentId] || []).push(x); }); return { classAvg: exCalcExam(all), byStudent }; }
     async function exRiverBase(classId) { const snap = await getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', classId))); const byExam = {}; snap.forEach(d => { const x = d.data(); if (x.status !== 'scored' || x.totalScore == null) return; const k = x.examName; if (!byExam[k]) byExam[k] = { name: k, date: x.examDate || '', scores: [], my: {} }; byExam[k].scores.push(x.totalScore); if (x.examDate) byExam[k].date = x.examDate; byExam[k].my[x.studentId] = x.totalScore; }); return byExam; }
     function exBuildRiver(byExam, sid) { const exams = Object.values(byExam).filter(e => e.my[sid] != null).sort((a, b) => (a.date || '').localeCompare(b.date || '')); return exams.map(e => { const arr = e.scores.slice().sort((a, b) => a - b); const n = arr.length, enough = n >= 5; const mean = n ? arr.reduce((x, y) => x + y, 0) / n : null; const P = p => enough ? exPct(arr, p) : null; const dt = e.date ? new Date(e.date) : null; return { label: dt ? `${dt.getMonth() + 1}/${dt.getDate()}` : e.name, my: e.my[sid], mean, p25: P(25), p75: P(75) }; }); }
