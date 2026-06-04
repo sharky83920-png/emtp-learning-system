@@ -2207,6 +2207,30 @@
       } catch (e) { msg.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
     }
 
+    // 重算班級考試彙總 class_exam_summary（成績有變動就呼叫；學員端改讀此 1 筆、不掃整班。失敗不影響成績寫入）
+    function _examPct(sorted, p) { if (!sorted.length) return null; if (sorted.length === 1) return sorted[0]; const idx = (p / 100) * (sorted.length - 1); const lo = Math.floor(idx), hi = Math.ceil(idx), w = idx - lo; return sorted[lo] * (1 - w) + sorted[hi] * w; }
+    async function recalcExamSummary(classId) {
+      if (!classId) return;
+      try {
+        const DIMS = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'];
+        const [rSnap, tSnap] = await Promise.all([
+          getDocs(query(collection(db, 'exam_scores_radar'), where('classId', '==', classId))),
+          getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', classId)))
+        ]);
+        const radar = {}; DIMS.forEach(d => radar[d] = { c: 0, t: 0 });
+        rSnap.forEach(d => { const e = d.data(); if (!e.dimensions) return; DIMS.forEach(k => { const s = e.dimensions[k]; if (s) { radar[k].c += s.correct || 0; radar[k].t += s.total || 0; } }); });
+        const byExam = {};
+        tSnap.forEach(d => { const x = d.data(); if (x.status !== 'scored' || x.totalScore == null) return; const k = x.examName; if (!byExam[k]) byExam[k] = { date: x.examDate || '', scores: [] }; byExam[k].scores.push(x.totalScore); if (x.examDate) byExam[k].date = x.examDate; });
+        const river = {};
+        Object.entries(byExam).forEach(([name, e]) => {
+          const arr = e.scores.slice().sort((a, b) => a - b); const n = arr.length, enough = n >= 5;
+          const P = p => enough ? _examPct(arr, p) : null;
+          river[name] = { date: e.date, n, mean: n ? arr.reduce((x, y) => x + y, 0) / n : null, p10: P(10), p20: P(20), p25: P(25), p30: P(30), p40: P(40), p60: P(60), p70: P(70), p75: P(75), p80: P(80), p90: P(90), dist: { d85: arr.filter(v => v >= 85).length, d76: arr.filter(v => v >= 76 && v < 85).length, d66: arr.filter(v => v >= 66 && v < 76).length, d65: arr.filter(v => v < 66).length } };
+        });
+        await setDoc(doc(db, 'class_exam_summary', classId), { radar, river, updatedAt: serverTimestamp() }, { merge: true });
+      } catch (e) { console.warn('[recalcExamSummary] 重算失敗（不影響成績寫入）:', e?.message || e); }
+    }
+
     async function commitScore() {
       if (!scPreview) return;
       const { name, date, type, mode, rows } = scPreview;
@@ -2230,6 +2254,7 @@
         document.getElementById('sc-data').value = '';
         document.getElementById('sc-preview-box').innerHTML = '';
         scPreview = null;
+        await recalcExamSummary(selectedClassId);   // 成績寫完→重算班彙總
       } catch (e) { document.getElementById('sc-msg').innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
       finally { btn.disabled = false; btn.textContent = '💾 寫入'; }
     }
@@ -2297,6 +2322,7 @@
           await setDoc(ref, { studentId, classId: selectedClassId, studentNo: String(studentNo), examName, examDate: exDate, examType: '小考', ...payload, uploadBatchId: 'manual_edit', uploadedBy: currentInstructor.name, uploadedAt: serverTimestamp() });
           seScoreDocs[studentId] = { docId: ref.id, ...payload };
         }
+        await recalcExamSummary(selectedClassId);   // 成績改完→重算班彙總
         btn.textContent = '✅'; setTimeout(() => { btn.textContent = '存'; btn.disabled = false; }, 1200);
       } catch (e) { alert('❌ ' + e.message); btn.disabled = false; btn.textContent = '存'; }
     }
@@ -2337,6 +2363,7 @@
           const snap = await getDocs(query(collection(db, coll), where('classId', '==', selectedClassId), where('examName', '==', examName)));
           await Promise.all(snap.docs.map(d => deleteDoc(doc(db, coll, d.id))));
         }
+        await recalcExamSummary(selectedClassId);   // 刪場後→重算班彙總
         loadScoreManage();
         if (document.getElementById('scoreedit-card').style.display !== 'none') loadScoreEdit();
       } catch (e) { alert('❌ ' + e.message); }

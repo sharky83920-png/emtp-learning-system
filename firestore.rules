@@ -74,6 +74,7 @@ service cloud.firestore {
     match /class_radar/{id}       { allow read: if authed(); allow write: if isMaster(); }
     match /question_stats/{id}    { allow read: if authed(); allow write: if isMaster(); }   // 每題首刷統計彙總（後台重算寫入）
     match /student_first_radar/{id} { allow read: if authed(); allow write: if authed(); }   // 個人首刷雷達彙總（學員交卷時增量更新；雷達讀 1 筆、不掃全部作答）
+    match /class_exam_summary/{id} { allow read: if authed(); allow write: if authed(); }   // 班級考試彙總（考試雷達班平均+河流每場落點；指導員/後台上傳成績後重算寫入，學員端讀 1 筆不掃整班）
     match /upload_batches/{id}    { allow read: if authed(); allow write: if authed(); }
 
     // ── 公告 / 通知 ──
