@@ -302,6 +302,17 @@
           </div>
           <div id="epa-config-body"><div class="placeholder" style="padding:30px"><div class="icon">📊</div><p>請先選擇班級</p></div></div>
         </div>
+
+        <div class="card">
+          <h2><span>🔎 Milestone 評核紀錄查詢 / 刪除</span></h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">💡 查某班學員的 Milestone 評核紀錄（看得到等級、評核者、時間、質性回饋），可<strong>整筆刪除</strong>（誤評／重複）。<strong>不提供改分數</strong>。選班級才查、省讀取。</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:12px">
+            <div class="form-group" style="margin-bottom:0;min-width:160px"><label>班級</label><select id="mev-class"><option value="">請選班級...</option></select></div>
+            <div class="form-group" style="margin-bottom:0;min-width:160px"><label>學員（選填）</label><select id="mev-student"><option value="">全部學員</option></select></div>
+            <button class="btn btn-green" id="btn-mev-query">🔍 查詢</button>
+          </div>
+          <div id="mev-result"><div class="placeholder" style="padding:20px"><div class="icon">🔎</div><p>選班級後查詢</p></div></div>
+        </div>
       </section>
 
       <section class="tab-content" id="tab-skills">
@@ -1246,7 +1257,7 @@ TP18,新北 TP18,2026"></textarea>
         if (btn.dataset.tab === 'classes') loadClasses();
         if (btn.dataset.tab === 'students') loadClassDropdown();
         if (btn.dataset.tab === 'instructors') loadInstructors();
-        if (btn.dataset.tab === 'milestones') loadMilestonesPage();
+        if (btn.dataset.tab === 'milestones') { loadMilestonesPage(); loadMilestoneEvalPage(); }
         if (btn.dataset.tab === 'skills') { loadSkillsPage(); loadQrPage(); loadSignoffRecordsPage(); }
         if (btn.dataset.tab === 'books') loadBooksPage();
         if (btn.dataset.tab === 'exams') loadExamsPage();
@@ -3749,6 +3760,67 @@ TP18,新北 TP18,2026"></textarea>
         await loadSkills(); renderSkills();
       } catch (e) { alert('❌ ' + e.message); }
       finally { btn.disabled = false; btn.textContent = '🚀 一鍵匯入官方 13 項'; }
+    }
+
+    // ===== 🔎 Milestone 評核紀錄查詢 / 刪除（依班級；只查+刪、不改分數）=====
+    let _mevRecords = [], _mevStudents = {};
+    async function loadMilestoneEvalPage() {
+      try {
+        const cSnap = await getDocs(collection(db, 'classes'));
+        const classes = []; cSnap.forEach(d => { const x = d.data(); if (x.isActive !== false) classes.push({ id: d.id, ...x }); });
+        classes.sort((a, b) => (b.year || 0) - (a.year || 0));
+        const cSel = document.getElementById('mev-class');
+        if (cSel) cSel.innerHTML = '<option value="">請選班級...</option>' + classes.map(c => `<option value="${c.id}">${c.displayName || c.id}</option>`).join('');
+      } catch (e) { console.error('loadMilestoneEvalPage', e); }
+    }
+    document.getElementById('mev-class')?.addEventListener('change', async (e) => {
+      const cid = e.target.value; const stuSel = document.getElementById('mev-student'); _mevStudents = {};
+      if (!cid) { stuSel.innerHTML = '<option value="">全部學員</option>'; return; }
+      try {
+        const snap = await getDocs(query(collection(db, 'students'), where('classId', '==', cid)));
+        const studs = []; snap.forEach(d => { const x = d.data(); _mevStudents[d.id] = (x.studentNo ? x.studentNo + '號 ' : '') + (x.name || d.id); if (x.isActive === false) return; studs.push({ id: d.id, no: x.studentNo || '', name: x.name || d.id }); });
+        studs.sort((a, b) => (parseInt(a.no) || 0) - (parseInt(b.no) || 0));
+        stuSel.innerHTML = '<option value="">全部學員</option>' + studs.map(s => `<option value="${s.id}">${s.no ? s.no + '號 ' : ''}${s.name}</option>`).join('');
+      } catch (err) { stuSel.innerHTML = '<option value="">❌ 載入失敗</option>'; }
+    });
+    document.getElementById('btn-mev-query')?.addEventListener('click', loadMilestoneEval);
+
+    async function loadMilestoneEval() {
+      const cid = document.getElementById('mev-class').value;
+      const sid = document.getElementById('mev-student').value;
+      const box = document.getElementById('mev-result');
+      if (!cid) { box.innerHTML = '<div class="err-msg">請先選班級</div>'; return; }
+      box.innerHTML = '<div class="loading">⏳ 查詢中...</div>';
+      try {
+        const snap = await getDocs(query(collection(db, 'milestone_evaluations'), where('classId', '==', cid)));   // 一次拿該班、前端篩學員（免複合索引）
+        _mevRecords = []; snap.forEach(d => _mevRecords.push({ id: d.id, ...d.data() }));
+        let recs = _mevRecords;
+        if (sid) recs = recs.filter(r => r.studentId === sid);
+        recs.sort((a, b) => (b.evaluatedAt?.seconds || 0) - (a.evaluatedAt?.seconds || 0));
+        if (recs.length === 0) { box.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">查無評核紀錄</div>'; return; }
+        const fmt = sec => { if (!sec) return '—'; const dt = new Date(sec * 1000); const p = n => String(n).padStart(2, '0'); return `${dt.getFullYear()}/${dt.getMonth() + 1}/${dt.getDate()} ${p(dt.getHours())}:${p(dt.getMinutes())}`; };
+        const esc = v => String(v == null ? '' : v).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+        box.innerHTML = `<div style="font-size:13px;color:#cbd5e1;margin-bottom:10px">共 <strong style="color:#10b981">${recs.length}</strong> 筆${sid ? '（已篩學員）' : '（全班）'}</div>` + recs.map(r => {
+          const role = [r.evaluatorRole === '其他' ? r.evaluatorRoleCustom : r.evaluatorRole, r.evaluatorUnit === '其他' ? r.evaluatorUnitCustom : r.evaluatorUnit].filter(Boolean).join('·');
+          return `<div style="border:1px solid #334155;border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;background:#0f172a">
+            <div style="min-width:0">
+              <div style="font-weight:700;color:#f1f5f9">${esc(_mevStudents[r.studentId] || r.studentName || r.studentId)}　<span style="color:#93c5fd">${esc(r.milestoneName || r.milestoneId)}</span></div>
+              <div style="font-size:12px;color:#cbd5e1;margin-top:3px">📊 等級 <strong style="color:#fbbf24">${esc(r.level)}</strong>${r.step ? ' · 步驟 ' + esc(r.step) : ''} · 評核者 ${esc(r.evaluatorName || '—')}${role ? '（' + esc(role) + '）' : ''} · ${fmt(r.evaluatedAt?.seconds)}</div>
+              ${r.qualitativeFeedback ? `<div style="font-size:12px;color:#94a3b8;margin-top:3px">💬 ${esc(r.qualitativeFeedback)}</div>` : ''}
+            </div>
+            <button class="btn btn-red" data-mev-del="${r.id}" style="padding:5px 10px;font-size:13px;flex-shrink:0">🗑 刪除</button>
+          </div>`;
+        }).join('');
+        box.querySelectorAll('[data-mev-del]').forEach(b => b.addEventListener('click', () => deleteMilestoneEval(b.dataset.mevDel)));
+      } catch (e) { box.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+    }
+
+    async function deleteMilestoneEval(id) {
+      const r = _mevRecords.find(x => x.id === id);
+      if (!r) return;
+      if (!confirm(`確定刪除此 Milestone 評核紀錄？\n\n${_mevStudents[r.studentId] || r.studentName || ''} · ${r.milestoneName || r.milestoneId}（等級 ${r.level}）\n評核者：${r.evaluatorName || '—'}\n\n⚠️ 整筆刪除、不可復原。`)) return;
+      try { await deleteDoc(doc(db, 'milestone_evaluations', id)); loadMilestoneEval(); }
+      catch (e) { alert('❌ ' + e.message); }
     }
 
     // ===== 簽核紀錄查詢 / 修改 / 刪除（依班級）=====
