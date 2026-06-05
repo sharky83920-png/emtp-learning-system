@@ -330,6 +330,19 @@
           <div id="ann-list" style="margin-top:14px"></div>
         </div>
 
+        <div class="card" id="troop-card" style="display:none">
+          <h2 style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center;gap:8px" id="troop-toggle"><span>⚡ 全班刷題趟數總覽 <span style="font-size:12px;color:#94a3b8;font-weight:400">一眼看全班誰刷幾趟（讀彙總、超省；點學員看動能）</span></span><span id="troop-caret" style="font-size:14px;color:#94a3b8">▶ 展開</span></h2>
+          <div id="troop-wrap" style="display:none">
+            <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:10px 0 14px">
+              <label style="font-size:13px;color:#475569;display:flex;flex-direction:column;gap:4px">期間<select id="troop-period"><option value="weekly">本週</option><option value="monthly">本月</option><option value="custom">自訂日期</option></select></label>
+              <label class="troop-date" style="font-size:13px;color:#475569;display:none;flex-direction:column;gap:4px">起<input type="date" id="troop-start"></label>
+              <label class="troop-date" style="font-size:13px;color:#475569;display:none;flex-direction:column;gap:4px">迄<input type="date" id="troop-end"></label>
+              <button id="troop-refresh" class="btn-logout">🔄 重新整理</button>
+            </div>
+            <div id="troop-list"><div class="placeholder"><div class="icon">⏳</div><p>展開後載入…</p></div></div>
+          </div>
+        </div>
+
         <div class="card" id="student-view-card">
           <h2>👤 個別學員檢視</h2>
           <p style="color:#64748b;font-size:13px;margin-bottom:12px">選一位學員，查看他的成績河流圖、學科雷達圖與每日刷題動能。</p>
@@ -1680,6 +1693,7 @@
       loadInstructorAnnouncements();
       // 個別學員檢視（三個獨立權限：雷達/動能/河流）
       loadStudentViewPanel(perms);
+      initTroopOverview();   // ⚡ 全班刷題趟數總覽（lazy：展開才讀彙總）
       // 沒「開關錯題本」權限 → 整張卡隱藏
       const mbCard = document.getElementById('mb-card');
       if (perms.canToggleMistakeBook) { mbCard.style.display = ''; loadMistakeBookToggle(); }
@@ -1817,6 +1831,70 @@
       ];
     }
 
+    // ===== ⚡ 全班刷題趟數總覽（讀彙總 sessionLog、最省；點學員連到動能）=====
+    let _svStudents = [];   // loadStudentViewPanel 載入的全班學員（id/no/name），總覽重用
+    function troopPeriodStart(period) { const d = new Date(); d.setHours(0, 0, 0, 0); if (period === 'monthly') { d.setDate(1); return d.getTime(); } const day = d.getDay(); d.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); return d.getTime(); }
+
+    function initTroopOverview() {
+      const card = document.getElementById('troop-card');
+      const p = classPerms || {};
+      if (card) card.style.display = p.canViewStudentMomentum ? '' : 'none';   // 用「看刷題動能」權限控管
+      const tog = document.getElementById('troop-toggle');
+      if (!tog || tog._bound) return; tog._bound = true;
+      const wrap = document.getElementById('troop-wrap'), caret = document.getElementById('troop-caret');
+      tog.addEventListener('click', () => { const open = wrap.style.display === 'none'; wrap.style.display = open ? 'block' : 'none'; caret.textContent = open ? '▼ 收合' : '▶ 展開'; if (open) loadTroopOverview(); });
+      document.getElementById('troop-refresh').addEventListener('click', loadTroopOverview);
+      document.getElementById('troop-period').addEventListener('change', () => { const c = document.getElementById('troop-period').value === 'custom'; document.querySelectorAll('.troop-date').forEach(e => e.style.display = c ? 'flex' : 'none'); loadTroopOverview(); });
+      ['troop-start', 'troop-end'].forEach(id => document.getElementById(id).addEventListener('change', () => { if (document.getElementById('troop-period').value === 'custom') loadTroopOverview(); }));
+    }
+
+    async function loadTroopOverview() {
+      const list = document.getElementById('troop-list');
+      list.innerHTML = '<div class="placeholder"><div class="icon">⏳</div><p>載入中…</p></div>';
+      try {
+        const period = document.getElementById('troop-period').value;
+        let start, end = Infinity, label;
+        if (period === 'custom') {
+          const s = document.getElementById('troop-start').value, e = document.getElementById('troop-end').value;
+          start = s ? new Date(s + 'T00:00:00').getTime() : 0; end = e ? new Date(e + 'T23:59:59').getTime() : Infinity; label = `${s || '起'} ~ ${e || '今'}`;
+        } else { start = troopPeriodStart(period); label = period === 'monthly' ? '本月' : '本週'; }
+        // 能量條目標（讀 1 筆 classes）
+        const cDoc = await getDoc(doc(db, 'classes', selectedClassId));
+        const eb = (cDoc.exists() && cDoc.data().settings && cDoc.data().settings.energyBar) || {};
+        const target = eb.target || 15;
+        // 學員清單：重用 _svStudents、排除測試帳號；若沒有就自己讀一次
+        let studs = (_svStudents || []).filter(s => !String(s.name).includes('測試'));
+        if (!studs.length) {
+          const snap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
+          studs = []; snap.forEach(d => { const x = d.data(); if (x.isActive === false || String(x.name || '').includes('測試')) return; studs.push({ id: d.id, no: x.studentNo || '', name: x.name || d.id }); });
+          studs.sort((a, b) => (parseInt(a.no) || 0) - (parseInt(b.no) || 0));
+        }
+        // 逐生讀 progress.sessionLog（每生 1 筆、最省）
+        const rows = [];
+        for (const s of studs) {
+          const prog = (await getDoc(doc(db, 'student_quiz_progress', s.id))).data() || {};
+          let cnt = 0;
+          if (Array.isArray(prog.sessionLog)) { const ids = new Set(); prog.sessionLog.forEach(x => { if (x && x.at >= start && x.at <= end && x.id) ids.add(x.id); }); cnt = ids.size; }
+          rows.push({ ...s, cnt });
+        }
+        const done = rows.filter(r => r.cnt >= target).length;
+        list.innerHTML = `<div style="color:#64748b;font-size:12px;margin-bottom:10px">期間：${label}　目標 ${target} 趟　達標 ${done}/${rows.length} 人　（讀 ${rows.length} 筆彙總；點學員看每日動能）</div>` +
+          `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">` +
+          rows.map(r => {
+            const ok = r.cnt >= target; const cells = Math.max(target, 1); const filled = Math.min(r.cnt, cells);
+            const bat = Array.from({ length: cells }, (_, i) => `<span style="flex:1;height:10px;border-radius:2px;background:${i < filled ? (ok ? '#10b981' : '#f59e0b') : '#e2e8f0'}"></span>`).join('');
+            return `<div class="troop-cell" data-sid="${r.id}" style="cursor:pointer;border:1px solid ${ok ? '#86efac' : '#e2e8f0'};background:${ok ? '#f0fdf4' : '#fff'};border-radius:10px;padding:10px">
+              <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span style="font-weight:600;color:#1e293b">${r.no ? r.no + '號 ' : ''}${r.name}</span><span style="color:${ok ? '#15803d' : '#b45309'};font-weight:700">${r.cnt}/${target}${ok ? ' ✅' : ''}</span></div>
+              <div style="display:flex;gap:2px">${bat}</div>
+            </div>`;
+          }).join('') + `</div>`;
+        list.querySelectorAll('.troop-cell').forEach(c => c.addEventListener('click', () => {
+          const sid = c.dataset.sid; const sel = document.getElementById('sv-student');
+          if (sel) { sel.value = sid; sel.dispatchEvent(new Event('change')); const sc = document.getElementById('student-view-card'); if (sc) sc.scrollIntoView({ behavior: 'smooth' }); }
+        }));
+      } catch (e) { list.innerHTML = `<div style="color:#dc2626;padding:12px">❌ ${e.message}</div>`; }
+    }
+
     async function loadStudentViewPanel(perms) {
       const card = document.getElementById('student-view-card');
       const p = perms || classPerms || {};
@@ -1838,6 +1916,7 @@
         const studs = [];
         snap.forEach(d => { const x = d.data(); if (x.isActive === false) return; studs.push({ id: d.id, no: x.studentNo || '', name: x.name || d.id }); });
         studs.sort((a, b) => (parseInt(a.no) || 0) - (parseInt(b.no) || 0));
+        _svStudents = studs;   // 存起來供「全班趟數總覽」重用，不再重讀 students
         sel.innerHTML = '<option value="">請選擇學員...</option>' + studs.map(s => `<option value="${s.id}">${s.no ? s.no + '號 ' : ''}${s.name}</option>`).join('');
         _svCurrentStudentId = null;
       } catch (e) { sel.innerHTML = '<option value="">❌ 載入失敗</option>'; }
