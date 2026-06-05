@@ -17,7 +17,12 @@ service cloud.firestore {
     function isMaster() { return authed() && request.auth.token.email == 'sharky83920@gmail.com'; }
 
     // ── 登入下拉需要未登入可讀 ──
-    match /classes/{id}      { allow read: if true; allow write: if isMaster(); }
+    match /classes/{id}      {
+      allow read: if true;
+      allow create, delete: if isMaster();
+      // Master 全權；指導員（登入者）只能改 settings 相關欄位（能量條/錯題本設定），不能動 displayName/isActive 等其他班級資料。學員端無此寫入功能。
+      allow update: if isMaster() || (authed() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['settings', 'settingsUpdatedAt', 'settingsUpdatedBy']));
+    }
     match /students/{id}     { allow read: if true; allow write: if isMaster(); }
     match /instructors/{id}  { allow read: if true; allow write: if isMaster(); }
 
