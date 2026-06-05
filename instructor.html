@@ -211,9 +211,9 @@
           <div id="energy-body"><div class="placeholder" style="padding:20px"><div class="icon">⏳</div></div></div>
         </div>
 
-        <div class="card">
-          <h2>🏆 綜合測驗績效排名</h2>
-          <p style="color:#64748b;font-size:13px;margin-bottom:10px">只計隨機綜合測驗（不含專項練習）。可選日期區間。全班依加權分數排名。</p>
+        <div class="card" id="perf-card" style="display:none">
+          <h2>🏆 綜合測驗績效排名（看刷題數，巨耗錢）</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:10px">只計隨機綜合測驗（不含專項練習）。可選日期區間。全班依加權分數排名。⚠️ 會掃大量作答、較耗讀取，僅後台授權者可見。</p>
           <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
             <input type="date" id="perf-start" style="padding:7px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit;font-size:13px">
             <span style="color:#94a3b8">~</span>
@@ -695,6 +695,7 @@
       // 卡片層級：出題追蹤頁內的能量條 / 各班出題戰力
       document.getElementById('energy-card').style.display = p.canEditEnergyBar ? '' : 'none';
       document.getElementById('classpower-card').style.display = p.canViewClassPower ? '' : 'none';
+      { const _pc = document.getElementById('perf-card'); if (_pc) _pc.style.display = p.canViewPerfRanking ? '' : 'none'; }   // 綜合績效排名：後台授權才顯示（耗讀取）
       // 目前所在分頁若被隱藏 → 退回出題追蹤（只切換、不在這裡載入；由呼叫端載入）
       const activeBtn = document.querySelector('.bottom-tabs button.active');
       if (activeBtn && activeBtn.style.display === 'none') {
@@ -1151,8 +1152,7 @@
       if (perms.canEditEnergyBar) tasks.push(loadEnergyBar());   // 沒權限不載、卡片已隱藏
       await Promise.all(tasks);
       populateTrackControls();                                    // 出題繳交追蹤（schedCache 已就緒）
-      if (!document.getElementById('perf-start').value) _setPerfWeek(); // 預設本週、不撈全部
-      loadPerfRanking();                                          // 綜合績效排名
+      if (perms.canViewPerfRanking) { if (!document.getElementById('perf-start').value) _setPerfWeek(); loadPerfRanking(); }   // 綜合績效排名：需後台授權才載入（耗讀取）
       if (perms.canViewClassPower) loadQuestionPower();           // 各班出題戰力（需權限）
     }
 
@@ -1838,7 +1838,7 @@
     function initTroopOverview() {
       const card = document.getElementById('troop-card');
       const p = classPerms || {};
-      if (card) card.style.display = p.canViewStudentMomentum ? '' : 'none';   // 用「看刷題動能」權限控管
+      if (card) card.style.display = p.canViewTroopOverview ? '' : 'none';   // 後台「查看能量條進度」權限控管
       const tog = document.getElementById('troop-toggle');
       if (!tog || tog._bound) return; tog._bound = true;
       const wrap = document.getElementById('troop-wrap'), caret = document.getElementById('troop-caret');
