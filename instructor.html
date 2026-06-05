@@ -1496,14 +1496,14 @@
           </label>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
             <div>
-              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">週期模式</label>
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">週期模式 <span style="cursor:pointer;color:#3b82f6;font-weight:700" onclick="alert('每週重置＝每週一 00:00（凌晨）起算，只算本週一之後刷的趟數。每月重置＝每月 1 號 00:00 起算。到了週一／1 號，趟數會自動歸零重算，上一週期不計入。')" title="點我看說明">ⓘ</span></label>
               <select id="eb-period" ${dis} style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit">
                 <option value="weekly" ${eb.period === 'weekly' ? 'selected' : ''}>每週重置</option>
                 <option value="monthly" ${eb.period === 'monthly' ? 'selected' : ''}>每月重置</option>
               </select>
             </div>
             <div>
-              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">目標趟數</label>
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">目標趟數 <span style="cursor:pointer;color:#3b82f6;font-weight:700" onclick="alert('一趟＝完成一次 10 題綜合測驗（專項練習不計）。學員在本週期內刷滿這個趟數，就達標、能量條集滿。')" title="點我看說明">ⓘ</span></label>
               <input type="number" id="eb-target" value="${eb.target || 15}" min="1" max="100" ${dis} style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit">
             </div>
           </div>
