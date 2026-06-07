@@ -595,7 +595,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, arrayUnion, runTransaction, orderBy, limit, increment } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, arrayUnion, arrayRemove, runTransaction, orderBy, limit, increment } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
     import { getMessaging, getToken, onMessage, isSupported as fcmSupported } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-messaging.js";
     import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js";
@@ -2906,14 +2906,16 @@
         const counts = {};
         quizState.answers.forEach(a => { counts[a.questionId] = increment(1); });
         const progUpdate = { counts, updatedAt: serverTimestamp() };
-        // 能量條趟數彙總：完成一趟才記，保留近 70 天的 {id,at}（能量條改讀此 1 筆、不再掃全部 attempts）
-        if (completed === true && quizState.sessionId) {
-          const now = Date.now(), cut = now - 70 * 86400000;
-          const log = (progData.sessionLog || []).filter(s => s && s.at >= cut && s.id !== quizState.sessionId);
-          log.push({ id: quizState.sessionId, at: now });
-          progUpdate.sessionLog = log;
-        }
         await setDoc(progRef, progUpdate, { merge: true });
+        // 能量條趟數彙總：完成一趟才記一筆 {id,at}。
+        // 🐛 修：舊版「讀整包 sessionLog → push → 整包 setDoc 寫回」非原子，學生連續測驗時
+        //   下一場的讀取早於上一場寫回 → lost update → 大量漏記趟數（曾 71 趟只記到 27）。
+        //   改用 arrayUnion 原子追加（並發也不丟）；70 天前舊項用 arrayRemove 原子移除（不影響並發新增）。
+        if (completed === true && quizState.sessionId) {
+          await updateDoc(progRef, { sessionLog: arrayUnion({ id: quizState.sessionId, at: Date.now() }) });
+          const stale = (progData.sessionLog || []).filter(s => s && typeof s.at === 'number' && s.at < Date.now() - 70 * 86400000);
+          if (stale.length) { try { await updateDoc(progRef, { sessionLog: arrayRemove(...stale) }); } catch (e) {} }
+        }
       } catch (e) { console.warn('寫入進度/雷達彙總:', e); }
 
       // 先載入此學員已收藏的錯題（決定星星狀態）
