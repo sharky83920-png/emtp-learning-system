@@ -483,20 +483,18 @@
         </div>
         <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#991b1b;margin:6px 0 14px"><input type="checkbox" id="corr-hide" style="width:18px;height:18px"> 隱藏此題（保留編號、不再出現在題庫）</label>
         <div class="form-group">
-          <label>回覆（選填、會發到對方的通知中心）</label>
-          <div style="display:flex;gap:6px;margin:4px 0 8px">
-            <button type="button" id="corr-tab-reporter" style="flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:#10b981;color:white;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">👤 給回報者</button>
-            <button type="button" id="corr-tab-author" style="flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:#f1f5f9;color:#475569;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">✍️ 給出題者</button>
-          </div>
+          <label style="display:block;margin-bottom:5px">👤 <span id="corr-reply-rlabel">給回報者</span> <span style="color:#059669;font-weight:700">〔結案後一定會通知〕</span></label>
           <textarea id="corr-reply" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px" placeholder="給回報者（選填）：例 感謝回報、標答已更正為 B"></textarea>
-          <textarea id="corr-reply-author" rows="2" style="display:none;width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px" placeholder="給出題者（選填）：例 你出的這題標答有誤、已更正為 B，下次留意"></textarea>
-          <div id="corr-author-hint" style="font-size:12px;color:#b45309;margin-top:6px;display:none">⚠️ 此題無出題者資料、無法通知出題者。</div>
+        </div>
+        <div class="form-group" id="corr-author-group">
+          <label style="display:block;margin-bottom:5px">✍️ <span id="corr-reply-alabel">給出題者</span> <span id="corr-author-rule" style="color:#b45309;font-weight:700">〔留空＝不通知〕</span></label>
+          <textarea id="corr-reply-author" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px" placeholder="給出題者（選填）：例 你出的這題標答有誤、已更正為 B，下次留意"></textarea>
         </div>
         <div id="corr-modal-msg"></div>
       </div>
       <div style="padding:14px 20px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">
         <button id="corr-modal-cancel" style="background:#e2e8f0;color:#475569;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit">取消</button>
-        <button id="corr-resolve-fix" style="background:#10b981;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600">✅ 結案並通知</button>
+        <button id="corr-resolve-fix" style="background:#10b981;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600">✅ 結案並通知回報者</button>
       </div>
     </div>
   </div>
@@ -1006,19 +1004,29 @@
       document.getElementById('corr-hide').checked = q.isVisible === false;
       document.getElementById('corr-reply').value = '';
       document.getElementById('corr-reply-author').value = '';
-      // 回覆分頁預設「給回報者」；依出題者 id 啟用/禁用「給出題者」
-      switchCorrReplyTab('reporter');
       currentCorr.authorId = q.createdByStudentId || '';
       currentCorr.authorName = _who;
-      const _authorTab = document.getElementById('corr-tab-author');
-      const _authorHint = document.getElementById('corr-author-hint');
+      // 回報者標籤：1 位顯示姓名、多位顯示「N 位」
+      const _reps = currentCorr.reports || [];
+      document.getElementById('corr-reply-rlabel').textContent =
+        _reps.length === 1 ? `給回報者 ${_esc(_reps[0].reportedByName || '學員')}` : `給回報者（${_reps.length} 位）`;
+      // 出題者欄：有 id → 啟用＋標姓名；無 id → 禁用＋灰掉＋提示
+      const _aTa = document.getElementById('corr-reply-author');
+      const _aGroup = document.getElementById('corr-author-group');
+      const _aLabel = document.getElementById('corr-reply-alabel');
+      const _aRule = document.getElementById('corr-author-rule');
       if (currentCorr.authorId) {
-        _authorTab.disabled = false; _authorTab.style.opacity = '1'; _authorTab.style.cursor = 'pointer';
-        _authorHint.style.display = 'none';
+        _aTa.disabled = false; _aGroup.style.opacity = '1';
+        _aLabel.textContent = `給出題者 ${_esc(_who)}`;
+        _aRule.textContent = '〔留空＝不通知〕'; _aRule.style.color = '#b45309';
+        _aTa.placeholder = '給出題者（選填）：例 你出的這題標答有誤、已更正為 B，下次留意';
       } else {
-        _authorTab.disabled = true; _authorTab.style.opacity = '0.45'; _authorTab.style.cursor = 'not-allowed';
-        _authorHint.style.display = 'block';
+        _aTa.disabled = true; _aTa.value = ''; _aGroup.style.opacity = '0.5';
+        _aLabel.textContent = '給出題者';
+        _aRule.textContent = '〔此題無出題者資料、無法通知〕'; _aRule.style.color = '#94a3b8';
+        _aTa.placeholder = '此題無出題者資料';
       }
+      updateCorrBtnLabel();
       document.getElementById('corr-modal-msg').innerHTML = '';
       // 選項
       const opts = q.options || {};
@@ -1044,17 +1052,13 @@
     document.getElementById('corr-modal-cancel').addEventListener('click', closeCorrModal);
     document.getElementById('corr-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeCorrModal(); });
     document.getElementById('corr-resolve-fix').addEventListener('click', () => resolveCorr());
-    // 回覆分頁切換：給回報者 / 給出題者
-    function switchCorrReplyTab(which) {
-      const isRep = which !== 'author';
-      document.getElementById('corr-reply').style.display = isRep ? 'block' : 'none';
-      document.getElementById('corr-reply-author').style.display = isRep ? 'none' : 'block';
-      const tabR = document.getElementById('corr-tab-reporter'), tabA = document.getElementById('corr-tab-author');
-      tabR.style.background = isRep ? '#10b981' : '#f1f5f9'; tabR.style.color = isRep ? 'white' : '#475569';
-      tabA.style.background = !isRep ? '#6366f1' : '#f1f5f9'; tabA.style.color = !isRep ? 'white' : '#475569';
+    // 結案鈕動態文字：出題者欄有字 → 顯示「回報者＋出題者」，否則「回報者」
+    function updateCorrBtnLabel() {
+      const aTa = document.getElementById('corr-reply-author');
+      const hasAuthor = !aTa.disabled && aTa.value.trim().length > 0;
+      document.getElementById('corr-resolve-fix').textContent = hasAuthor ? '✅ 結案並通知回報者＋出題者' : '✅ 結案並通知回報者';
     }
-    document.getElementById('corr-tab-reporter').addEventListener('click', () => switchCorrReplyTab('reporter'));
-    document.getElementById('corr-tab-author').addEventListener('click', () => { if (!document.getElementById('corr-tab-author').disabled) switchCorrReplyTab('author'); });
+    document.getElementById('corr-reply-author').addEventListener('input', updateCorrBtnLabel);
 
     // ===== 勘誤：書籍 / 章節（可改、存檔時重算維度）=====
     let corrBooks = [], corrChapters = [];

@@ -1164,15 +1164,15 @@ TP18,新北 TP18,2026"></textarea>
           <div class="form-group"><label>頁碼</label><input id="qm-edit-page"></div>
         </div>
         <div class="form-group"><label style="display:flex;align-items:center;gap:8px;color:#fca5a5"><input type="checkbox" id="qm-edit-hide" style="width:18px;height:18px"> 隱藏此題（保留編號、不再出現在題庫）</label></div>
-        <div class="form-group" id="qm-edit-reply-group" style="display:none">
-          <label>回覆（選填、會發到對方的通知中心）</label>
-          <div style="display:flex;gap:6px;margin:4px 0 8px">
-            <button type="button" id="qm-edit-tab-reporter" style="flex:1;padding:8px;border:none;border-radius:8px;background:#10b981;color:white;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">👤 給回報者</button>
-            <button type="button" id="qm-edit-tab-author" style="flex:1;padding:8px;border:none;border-radius:8px;background:#1e293b;color:#94a3b8;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">✍️ 給出題者</button>
+        <div id="qm-edit-reply-group" style="display:none">
+          <div class="form-group">
+            <label>👤 <span id="qm-edit-rlabel">給回報者</span> <span style="color:#34d399;font-weight:700">〔結案後一定會通知〕</span></label>
+            <textarea id="qm-edit-reply" rows="2" placeholder="給回報者（選填）：例 感謝回報、標答已更正為 B"></textarea>
           </div>
-          <textarea id="qm-edit-reply" rows="2" placeholder="給回報者（選填）：例 感謝回報、標答已更正為 B"></textarea>
-          <textarea id="qm-edit-reply-author" rows="2" style="display:none" placeholder="給出題者（選填）：例 你出的這題標答有誤、已更正為 B，下次留意"></textarea>
-          <div id="qm-edit-author-hint" style="font-size:12px;color:#fbbf24;margin-top:6px;display:none">⚠️ 此題無出題者資料、無法通知出題者。</div>
+          <div class="form-group" id="qm-edit-author-group">
+            <label>✍️ <span id="qm-edit-alabel">給出題者</span> <span id="qm-edit-author-rule" style="color:#fbbf24;font-weight:700">〔留空＝不通知〕</span></label>
+            <textarea id="qm-edit-reply-author" rows="2" placeholder="給出題者（選填）：例 你出的這題標答有誤、已更正為 B，下次留意"></textarea>
+          </div>
         </div>
         <div id="qm-edit-msg"></div>
       </div>
@@ -5662,13 +5662,29 @@ TP18,新北 TP18,2026"></textarea>
       const isCorr = reports && reports.length > 0;
       document.getElementById('qm-edit-reporters').style.display = isCorr ? 'block' : 'none';
       document.getElementById('qm-edit-reply-group').style.display = isCorr ? 'block' : 'none';
-      document.getElementById('qm-edit-save').textContent = isCorr ? '✅ 結案並通知' : '💾 儲存';
+      document.getElementById('qm-edit-save').textContent = isCorr ? '✅ 結案並通知回報者' : '💾 儲存';
       if (isCorr) {
         document.getElementById('qm-edit-reporters-list').innerHTML = reports.map(r => `• ${r.reportedByName || '學員'}（${r.reportedByClassId || '?'}）：${r.reason || ''}`).join('<br>');
-        qmSwitchReplyTab('reporter');
-        const aTab = document.getElementById('qm-edit-tab-author'), aHint = document.getElementById('qm-edit-author-hint');
-        if (qmEditCtx.authorId) { aTab.disabled = false; aTab.style.opacity = '1'; aTab.style.cursor = 'pointer'; aHint.style.display = 'none'; }
-        else { aTab.disabled = true; aTab.style.opacity = '0.45'; aTab.style.cursor = 'not-allowed'; aHint.style.display = 'block'; }
+        // 回報者標籤：1 位顯示姓名、多位顯示「N 位」
+        document.getElementById('qm-edit-rlabel').textContent =
+          reports.length === 1 ? `給回報者 ${reports[0].reportedByName || '學員'}` : `給回報者（${reports.length} 位）`;
+        // 出題者欄：有 id → 啟用＋標姓名；無 id → 禁用＋灰掉＋提示
+        const aTa = document.getElementById('qm-edit-reply-author');
+        const aGroup = document.getElementById('qm-edit-author-group');
+        const aLabel = document.getElementById('qm-edit-alabel');
+        const aRule = document.getElementById('qm-edit-author-rule');
+        if (qmEditCtx.authorId) {
+          aTa.disabled = false; aGroup.style.opacity = '1';
+          aLabel.textContent = `給出題者 ${qmEditCtx.authorName || ''}`.trim();
+          aRule.textContent = '〔留空＝不通知〕'; aRule.style.color = '#fbbf24';
+          aTa.placeholder = '給出題者（選填）：例 你出的這題標答有誤、已更正為 B，下次留意';
+        } else {
+          aTa.disabled = true; aTa.value = ''; aGroup.style.opacity = '0.5';
+          aLabel.textContent = '給出題者';
+          aRule.textContent = '〔此題無出題者資料、無法通知〕'; aRule.style.color = '#64748b';
+          aTa.placeholder = '此題無出題者資料';
+        }
+        updateQmBtnLabel();
       }
       document.getElementById('qm-edit-modal').classList.add('active');
     }
@@ -5676,17 +5692,13 @@ TP18,新北 TP18,2026"></textarea>
     document.getElementById('qm-edit-cancel').addEventListener('click', () => document.getElementById('qm-edit-modal').classList.remove('active'));
     document.getElementById('qm-edit-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('qm-edit-modal').classList.remove('active'); });
     document.getElementById('qm-edit-save').addEventListener('click', () => qmSaveEdit());
-    // 回覆分頁切換：給回報者 / 給出題者
-    function qmSwitchReplyTab(which) {
-      const isRep = which !== 'author';
-      document.getElementById('qm-edit-reply').style.display = isRep ? 'block' : 'none';
-      document.getElementById('qm-edit-reply-author').style.display = isRep ? 'none' : 'block';
-      const tabR = document.getElementById('qm-edit-tab-reporter'), tabA = document.getElementById('qm-edit-tab-author');
-      tabR.style.background = isRep ? '#10b981' : '#1e293b'; tabR.style.color = isRep ? 'white' : '#94a3b8';
-      tabA.style.background = !isRep ? '#6366f1' : '#1e293b'; tabA.style.color = !isRep ? 'white' : '#94a3b8';
+    // 結案鈕動態文字：出題者欄有字 → 顯示「回報者＋出題者」，否則「回報者」
+    function updateQmBtnLabel() {
+      const aTa = document.getElementById('qm-edit-reply-author');
+      const hasAuthor = !aTa.disabled && aTa.value.trim().length > 0;
+      document.getElementById('qm-edit-save').textContent = hasAuthor ? '✅ 結案並通知回報者＋出題者' : '✅ 結案並通知回報者';
     }
-    document.getElementById('qm-edit-tab-reporter').addEventListener('click', () => qmSwitchReplyTab('reporter'));
-    document.getElementById('qm-edit-tab-author').addEventListener('click', () => { if (!document.getElementById('qm-edit-tab-author').disabled) qmSwitchReplyTab('author'); });
+    document.getElementById('qm-edit-reply-author').addEventListener('input', updateQmBtnLabel);
 
     async function qmSaveEdit() {
       if (!qmEditCtx) return;
