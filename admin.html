@@ -1164,12 +1164,20 @@ TP18,新北 TP18,2026"></textarea>
           <div class="form-group"><label>頁碼</label><input id="qm-edit-page"></div>
         </div>
         <div class="form-group"><label style="display:flex;align-items:center;gap:8px;color:#fca5a5"><input type="checkbox" id="qm-edit-hide" style="width:18px;height:18px"> 隱藏此題（保留編號、不再出現在題庫）</label></div>
-        <div class="form-group" id="qm-edit-reply-group" style="display:none"><label>回覆學員（選填、會通知回報者）</label><textarea id="qm-edit-reply" rows="2" placeholder="例：感謝回報、標答已更正為 B"></textarea></div>
+        <div class="form-group" id="qm-edit-reply-group" style="display:none">
+          <label>回覆（選填、會發到對方的通知中心）</label>
+          <div style="display:flex;gap:6px;margin:4px 0 8px">
+            <button type="button" id="qm-edit-tab-reporter" style="flex:1;padding:8px;border:none;border-radius:8px;background:#10b981;color:white;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">👤 給回報者</button>
+            <button type="button" id="qm-edit-tab-author" style="flex:1;padding:8px;border:none;border-radius:8px;background:#1e293b;color:#94a3b8;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">✍️ 給出題者</button>
+          </div>
+          <textarea id="qm-edit-reply" rows="2" placeholder="給回報者（選填）：例 感謝回報、標答已更正為 B"></textarea>
+          <textarea id="qm-edit-reply-author" rows="2" style="display:none" placeholder="給出題者（選填）：例 你出的這題標答有誤、已更正為 B，下次留意"></textarea>
+          <div id="qm-edit-author-hint" style="font-size:12px;color:#fbbf24;margin-top:6px;display:none">⚠️ 此題無出題者資料、無法通知出題者。</div>
+        </div>
         <div id="qm-edit-msg"></div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" id="qm-edit-cancel">取消</button>
-        <button class="btn btn-red" id="qm-edit-reject" style="display:none">❌ 不成立並通知</button>
         <button class="btn btn-green" id="qm-edit-save">💾 儲存</button>
       </div>
     </div>
@@ -5627,7 +5635,7 @@ TP18,新北 TP18,2026"></textarea>
     function openQmEdit(qid, reports = null) {
       const q = qmCache.find(x => x.id === qid);
       if (!q) return;
-      qmEditCtx = { qid, qUpdatedAt: q.updatedAt?.seconds || 0, reports: reports || [] };
+      qmEditCtx = { qid, qUpdatedAt: q.updatedAt?.seconds || 0, reports: reports || [], authorId: q.createdByStudentId || '', authorName: q.createdByName || q.createdBy || '' };
       document.getElementById('qm-edit-title').textContent = reports ? '⚠️ 處理勘誤' : '✏️ 編輯題目';
       document.getElementById('qm-edit-qid').textContent = qid;
       document.getElementById('qm-edit-qtext').value = q.questionText || '';
@@ -5645,55 +5653,92 @@ TP18,新北 TP18,2026"></textarea>
         qmEditPopulateBook(s.bookId || ''); qmEditPopulateChapter(s.bookId || '', s.chapterId || '', s.chapterNumber); qmEditDimHint(); }
       document.getElementById('qm-edit-hide').checked = q.isVisible === false;
       document.getElementById('qm-edit-reply').value = '';
+      document.getElementById('qm-edit-reply-author').value = '';
       document.getElementById('qm-edit-msg').innerHTML = '';
       const opts = q.options || {};
       document.getElementById('qm-edit-options').innerHTML = ['A', 'B', 'C', 'D'].map(k =>
         `<div class="form-group"><label>選項 ${k}</label><input class="qm-edit-opt" data-k="${k}" value="${(opts[k]?.text || '').replace(/"/g, '&quot;')}"></div>`).join('');
-      // 勘誤模式 → 顯示回報者 + 回覆 + 不成立鈕
+      // 勘誤模式 → 顯示回報者 + 回覆分頁（給回報者／給出題者）
       const isCorr = reports && reports.length > 0;
       document.getElementById('qm-edit-reporters').style.display = isCorr ? 'block' : 'none';
       document.getElementById('qm-edit-reply-group').style.display = isCorr ? 'block' : 'none';
-      document.getElementById('qm-edit-reject').style.display = isCorr ? 'inline-flex' : 'none';
-      document.getElementById('qm-edit-save').textContent = isCorr ? '✅ 已修正並通知' : '💾 儲存';
-      if (isCorr) document.getElementById('qm-edit-reporters-list').innerHTML = reports.map(r => `• ${r.reportedByName || '學員'}（${r.reportedByClassId || '?'}）：${r.reason || ''}`).join('<br>');
+      document.getElementById('qm-edit-save').textContent = isCorr ? '✅ 結案並通知' : '💾 儲存';
+      if (isCorr) {
+        document.getElementById('qm-edit-reporters-list').innerHTML = reports.map(r => `• ${r.reportedByName || '學員'}（${r.reportedByClassId || '?'}）：${r.reason || ''}`).join('<br>');
+        qmSwitchReplyTab('reporter');
+        const aTab = document.getElementById('qm-edit-tab-author'), aHint = document.getElementById('qm-edit-author-hint');
+        if (qmEditCtx.authorId) { aTab.disabled = false; aTab.style.opacity = '1'; aTab.style.cursor = 'pointer'; aHint.style.display = 'none'; }
+        else { aTab.disabled = true; aTab.style.opacity = '0.45'; aTab.style.cursor = 'not-allowed'; aHint.style.display = 'block'; }
+      }
       document.getElementById('qm-edit-modal').classList.add('active');
     }
     document.getElementById('qm-edit-close').addEventListener('click', () => document.getElementById('qm-edit-modal').classList.remove('active'));
     document.getElementById('qm-edit-cancel').addEventListener('click', () => document.getElementById('qm-edit-modal').classList.remove('active'));
     document.getElementById('qm-edit-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('qm-edit-modal').classList.remove('active'); });
-    document.getElementById('qm-edit-save').addEventListener('click', () => qmSaveEdit('fixed'));
-    document.getElementById('qm-edit-reject').addEventListener('click', () => qmSaveEdit('rejected'));
+    document.getElementById('qm-edit-save').addEventListener('click', () => qmSaveEdit());
+    // 回覆分頁切換：給回報者 / 給出題者
+    function qmSwitchReplyTab(which) {
+      const isRep = which !== 'author';
+      document.getElementById('qm-edit-reply').style.display = isRep ? 'block' : 'none';
+      document.getElementById('qm-edit-reply-author').style.display = isRep ? 'none' : 'block';
+      const tabR = document.getElementById('qm-edit-tab-reporter'), tabA = document.getElementById('qm-edit-tab-author');
+      tabR.style.background = isRep ? '#10b981' : '#1e293b'; tabR.style.color = isRep ? 'white' : '#94a3b8';
+      tabA.style.background = !isRep ? '#6366f1' : '#1e293b'; tabA.style.color = !isRep ? 'white' : '#94a3b8';
+    }
+    document.getElementById('qm-edit-tab-reporter').addEventListener('click', () => qmSwitchReplyTab('reporter'));
+    document.getElementById('qm-edit-tab-author').addEventListener('click', () => { if (!document.getElementById('qm-edit-tab-author').disabled) qmSwitchReplyTab('author'); });
 
-    async function qmSaveEdit(resolution) {
+    async function qmSaveEdit() {
       if (!qmEditCtx) return;
       const { qid, qUpdatedAt, reports } = qmEditCtx;
       const isCorr = reports && reports.length > 0;
       const msg = document.getElementById('qm-edit-msg');
       const saveBtn = document.getElementById('qm-edit-save');
-      const rejBtn = document.getElementById('qm-edit-reject');
-      saveBtn.disabled = true; rejBtn.disabled = true;
+      const hide = document.getElementById('qm-edit-hide').checked;
+      const pre = qmCache.find(x => x.id === qid) || {};
+
+      // 表單值
+      const newText = document.getElementById('qm-edit-qtext').value;
+      const newAns = document.getElementById('qm-edit-answer').value;
+      const newPage = document.getElementById('qm-edit-page').value;
+      const newOpts = {}; document.querySelectorAll('.qm-edit-opt').forEach(inp => { newOpts[inp.dataset.k] = inp.value; });
+      const bookId = document.getElementById('qm-edit-book').value;
+      const chapterId = document.getElementById('qm-edit-chapter').value;
+      const chOpt = document.getElementById('qm-edit-chapter').selectedOptions[0];
+
+      // 勘誤模式：有改＝已修正(fixed)、沒改＝已處理(rejected，等同不成立)。純編輯模式：一律 fixed。
+      let resolution = 'fixed';
+      if (isCorr) {
+        const o0 = pre.options || {}, s0 = pre.source || {};
+        const optsChanged = ['A', 'B', 'C', 'D'].some(k => String(o0[k]?.text || '') !== String(newOpts[k] || ''));
+        const changed = (String(pre.questionText || '') !== newText)
+          || (String(pre.correctAnswer || '') !== newAns)
+          || optsChanged
+          || (String(s0.page || '') !== String(newPage || ''))
+          || (String(s0.bookId || '') !== bookId)
+          || (String(s0.chapterId || '') !== chapterId)
+          || ((pre.isVisible === false) !== hide);
+        resolution = changed ? 'fixed' : 'rejected';
+      }
+
+      saveBtn.disabled = true;
       try {
-        const hide = document.getElementById('qm-edit-hide').checked;
-        const pre = qmCache.find(x => x.id === qid) || {};
         // 並發控制（fixed 才檢查）
         if (resolution === 'fixed') {
           const fresh = await getDoc(doc(db, 'questions', qid));
           const freshUpdated = fresh.exists() ? (fresh.data().updatedAt?.seconds || 0) : 0;
-          if (freshUpdated !== qUpdatedAt) { msg.innerHTML = '<div class="warn-msg">⚠️ 這題剛被改過、請關閉重整後再試</div>'; saveBtn.disabled = false; rejBtn.disabled = false; return; }
+          if (freshUpdated !== qUpdatedAt) { msg.innerHTML = '<div class="warn-msg">⚠️ 這題剛被改過、請關閉重整後再試</div>'; saveBtn.disabled = false; return; }
+          // 修正（非隱藏）時強制書+章必填 → 藉勘誤把題目編入正確維度（比照指導員端）
+          if (!hide && (!bookId || !chapterId)) { msg.innerHTML = '<div class="warn-msg">⚠️ 請選「書籍」與「章節」（用來把題目編入正確維度）</div>'; saveBtn.disabled = false; return; }
           const opts = {};
           document.querySelectorAll('.qm-edit-opt').forEach(inp => { opts[inp.dataset.k] = { text: inp.value }; });
-          const chOpt = document.getElementById('qm-edit-chapter').selectedOptions[0];
-          const bookId = document.getElementById('qm-edit-book').value;
-          const chapterId = document.getElementById('qm-edit-chapter').value;
-          // 修正（非隱藏）時強制書+章必填 → 藉勘誤把題目編入正確維度（比照指導員端）
-          if (!hide && (!bookId || !chapterId)) { msg.innerHTML = '<div class="warn-msg">⚠️ 請選「書籍」與「章節」（用來把題目編入正確維度）</div>'; saveBtn.disabled = false; rejBtn.disabled = false; return; }
           const chapterNumber = chOpt ? (chOpt.dataset.num || null) : null;
           const dimension = chOpt ? (chOpt.dataset.dim || null) : null;
           await updateDoc(doc(db, 'questions', qid), {
-            questionText: document.getElementById('qm-edit-qtext').value,
+            questionText: newText,
             options: opts,
-            correctAnswer: document.getElementById('qm-edit-answer').value,
-            'source.page': document.getElementById('qm-edit-page').value,
+            correctAnswer: newAns,
+            'source.page': newPage,
             'source.bookId': bookId || null,
             'source.chapterId': chapterId || null,
             'source.chapterNumber': chapterNumber,
@@ -5705,7 +5750,7 @@ TP18,新北 TP18,2026"></textarea>
         } else if (hide) {
           await updateDoc(doc(db, 'questions', qid), { isVisible: false, hiddenReason: '勘誤處理', hiddenBy: currentUser.email, hiddenAt: serverTimestamp(), updatedAt: serverTimestamp() });
         }
-        // 勘誤模式 → 關閉所有班級對此題的待處理回報 + 通知
+        // 勘誤模式 → 關閉所有班級對此題的待處理回報 + 一律通知回報者 +（選填）通知出題者
         if (isCorr) {
           const replyRaw = document.getElementById('qm-edit-reply').value.trim();
           const reply = replyRaw || (resolution === 'fixed' ? '題目已更正' : '已審閱、此題維持原樣');
@@ -5715,11 +5760,17 @@ TP18,新北 TP18,2026"></textarea>
           await Promise.all(toClose.map(r => updateDoc(doc(db, 'question_error_reports', r.id), { status: newStatus, reviewedBy: 'master', reviewedByName: 'Master', reviewedAt: serverTimestamp(), reviewerNote: reply })));
           const title = resolution === 'fixed' ? '✅ 你回報的題目已修正' : '📩 你回報的題目已處理';
           await Promise.all(toClose.map(r => qmCreateNotification(r.reportedBy, 'error_report_reply', title, reply, qid)));
+          // 給出題者：只有寫了內容且該題有出題者才發（推播由 onNotification 自動送）
+          const authorMsg = document.getElementById('qm-edit-reply-author').value.trim();
+          const authorId = qmEditCtx.authorId || pre.createdByStudentId || '';
+          if (authorMsg && authorId) {
+            await qmCreateNotification(authorId, 'error_report_to_author', '📣 指導員對你出的題目有話說', authorMsg, qid);
+          }
         }
         document.getElementById('qm-edit-modal').classList.remove('active');
         loadQuestionsPage();
       } catch (e) { msg.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
-      finally { saveBtn.disabled = false; rejBtn.disabled = false; }
+      finally { saveBtn.disabled = false; }
     }
 
     // 勘誤分頁徽章：顯示「待處理勘誤的題目數」（distinct questionId，1~99+）

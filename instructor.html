@@ -482,13 +482,21 @@
           <div class="form-group"><label>頁碼</label><input id="corr-page" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit"></div>
         </div>
         <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#991b1b;margin:6px 0 14px"><input type="checkbox" id="corr-hide" style="width:18px;height:18px"> 隱藏此題（保留編號、不再出現在題庫）</label>
-        <div class="form-group"><label>回覆學員（選填、會出現在學員的通知中心）</label><textarea id="corr-reply" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px" placeholder="例：感謝回報、標答已更正為 B"></textarea></div>
+        <div class="form-group">
+          <label>回覆（選填、會發到對方的通知中心）</label>
+          <div style="display:flex;gap:6px;margin:4px 0 8px">
+            <button type="button" id="corr-tab-reporter" style="flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:#10b981;color:white;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">👤 給回報者</button>
+            <button type="button" id="corr-tab-author" style="flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:#f1f5f9;color:#475569;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">✍️ 給出題者</button>
+          </div>
+          <textarea id="corr-reply" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px" placeholder="給回報者（選填）：例 感謝回報、標答已更正為 B"></textarea>
+          <textarea id="corr-reply-author" rows="2" style="display:none;width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px" placeholder="給出題者（選填）：例 你出的這題標答有誤、已更正為 B，下次留意"></textarea>
+          <div id="corr-author-hint" style="font-size:12px;color:#b45309;margin-top:6px;display:none">⚠️ 此題無出題者資料、無法通知出題者。</div>
+        </div>
         <div id="corr-modal-msg"></div>
       </div>
       <div style="padding:14px 20px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">
         <button id="corr-modal-cancel" style="background:#e2e8f0;color:#475569;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit">取消</button>
-        <button id="corr-resolve-reject" style="background:#94a3b8;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600">❌ 不成立並通知</button>
-        <button id="corr-resolve-fix" style="background:#10b981;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600">✅ 已修正並通知</button>
+        <button id="corr-resolve-fix" style="background:#10b981;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600">✅ 結案並通知</button>
       </div>
     </div>
   </div>
@@ -997,6 +1005,20 @@
       document.getElementById('corr-page').value = (q.source && q.source.page) || '';
       document.getElementById('corr-hide').checked = q.isVisible === false;
       document.getElementById('corr-reply').value = '';
+      document.getElementById('corr-reply-author').value = '';
+      // 回覆分頁預設「給回報者」；依出題者 id 啟用/禁用「給出題者」
+      switchCorrReplyTab('reporter');
+      currentCorr.authorId = q.createdByStudentId || '';
+      currentCorr.authorName = _who;
+      const _authorTab = document.getElementById('corr-tab-author');
+      const _authorHint = document.getElementById('corr-author-hint');
+      if (currentCorr.authorId) {
+        _authorTab.disabled = false; _authorTab.style.opacity = '1'; _authorTab.style.cursor = 'pointer';
+        _authorHint.style.display = 'none';
+      } else {
+        _authorTab.disabled = true; _authorTab.style.opacity = '0.45'; _authorTab.style.cursor = 'not-allowed';
+        _authorHint.style.display = 'block';
+      }
       document.getElementById('corr-modal-msg').innerHTML = '';
       // 選項
       const opts = q.options || {};
@@ -1021,8 +1043,18 @@
     document.getElementById('corr-modal-close').addEventListener('click', closeCorrModal);
     document.getElementById('corr-modal-cancel').addEventListener('click', closeCorrModal);
     document.getElementById('corr-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeCorrModal(); });
-    document.getElementById('corr-resolve-fix').addEventListener('click', () => resolveCorr('fixed'));
-    document.getElementById('corr-resolve-reject').addEventListener('click', () => resolveCorr('rejected'));
+    document.getElementById('corr-resolve-fix').addEventListener('click', () => resolveCorr());
+    // 回覆分頁切換：給回報者 / 給出題者
+    function switchCorrReplyTab(which) {
+      const isRep = which !== 'author';
+      document.getElementById('corr-reply').style.display = isRep ? 'block' : 'none';
+      document.getElementById('corr-reply-author').style.display = isRep ? 'none' : 'block';
+      const tabR = document.getElementById('corr-tab-reporter'), tabA = document.getElementById('corr-tab-author');
+      tabR.style.background = isRep ? '#10b981' : '#f1f5f9'; tabR.style.color = isRep ? 'white' : '#475569';
+      tabA.style.background = !isRep ? '#6366f1' : '#f1f5f9'; tabA.style.color = !isRep ? 'white' : '#475569';
+    }
+    document.getElementById('corr-tab-reporter').addEventListener('click', () => switchCorrReplyTab('reporter'));
+    document.getElementById('corr-tab-author').addEventListener('click', () => { if (!document.getElementById('corr-tab-author').disabled) switchCorrReplyTab('author'); });
 
     // ===== 勘誤：書籍 / 章節（可改、存檔時重算維度）=====
     let corrBooks = [], corrChapters = [];
@@ -1065,35 +1097,56 @@
     function corrAutosizeAll() { document.querySelectorAll('#corr-modal textarea.corr-grow').forEach(corrGrow); }
     document.getElementById('corr-modal').addEventListener('input', (e) => { if (e.target.classList && e.target.classList.contains('corr-grow')) corrGrow(e.target); });
 
-    async function resolveCorr(resolution) {
+    async function resolveCorr() {
       if (!currentCorr) return;
       const qid = currentCorr.qid;
-      const replyRaw = document.getElementById('corr-reply').value.trim();
-      const reply = replyRaw || (resolution === 'fixed' ? '題目已更正' : '已審閱、此題維持原樣');  // 非必填、空白給預設
+      const q0 = corrQuestions[qid] || {};
       const msg = document.getElementById('corr-modal-msg');
       const fixBtn = document.getElementById('corr-resolve-fix');
-      const rejBtn = document.getElementById('corr-resolve-reject');
+      const hide = document.getElementById('corr-hide').checked;
+
+      // 讀目前表單值
+      const newText = document.getElementById('corr-qtext').value;
+      const newAns = document.getElementById('corr-answer').value;
+      const newPage = document.getElementById('corr-page').value;
+      const newOpts = {}; document.querySelectorAll('.corr-opt').forEach(inp => { newOpts[inp.dataset.k] = inp.value; });
+      const bkSel = document.getElementById('corr-book'), chSel = document.getElementById('corr-chapter');
+      const _bookId = bkSel.value, _chapterId = chSel.value;
+      const _chapterNumber = chSel.selectedOptions[0]?.dataset.num || '';
+      const _dimension = chSel.selectedOptions[0]?.dataset.dim || null;
+
+      // 判斷指導員是否真的改了題目：有改＝已修正(fixed)、沒改＝已處理(rejected，等同不成立)
+      const o0 = q0.options || {}, s0 = q0.source || {};
+      const optsChanged = ['A', 'B', 'C', 'D'].some(k => String(o0[k]?.text || '') !== String(newOpts[k] || ''));
+      const changed = (String(q0.questionText || '') !== newText)
+        || (String(q0.correctAnswer || '') !== newAns)
+        || optsChanged
+        || (String(s0.page || '') !== String(newPage || ''))
+        || (String(s0.bookId || '') !== _bookId)
+        || (String(s0.chapterId || '') !== _chapterId)
+        || ((q0.isVisible === false) !== hide);
+      const resolution = changed ? 'fixed' : 'rejected';
+
       // 修正結案：強制「書籍 + 章節」都要選（藉勘誤把題目強制編入維度）
-      let _bookId = '', _chapterId = '', _chapterNumber = '', _dimension = null;
-      if (resolution === 'fixed') {
-        const bkSel = document.getElementById('corr-book'), chSel = document.getElementById('corr-chapter');
-        _bookId = bkSel.value; _chapterId = chSel.value;
-        _chapterNumber = chSel.selectedOptions[0]?.dataset.num || '';
-        _dimension = chSel.selectedOptions[0]?.dataset.dim || null;
-        if (!_bookId || !_chapterId) {
-          msg.innerHTML = '<div style="color:#ef4444;font-size:13px">⚠️ 請選擇「書籍」與「章節」才能送出修正（用來把題目編入維度）。</div>';
-          return;
-        }
+      if (resolution === 'fixed' && (!_bookId || !_chapterId)) {
+        msg.innerHTML = '<div style="color:#ef4444;font-size:13px">⚠️ 你修改了題目內容，請選「書籍」與「章節」才能送出（用來把題目編入維度）。</div>';
+        return;
       }
-      fixBtn.disabled = true; rejBtn.disabled = true;
+
+      // 回覆文字（皆選填）：回報者一律通知（含預設結案語）；出題者只有寫了才通知
+      const replyRaw = document.getElementById('corr-reply').value.trim();
+      const reply = replyRaw || (resolution === 'fixed' ? '題目已更正' : '已審閱、此題維持原樣');
+      const authorMsg = document.getElementById('corr-reply-author').value.trim();
+      const authorId = currentCorr.authorId || q0.createdByStudentId || '';
+
+      fixBtn.disabled = true;
       try {
-        const hide = document.getElementById('corr-hide').checked;
         // 並發控制：重讀題目、比對版本（先按出的先贏）
         const fresh = await getDoc(doc(db, 'questions', qid));
         const freshUpdated = fresh.exists() ? (fresh.data().updatedAt?.seconds || 0) : 0;
         if (resolution === 'fixed' && freshUpdated !== currentCorr.qUpdatedAt) {
           msg.innerHTML = '<div style="color:#ef4444;font-size:13px">⚠️ 這題剛剛已被其他教官修改過了！請關閉、重新整理後再確認（避免覆蓋別人的修正）。</div>';
-          fixBtn.disabled = false; rejBtn.disabled = false;
+          fixBtn.disabled = false;
           return;
         }
         // 1. 修正題目（fixed）+ editHistory；隱藏不論結案皆套用
@@ -1102,10 +1155,10 @@
           document.querySelectorAll('.corr-opt').forEach(inp => { opts[inp.dataset.k] = { text: inp.value }; });
           const pre = corrQuestions[qid] || {};
           await updateDoc(doc(db, 'questions', qid), {
-            questionText: document.getElementById('corr-qtext').value,
+            questionText: newText,
             options: opts,
-            correctAnswer: document.getElementById('corr-answer').value,
-            'source.page': document.getElementById('corr-page').value,
+            correctAnswer: newAns,
+            'source.page': newPage,
             'source.bookId': _bookId,
             'source.chapterId': _chapterId,
             'source.chapterNumber': _chapterNumber || null,
@@ -1121,7 +1174,7 @@
         } else if (hide) {
           await updateDoc(doc(db, 'questions', qid), { isVisible: false, hiddenReason: '勘誤處理', hiddenBy: currentInstructor.email, hiddenAt: serverTimestamp(), updatedAt: serverTimestamp() });
         }
-        // 2. 關閉「所有班級」對這題的待處理回報（避免重複改）+ 通知每位回報者
+        // 2. 關閉「所有班級」對這題的待處理回報（避免重複改）+ 一律通知每位回報者
         const allRep = await getDocs(query(collection(db, 'question_error_reports'), where('questionId', '==', qid)));
         const toClose = []; allRep.forEach(d => { if ((d.data().status || 'pending') === 'pending') toClose.push({ id: d.id, ...d.data() }); });
         const newStatus = hide ? 'hidden' : resolution;
@@ -1130,12 +1183,16 @@
         })));
         const title = resolution === 'fixed' ? '✅ 你回報的題目已修正' : '📩 你回報的題目已處理';
         await Promise.all(toClose.map(rep => createNotification(rep.reportedBy, 'error_report_reply', title, reply, qid)));
+        // 3. 給出題者：只有寫了內容且該題有出題者才發（推播由 onNotification 自動送）
+        if (authorMsg && authorId) {
+          await createNotification(authorId, 'error_report_to_author', '📣 指導員對你出的題目有話說', authorMsg, qid);
+        }
         closeCorrModal();
         loadCorrections();
       } catch (e) {
         msg.innerHTML = `<div style="color:#ef4444;font-size:13px">❌ ${e.message}</div>`;
       } finally {
-        fixBtn.disabled = false; rejBtn.disabled = false;
+        fixBtn.disabled = false;
       }
     }
 
