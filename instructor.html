@@ -429,8 +429,15 @@
             </div>
           </div>
           <div style="margin-bottom:10px">
-            <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">出處（書/章）</label>
-            <select id="qdl-source" class="pri-select"><option value="">全部</option></select>
+            <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">書籍</label>
+            <select id="qdl-book" class="pri-select"><option value="">全部書籍</option></select>
+          </div>
+          <div id="qdl-chapter-box" style="margin-bottom:10px;display:none">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <label style="font-size:12px;color:#475569;font-weight:600">章節（可複選）</label>
+              <label style="font-size:13px;font-weight:600;color:#10b981;cursor:pointer;display:flex;align-items:center;gap:5px"><input type="checkbox" id="qdl-ch-all" checked style="width:15px;height:15px"> 全部章節</label>
+            </div>
+            <div id="qdl-chapters" style="display:flex;flex-wrap:wrap;gap:6px;max-height:170px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px"></div>
           </div>
           <div id="qdl-count" style="font-size:13px;color:#475569;margin-bottom:10px">—</div>
           <button id="qdl-download" style="width:100%;background:#10b981;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700">📥 下載 CSV</button>
@@ -2525,24 +2532,53 @@
         snap.forEach(d => { const q = d.data(); if (q.isVisible !== false && q.isActive !== false) qdlQuestions.push({ id: d.id, ...q }); });
         // 篩選選項
         const studs = [...new Set(qdlQuestions.map(q => q.createdByName || q.createdBy).filter(Boolean))].sort();
-        const srcs = [...new Set(qdlQuestions.map(q => q.source ? `${q.source.bookId || ''}${q.source.chapterNumber ? ' Ch' + q.source.chapterNumber : ''}`.trim() : '').filter(Boolean))].sort();
+        const books = [...new Set(qdlQuestions.map(q => q.source && q.source.bookId).filter(Boolean))].sort();
         document.getElementById('qdl-student').innerHTML = '<option value="">全部</option>' + studs.map(s => `<option value="${s}">${s}</option>`).join('');
-        document.getElementById('qdl-source').innerHTML = '<option value="">全部</option>' + srcs.map(s => `<option value="${s}">${s}</option>`).join('');
-        ['qdl-date-start', 'qdl-date-end', 'qdl-student', 'qdl-source'].forEach(id => { const e = document.getElementById(id); if (e && !e._bound) { e.addEventListener('change', updateQdlCount); e._bound = true; } });
+        document.getElementById('qdl-book').innerHTML = '<option value="">全部書籍</option>' + books.map(b => `<option value="${b}">${b}</option>`).join('');
+        renderQdlChapters();   // 依目前書籍渲染章節（預設「全部書籍」→ 不顯示章節）
+        ['qdl-date-start', 'qdl-date-end', 'qdl-student'].forEach(id => { const e = document.getElementById(id); if (e && !e._bound) { e.addEventListener('change', updateQdlCount); e._bound = true; } });
+        const bookSel = document.getElementById('qdl-book');
+        if (!bookSel._bound) { bookSel.addEventListener('change', renderQdlChapters); bookSel._bound = true; }
+        const chAll = document.getElementById('qdl-ch-all');
+        if (!chAll._bound) { chAll.addEventListener('change', () => { document.querySelectorAll('#qdl-chapters .qdl-ch').forEach(c => { c.checked = chAll.checked; }); updateQdlCount(); }); chAll._bound = true; }
         updateQdlCount();
       } catch (e) { countEl.textContent = '❌ ' + e.message; }
+    }
+
+    // 依選定書籍渲染章節複選（數字排序、預設全選；選「全部書籍」則不顯示章節區）
+    function renderQdlChapters() {
+      const book = document.getElementById('qdl-book').value;
+      const box = document.getElementById('qdl-chapter-box');
+      const wrap = document.getElementById('qdl-chapters');
+      if (!book) { box.style.display = 'none'; wrap.innerHTML = ''; updateQdlCount(); return; }
+      const set = new Set();
+      qdlQuestions.forEach(q => { if (q.source && q.source.bookId === book) set.add(q.source.chapterNumber != null && q.source.chapterNumber !== '' ? String(q.source.chapterNumber) : ''); });
+      const chs = [...set].sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
+      wrap.innerHTML = chs.map(c => `<label style="display:flex;align-items:center;gap:5px;background:#f1f5f9;border-radius:8px;padding:5px 10px;font-size:13px;cursor:pointer"><input type="checkbox" class="qdl-ch" value="${c}" checked style="width:14px;height:14px">${c === '' ? '（無章節）' : 'Ch' + c}</label>`).join('');
+      document.getElementById('qdl-ch-all').checked = true;
+      wrap.querySelectorAll('.qdl-ch').forEach(c => c.addEventListener('change', () => {
+        document.getElementById('qdl-ch-all').checked = [...wrap.querySelectorAll('.qdl-ch')].every(x => x.checked);
+        updateQdlCount();
+      }));
+      box.style.display = 'block';
+      updateQdlCount();
     }
 
     function filterQdl() {
       const fds = document.getElementById('qdl-date-start').value;
       const fde = document.getElementById('qdl-date-end').value;
       const fs = document.getElementById('qdl-student').value;
-      const fsrc = document.getElementById('qdl-source').value;
+      const fbook = document.getElementById('qdl-book').value;
+      const chSet = fbook ? new Set([...document.querySelectorAll('#qdl-chapters .qdl-ch')].filter(c => c.checked).map(c => c.value)) : null;
       return qdlQuestions.filter(q => {
         if (fds && (q.scheduledDate || '') < fds) return false;
         if (fde && (q.scheduledDate || '') > fde) return false;
         if (fs && (q.createdByName || q.createdBy) !== fs) return false;
-        if (fsrc) { const s = q.source ? `${q.source.bookId || ''}${q.source.chapterNumber ? ' Ch' + q.source.chapterNumber : ''}`.trim() : ''; if (s !== fsrc) return false; }
+        if (fbook) {
+          if (!q.source || q.source.bookId !== fbook) return false;
+          const cn = (q.source.chapterNumber != null && q.source.chapterNumber !== '') ? String(q.source.chapterNumber) : '';
+          if (!chSet.has(cn)) return false;
+        }
         return true;
       });
     }
