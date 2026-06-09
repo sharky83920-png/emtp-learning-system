@@ -1105,11 +1105,16 @@
           let html = '';
           if (authorMsgs.length) {
             html += '<div style="font-size:13px;color:#94a3b8;font-weight:600;margin-bottom:8px">📣 教官對你出的題目的回饋</div>';
-            html += authorMsgs.map(n => `<div style="border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:12px;padding:14px;margin-bottom:12px">
-              <div style="font-family:monospace;font-size:13px;color:#64748b;margin-bottom:6px">題號 ${esc(n.relatedId) || '—'}</div>
+            html += authorMsgs.map(n => {
+              const qid = n.relatedId || '';
+              const qview = qid ? `<button class="qview-btn" data-qid="${esc(qid)}" style="margin-top:10px;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔍 看修改後題目</button><div class="qview-panel" style="display:none;margin-top:10px"></div>` : '';
+              return `<div style="border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:12px;padding:14px;margin-bottom:12px">
+              <div style="font-family:monospace;font-size:13px;color:#64748b;margin-bottom:6px">題號 ${esc(qid) || '—'}</div>
               <div style="font-size:13px;color:#334155;white-space:pre-wrap;line-height:1.6">${esc(n.content)}</div>
               <div style="font-size:11px;color:#94a3b8;margin-top:8px">${n.createdAt?.seconds ? fmt(n.createdAt.seconds) : ''}</div>
-            </div>`).join('');
+              ${qview}
+            </div>`;
+            }).join('');
             html += '<div style="font-size:13px;color:#94a3b8;font-weight:600;margin:16px 0 8px">📋 我回報的勘誤</div>';
           }
           html += reports.length ? reports.map(r => {
@@ -1118,15 +1123,18 @@
               ? '<span style="background:#d1fae5;color:#065f46;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600">✅ 已處理</span>'
               : '<span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600">⏳ 處理中</span>';
             const reply = (r.reviewerNote || '').trim();
+            const qid = r.questionId || '';
+            const qview = qid ? `<button class="qview-btn" data-qid="${esc(qid)}" style="margin-top:10px;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔍 看修改後題目</button><div class="qview-panel" style="display:none;margin-top:10px"></div>` : '';
             return `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px">
               <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
-                <span style="font-family:monospace;font-size:13px;color:#64748b">題號 ${esc(r.questionId) || '—'}</span>${statusBadge}
+                <span style="font-family:monospace;font-size:13px;color:#64748b">題號 ${esc(qid) || '—'}</span>${statusBadge}
               </div>
               <div style="font-size:13px;color:#334155;margin-bottom:8px"><b>你的回報：</b>${esc(r.reason)}</div>
               <div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:10px 12px;border-radius:6px;font-size:13px;color:#78350f">
                 <b>教官回饋：</b>${reply ? esc(reply) : (done ? '（已處理、無文字說明）' : '尚未回覆')}
                 ${r.reviewedByName ? `<div style="color:#a16207;font-size:12px;margin-top:6px">— ${esc(r.reviewedByName)}${r.reviewedAt?.seconds ? ' · ' + fmt(r.reviewedAt.seconds) : ''}</div>` : ''}
               </div>
+              ${qview}
             </div>`;
           }).join('') : '<div style="color:#94a3b8;font-size:13px">（你還沒回報過勘誤）</div>';
           body.innerHTML = html;
@@ -1144,6 +1152,37 @@
     }
     document.getElementById('btn-feedback').addEventListener('click', openFeedbackModal);
     document.getElementById('feedback-modal-close').addEventListener('click', () => document.getElementById('feedback-modal').style.display = 'none');
+
+    // 展開看「修改後題目」：懶載入（點才讀 1 筆）、載過即快取、已隱藏/移除優雅顯示
+    function renderQuestionView(q) {
+      const esc = s => String(s == null ? '' : s).replace(/</g, '&lt;');
+      const o = q.options || {}, ans = q.correctAnswer, s = q.source || {};
+      const src = [s.bookId || '', s.chapterNumber ? `第${s.chapterNumber}章` : '', s.page ? `p.${s.page}` : ''].filter(Boolean).join(' ');
+      const opts = ['A', 'B', 'C', 'D'].map(k => {
+        const ok = k === ans;
+        return `<div style="padding:6px 10px;border-radius:6px;margin-bottom:5px;font-size:13px;${ok ? 'background:#d1fae5;color:#065f46;font-weight:600' : 'background:#fff;color:#334155;border:1px solid #e2e8f0'}">${ok ? '✅ ' : ''}${k}. ${esc(o[k] && o[k].text || '')}</div>`;
+      }).join('');
+      return `<div style="background:#f1f5f9;border-radius:8px;padding:12px">
+        <div style="font-size:11px;color:#94a3b8;margin-bottom:6px">修改後題目${src ? ' · ' + esc(src) : ''}</div>
+        <div style="font-size:14px;color:#1e293b;font-weight:600;margin-bottom:8px;white-space:pre-wrap;line-height:1.6">${esc(q.questionText || '')}</div>
+        ${opts}
+      </div>`;
+    }
+    document.getElementById('feedback-modal-body').addEventListener('click', async (e) => {
+      const btn = e.target.closest('.qview-btn'); if (!btn) return;
+      const panel = btn.nextElementSibling; if (!panel) return;
+      if (panel.style.display === 'block') { panel.style.display = 'none'; btn.textContent = '🔍 看修改後題目'; return; }
+      panel.style.display = 'block'; btn.textContent = '🔽 收合題目';
+      if (panel.dataset.loaded) return;   // 已讀過、用快取不再讀
+      panel.innerHTML = '<div style="color:#94a3b8;font-size:13px;padding:6px">⏳ 載入中…</div>';
+      try {
+        const snap = await getDoc(doc(db, 'questions', btn.dataset.qid));
+        panel.innerHTML = (!snap.exists() || snap.data().isVisible === false)
+          ? '<div style="color:#94a3b8;font-size:13px;padding:6px">此題已隱藏或移除。</div>'
+          : renderQuestionView(snap.data());
+        panel.dataset.loaded = '1';
+      } catch (err) { panel.innerHTML = `<div style="color:#ef4444;font-size:13px;padding:6px">載入失敗：${err.message}</div>`; }
+    });
     document.getElementById('feedback-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('feedback-modal').style.display = 'none'; });
     document.getElementById('notice-modal-close').addEventListener('click', closeNoticeModal);
     document.getElementById('notice-mark-all').addEventListener('click', markAllNoticesRead);
