@@ -149,7 +149,7 @@
       <h1>📚 EMTP 學員系統</h1>
       <div class="user-info">
         <button id="btn-bell" title="公告與通知" style="position:relative;background:transparent;border:none;font-size:22px;cursor:pointer;padding:2px 6px;line-height:1">🔔<span id="bell-badge" style="display:none;position:absolute;top:-2px;right:-2px;background:#ef4444;color:white;font-size:10px;min-width:16px;height:16px;border-radius:8px;padding:0 4px;line-height:16px;text-align:center;font-weight:700">0</span></button>
-        <button id="btn-feedback" title="我的勘誤回報與教官回饋" style="background:transparent;border:none;font-size:22px;cursor:pointer;padding:2px 6px;line-height:1">📋</button>
+        <button id="btn-feedback" title="我的勘誤回報與教官回饋" style="position:relative;background:transparent;border:none;font-size:22px;cursor:pointer;padding:2px 6px;line-height:1">📋<span id="feedback-badge" style="display:none;position:absolute;top:-2px;right:-2px;background:#ef4444;color:white;font-size:10px;min-width:16px;height:16px;border-radius:8px;padding:0 4px;line-height:16px;text-align:center;font-weight:700">0</span></button>
         <span id="user-name">—</span>
         <button class="btn-logout" id="btn-logout">登出</button>
       </div>
@@ -948,10 +948,13 @@
         notifications.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
         noticeData = { announcements, notifications };
-        const unread = announcements.filter(a => !a._read).length + notifications.filter(n => !n._read).length;
-        updateBellBadge(unread);
+        const annUnread = announcements.filter(a => !a._read).length;     // 🔔 鈴鐺＝只算公告
+        const notiUnread = notifications.filter(n => !n._read).length;    // 📋 勘誤回饋通知（已搬離鈴鐺）
+        updateBellBadge(annUnread);
+        updateFeedbackBadge(notiUnread);
+        updateAppBadge(annUnread + notiUnread);                           // App 角標＝兩者總和
         renderNotices();
-        if (autoPopup && unread > 0) openNoticeModal();
+        if (autoPopup && annUnread > 0) openNoticeModal();                // 自動彈出只看公告
       } catch (e) {
         console.error('[loadNotices]', e);
       }
@@ -964,13 +967,14 @@
         if (n > 0) navigator.setAppBadge(n); else navigator.clearAppBadge();
       } catch (e) {}
     }
-    function updateBellBadge(count) {
-      updateAppBadge(count);
-      const badge = document.getElementById('bell-badge');
+    function setBadgeEl(id, count) {
+      const badge = document.getElementById(id);
       if (!badge) return;
       if (count > 0) { badge.textContent = count > 99 ? '99+' : count; badge.style.display = 'block'; }
       else { badge.style.display = 'none'; }
     }
+    function updateBellBadge(count) { setBadgeEl('bell-badge', count); }       // 🔔 公告未讀
+    function updateFeedbackBadge(count) { setBadgeEl('feedback-badge', count); } // 📋 勘誤回饋未讀
 
     // ===== 手機推播（FCM）=====
     // VAPID 公鑰：Firebase Console → 專案設定 → Cloud Messaging → 網頁推播憑證 → 產生金鑰組
@@ -1011,10 +1015,11 @@
     }
 
     function renderNotices() {
+      // 🔔 鈴鐺＝純布告欄（只顯示公告）；勘誤回饋通知已移到 📋「我的勘誤回報與教官回饋」
       const body = document.getElementById('notice-modal-body');
-      const { announcements, notifications } = noticeData;
-      if (announcements.length === 0 && notifications.length === 0) {
-        body.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:30px">目前沒有公告或通知 🎉</div>';
+      const { announcements } = noticeData;
+      if (announcements.length === 0) {
+        body.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:30px">目前沒有公告 🎉</div>';
         return;
       }
       const catStyle = {
@@ -1023,39 +1028,21 @@
         '重要提醒': { emoji: '⚠️', color: '#f59e0b' },
         '其他': { emoji: '📌', color: '#64748b' }
       };
-      let html = '';
-      if (announcements.length > 0) {
-        html += '<div style="font-size:13px;color:#94a3b8;font-weight:600;margin-bottom:8px">📢 公告</div>';
-        announcements.forEach(a => {
-          const cs = catStyle[a.category] || catStyle['其他'];
-          const dateStr = a.publishedAt?.seconds ? new Date(a.publishedAt.seconds * 1000).toLocaleDateString('zh-TW') : '';
-          html += `
-            <div style="border:1px solid #e2e8f0;border-left:4px solid ${cs.color};border-radius:10px;padding:14px;margin-bottom:10px;${a._read ? 'opacity:0.6' : 'background:#f8fafc'}">
-              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
-                <span style="font-size:12px;color:${cs.color};font-weight:600">${cs.emoji} ${a.category || '其他'}</span>
-                ${a._read ? '' : '<span style="font-size:10px;background:#ef4444;color:white;padding:2px 8px;border-radius:10px">未讀</span>'}
-              </div>
-              <div style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:4px">${a.title}</div>
-              <div style="font-size:13px;color:#475569;white-space:pre-wrap;line-height:1.6">${a.content}</div>
-              <div style="font-size:11px;color:#94a3b8;margin-top:8px">${dateStr}</div>
-            </div>`;
-        });
-      }
-      if (notifications.length > 0) {
-        html += '<div style="font-size:13px;color:#94a3b8;font-weight:600;margin:14px 0 8px">🔔 通知</div>';
-        notifications.forEach(n => {
-          const dateStr = n.createdAt?.seconds ? new Date(n.createdAt.seconds * 1000).toLocaleDateString('zh-TW') : '';
-          html += `
-            <div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:10px;${n._read ? 'opacity:0.6' : 'background:#f0f9ff'}">
-              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px">
-                <span style="font-size:15px;font-weight:700;color:#1e293b">${n.title || '通知'}</span>
-                ${n._read ? '' : '<span style="font-size:10px;background:#ef4444;color:white;padding:2px 8px;border-radius:10px">未讀</span>'}
-              </div>
-              <div style="font-size:13px;color:#475569;white-space:pre-wrap;line-height:1.6">${n.content || ''}</div>
-              <div style="font-size:11px;color:#94a3b8;margin-top:8px">${dateStr}</div>
-            </div>`;
-        });
-      }
+      let html = '<div style="font-size:13px;color:#94a3b8;font-weight:600;margin-bottom:8px">📢 公告</div>';
+      announcements.forEach(a => {
+        const cs = catStyle[a.category] || catStyle['其他'];
+        const dateStr = a.publishedAt?.seconds ? new Date(a.publishedAt.seconds * 1000).toLocaleDateString('zh-TW') : '';
+        html += `
+          <div style="border:1px solid #e2e8f0;border-left:4px solid ${cs.color};border-radius:10px;padding:14px;margin-bottom:10px;${a._read ? 'opacity:0.6' : 'background:#f8fafc'}">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
+              <span style="font-size:12px;color:${cs.color};font-weight:600">${cs.emoji} ${a.category || '其他'}</span>
+              ${a._read ? '' : '<span style="font-size:10px;background:#ef4444;color:white;padding:2px 8px;border-radius:10px">未讀</span>'}
+            </div>
+            <div style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:4px">${a.title}</div>
+            <div style="font-size:13px;color:#475569;white-space:pre-wrap;line-height:1.6">${a.content}</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:8px">${dateStr}</div>
+          </div>`;
+      });
       body.innerHTML = html;
     }
 
@@ -1069,19 +1056,17 @@
     }
 
     async function markAllNoticesRead() {
+      // 只標公告已讀（勘誤回饋通知歸 📋 管，由開 📋 時標記）
       try {
         const ops = [];
         noticeData.announcements.filter(a => !a._read).forEach(a => {
           ops.push(updateDoc(doc(db, 'announcements', a.id), { readBy: arrayUnion(currentStudent.id) }));
           a._read = true;
         });
-        noticeData.notifications.filter(n => !n._read).forEach(n => {
-          ops.push(updateDoc(doc(db, 'notifications', n.id), { isRead: true, readAt: serverTimestamp() }));
-          n._read = true;
-        });
         await Promise.all(ops);
       } catch (e) { console.error('[markAllNoticesRead]', e); }
       updateBellBadge(0);
+      updateAppBadge(noticeData.notifications.filter(n => !n._read).length);   // 角標保留勘誤未讀
       closeNoticeModal();
     }
 
@@ -1108,29 +1093,53 @@
         const reports = [];
         snap.forEach(d => reports.push({ id: d.id, ...d.data() }));
         reports.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-        if (reports.length === 0) {
-          body.innerHTML = '<div class="empty-hint">你還沒有送出過題目勘誤回報。<br><br>做完測驗、在檢討畫面按「⚠️ 題目勘誤」即可回報；教官處理後的回饋會留在這裡、可隨時回來看。</div>';
-          return;
-        }
         const fmt = sec => sec ? new Date(sec * 1000).toLocaleDateString('zh-TW') : '';
         const esc = s => String(s == null ? '' : s).replace(/</g, '&lt;');
-        body.innerHTML = reports.map(r => {
-          const done = r.status && r.status !== 'pending';
-          const statusBadge = done
-            ? '<span style="background:#d1fae5;color:#065f46;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600">✅ 已處理</span>'
-            : '<span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600">⏳ 處理中</span>';
-          const reply = (r.reviewerNote || '').trim();
-          return `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
-              <span style="font-family:monospace;font-size:13px;color:#64748b">題號 ${esc(r.questionId) || '—'}</span>${statusBadge}
-            </div>
-            <div style="font-size:13px;color:#334155;margin-bottom:8px"><b>你的回報：</b>${esc(r.reason)}</div>
-            <div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:10px 12px;border-radius:6px;font-size:13px;color:#78350f">
-              <b>教官回饋：</b>${reply ? esc(reply) : (done ? '（已處理、無文字說明）' : '尚未回覆')}
-              ${r.reviewedByName ? `<div style="color:#a16207;font-size:12px;margin-top:6px">— ${esc(r.reviewedByName)}${r.reviewedAt?.seconds ? ' · ' + fmt(r.reviewedAt.seconds) : ''}</div>` : ''}
-            </div>
-          </div>`;
-        }).join('');
+        // 教官對「我出的題」的回饋（error_report_to_author 通知，已從鈴鐺搬來這裡）
+        const authorMsgs = (noticeData.notifications || []).filter(n => n.type === 'error_report_to_author')
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+        if (reports.length === 0 && authorMsgs.length === 0) {
+          body.innerHTML = '<div class="empty-hint">你還沒有送出過題目勘誤回報。<br><br>做完測驗、在檢討畫面按「⚠️ 題目勘誤」即可回報；教官處理後的回饋會留在這裡、可隨時回來看。</div>';
+        } else {
+          let html = '';
+          if (authorMsgs.length) {
+            html += '<div style="font-size:13px;color:#94a3b8;font-weight:600;margin-bottom:8px">📣 教官對你出的題目的回饋</div>';
+            html += authorMsgs.map(n => `<div style="border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:12px;padding:14px;margin-bottom:12px">
+              <div style="font-family:monospace;font-size:13px;color:#64748b;margin-bottom:6px">題號 ${esc(n.relatedId) || '—'}</div>
+              <div style="font-size:13px;color:#334155;white-space:pre-wrap;line-height:1.6">${esc(n.content)}</div>
+              <div style="font-size:11px;color:#94a3b8;margin-top:8px">${n.createdAt?.seconds ? fmt(n.createdAt.seconds) : ''}</div>
+            </div>`).join('');
+            html += '<div style="font-size:13px;color:#94a3b8;font-weight:600;margin:16px 0 8px">📋 我回報的勘誤</div>';
+          }
+          html += reports.length ? reports.map(r => {
+            const done = r.status && r.status !== 'pending';
+            const statusBadge = done
+              ? '<span style="background:#d1fae5;color:#065f46;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600">✅ 已處理</span>'
+              : '<span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600">⏳ 處理中</span>';
+            const reply = (r.reviewerNote || '').trim();
+            return `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
+                <span style="font-family:monospace;font-size:13px;color:#64748b">題號 ${esc(r.questionId) || '—'}</span>${statusBadge}
+              </div>
+              <div style="font-size:13px;color:#334155;margin-bottom:8px"><b>你的回報：</b>${esc(r.reason)}</div>
+              <div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:10px 12px;border-radius:6px;font-size:13px;color:#78350f">
+                <b>教官回饋：</b>${reply ? esc(reply) : (done ? '（已處理、無文字說明）' : '尚未回覆')}
+                ${r.reviewedByName ? `<div style="color:#a16207;font-size:12px;margin-top:6px">— ${esc(r.reviewedByName)}${r.reviewedAt?.seconds ? ' · ' + fmt(r.reviewedAt.seconds) : ''}</div>` : ''}
+              </div>
+            </div>`;
+          }).join('') : '<div style="color:#94a3b8;font-size:13px">（你還沒回報過勘誤）</div>';
+          body.innerHTML = html;
+        }
+
+        // 開 📋 ＝把所有勘誤通知標記已讀 → 清 📋 紅點與 App 角標（推播照常、不影響）
+        const unreadN = (noticeData.notifications || []).filter(n => !n._read);
+        if (unreadN.length) {
+          await Promise.all(unreadN.map(n => updateDoc(doc(db, 'notifications', n.id), { isRead: true, readAt: serverTimestamp() })));
+          unreadN.forEach(n => n._read = true);
+        }
+        updateFeedbackBadge(0);
+        updateAppBadge(noticeData.announcements.filter(a => !a._read).length);   // 角標保留公告未讀
       } catch (e) { body.innerHTML = `<div class="err-msg">❌ 載入失敗：${e.message}</div>`; }
     }
     document.getElementById('btn-feedback').addEventListener('click', openFeedbackModal);
