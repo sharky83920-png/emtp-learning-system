@@ -509,7 +509,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, query, where, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp, onSnapshot, Timestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, query, where, getDocs, getCountFromServer, doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp, onSnapshot, Timestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getMessaging, getToken, onMessage, isSupported as fcmSupported } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-messaging.js";
 
     const firebaseConfig = {
@@ -1265,34 +1265,36 @@
         try { const f = await getDoc(doc(db, 'formulas', 'weighted_score')); if (f.exists() && f.data().expression) expr = f.data().expression; } catch (e) {}
         const stuSnap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
         const students = {}; stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false) students[d.id] = { name: s.name, no: s.studentNo, attempts: 0, correct: 0 }; });
-        // 有日期 → 伺服器端區間查詢（走 classId+attemptedAt 複合索引，只讀區間、省讀取）
-        // ⚠️ 不可在缺索引時靜默退回掃全班：整班 question_attempts 動輒數萬筆，會把 Firestore 讀取打爆。
-        let atSnap, clientFilter = false;
-        if (startMs && endMs) {
-          try {
-            atSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', selectedClassId), where('attemptedAt', '>=', Timestamp.fromMillis(startMs)), where('attemptedAt', '<=', Timestamp.fromMillis(endMs))));
-          } catch (idxErr) {
-            // 索引建置中或遺失：明確提示，絕不掃全班（避免讀取暴漲）
-            console.error('[loadPerfRanking] 區間查詢失敗（複合索引 classId+attemptedAt 可能建置中或遺失）：', idxErr?.code || idxErr);
-            el.innerHTML = '<div style="color:#ef4444;font-size:13px;text-align:center;padding:14px;line-height:1.6">成績排行索引建置中或暫時無法查詢<br><span style="color:#94a3b8;font-size:12px">請稍候 1～2 分鐘後重新整理，系統不會掃整班以免讀取暴漲</span></div>';
-            return;
-          }
-        } else {
-          // 全部期間（無區間）：會掃整班 question_attempts（動輒數萬筆）。沒有現成彙總可替代 → 加二次確認，防誤觸爆讀取
+        // 讀取改革：不再撈整班逐筆作答（動輒上萬筆＝上萬讀取），改成每位學員各打 2 個 count() 聚合
+        //（聚合查詢「每掃 1000 筆才算 1 次讀取」）。只算綜合隨機 examMode=='scoring'（排除專項練習，與原本 examMode==='practice' 跳過同義）。
+        const startTs = startMs ? Timestamp.fromMillis(startMs) : null;
+        const endTs = endMs ? Timestamp.fromMillis(endMs) : null;
+        // 全部期間（完全沒設區間）仍二次確認，行為與介面不變
+        if (!startMs && !endMs) {
           if (!confirm('「全部期間」會讀取整班的全部作答紀錄，大班可能數萬筆、耗用較多讀取額度。\n建議改用上方日期區間查詢（較省）。\n\n仍要查全部期間嗎？')) {
             el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">已取消（可改用日期區間查詢，較省讀取）</div>';
             return;
           }
-          atSnap = await getDocs(query(collection(db, 'question_attempts'), where('classId', '==', selectedClassId)));
-          clientFilter = !!startMs;
         }
-        atSnap.forEach(d => {
-          const a = d.data();
-          if (a.examMode === 'practice') return;
-          if (clientFilter) { const t = a.attemptedAt?.seconds ? a.attemptedAt.seconds * 1000 : 0; if ((startMs && t < startMs) || (endMs && t > endMs)) return; }
-          const s = students[a.studentId]; if (!s) return;
-          s.attempts++; if (a.isCorrect) s.correct++;
-        });
+        const rangeConstraints = [];
+        if (startTs) rangeConstraints.push(where('attemptedAt', '>=', startTs));
+        if (endTs) rangeConstraints.push(where('attemptedAt', '<=', endTs));
+        try {
+          await Promise.all(Object.keys(students).map(async (id) => {
+            const base = [where('studentId', '==', id), where('examMode', '==', 'scoring'), ...rangeConstraints];
+            const [tot, cor] = await Promise.all([
+              getCountFromServer(query(collection(db, 'question_attempts'), ...base)),
+              getCountFromServer(query(collection(db, 'question_attempts'), ...base, where('isCorrect', '==', true)))
+            ]);
+            students[id].attempts = tot.data().count;
+            students[id].correct = cor.data().count;
+          }));
+        } catch (idxErr) {
+          // 複合索引建置中或遺失：明確提示，不退回掃全班
+          console.error('[loadPerfRanking] count() 失敗（複合索引 studentId+examMode+attemptedAt / +isCorrect 可能建置中或遺失）：', idxErr?.code || idxErr);
+          el.innerHTML = '<div style="color:#ef4444;font-size:13px;text-align:center;padding:14px;line-height:1.6">成績排行索引建置中或暫時無法查詢<br><span style="color:#94a3b8;font-size:12px">請稍候 1～2 分鐘後重新整理（首次啟用聚合查詢需建索引）</span></div>';
+          return;
+        }
         let rows = Object.values(students).map(s => { const accuracy = s.attempts ? s.correct / s.attempts : 0; return { ...s, accuracy, raw: safeEvalFormula(expr, s.attempts, accuracy) }; });
         const maxRaw = Math.max(0, ...rows.map(r => r.raw));
         rows.forEach(r => r.score = maxRaw > 0 ? (r.raw / maxRaw) * 100 : 0);   // 正規化 0~100
