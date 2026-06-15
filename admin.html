@@ -1163,6 +1163,7 @@ TP18,新北 TP18,2026"></textarea>
           <div class="form-group"><label>正確答案</label><select id="qm-edit-answer"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div>
           <div class="form-group"><label>頁碼</label><input id="qm-edit-page"></div>
         </div>
+        <div class="form-group"><label>📅 出題日 <span style="color:#94a3b8;font-weight:400;font-size:12px">（改這裡會改變此題算在哪一天的「出題繳交追蹤」）</span></label><input type="date" id="qm-edit-scheddate"></div>
         <div class="form-group"><label style="display:flex;align-items:center;gap:8px;color:#fca5a5"><input type="checkbox" id="qm-edit-hide" style="width:18px;height:18px"> 隱藏此題（保留編號、不再出現在題庫）</label></div>
         <div id="qm-edit-reply-group" style="display:none">
           <div class="form-group">
@@ -5644,6 +5645,7 @@ TP18,新北 TP18,2026"></textarea>
         else { im.removeAttribute('src'); iw.style.display = 'none'; } }
       document.getElementById('qm-edit-answer').value = q.correctAnswer || 'A';
       document.getElementById('qm-edit-page').value = (q.source && q.source.page) || '';
+      document.getElementById('qm-edit-scheddate').value = q.scheduledDate || '';
       // 出題者 + 出處 meta、書/章下拉（比照指導員端）
       { const s = q.source || {}; const esc = v => String(v == null ? '' : v).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
         const srcTxt = [s.bookName || s.bookId || '', s.chapterNumber ? `第${s.chapterNumber}章` : '', s.page ? `p.${s.page}` : ''].filter(Boolean).join(' ') || '（無出處）';
@@ -5713,6 +5715,7 @@ TP18,新北 TP18,2026"></textarea>
       const newText = document.getElementById('qm-edit-qtext').value;
       const newAns = document.getElementById('qm-edit-answer').value;
       const newPage = document.getElementById('qm-edit-page').value;
+      const newSched = (document.getElementById('qm-edit-scheddate').value || '').trim() || (pre.scheduledDate || '');  // 留空＝保留原出題日（防呆，不誤刪）
       const newOpts = {}; document.querySelectorAll('.qm-edit-opt').forEach(inp => { newOpts[inp.dataset.k] = inp.value; });
       const bookId = document.getElementById('qm-edit-book').value;
       const chapterId = document.getElementById('qm-edit-chapter').value;
@@ -5729,6 +5732,7 @@ TP18,新北 TP18,2026"></textarea>
           || (String(s0.page || '') !== String(newPage || ''))
           || (String(s0.bookId || '') !== bookId)
           || (String(s0.chapterId || '') !== chapterId)
+          || (String(pre.scheduledDate || '') !== String(newSched || ''))
           || ((pre.isVisible === false) !== hide);
         resolution = changed ? 'fixed' : 'rejected';
       }
@@ -5755,6 +5759,7 @@ TP18,新北 TP18,2026"></textarea>
             'source.chapterId': chapterId || null,
             'source.chapterNumber': chapterNumber,
             derivedDimension: dimension,   // 依當下選的書+章重算（章沒改也重編）
+            scheduledDate: newSched,       // 出題日（影響出題繳交追蹤的分日計算）
             isVisible: !hide,
             updatedAt: serverTimestamp(), lastEditedBy: currentUser.email,
             editHistory: arrayUnion({ questionText: pre.questionText || '', options: pre.options || {}, correctAnswer: pre.correctAnswer || '', source: pre.source || {}, editedBy: 'Master', editedAt: Timestamp.now(), reason: isCorr ? ('勘誤校正：' + (document.getElementById('qm-edit-reply').value.trim() || '')) : 'Master 直接編輯' })
