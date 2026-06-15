@@ -2652,7 +2652,7 @@
           // fallback：無 sessionLog（極少數未回填）→ 退回掃自己作答算一次（最壞＝現狀）
           const snap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', currentStudent.id)));
           const sessions = new Set();
-          snap.forEach(d => { const a = d.data(); const t = a.attemptedAt?.seconds ? a.attemptedAt.seconds * 1000 : 0; if (t >= start && a.examSessionId && a.sessionCompleted !== false) sessions.add(a.examSessionId); });
+          snap.forEach(d => { const a = d.data(); const t = a.attemptedAt?.seconds ? a.attemptedAt.seconds * 1000 : 0; if (t >= start && a.examSessionId && a.sessionCompleted !== false && a.examMode !== 'practice') sessions.add(a.examSessionId); });
           count = sessions.size;
         }
         const pct = Math.min(100, target ? (count / target) * 100 : 0);
@@ -2959,7 +2959,8 @@
         // 🐛 修：舊版「讀整包 sessionLog → push → 整包 setDoc 寫回」非原子，學生連續測驗時
         //   下一場的讀取早於上一場寫回 → lost update → 大量漏記趟數（曾 71 趟只記到 27）。
         //   改用 arrayUnion 原子追加（並發也不丟）；70 天前舊項用 arrayRemove 原子移除（不影響並發新增）。
-        if (completed === true && quizState.sessionId) {
+        // 只有「隨機綜合測驗」完成才算一趟；專項練習(practice)不計入能量條趟數
+        if (completed === true && quizState.mode !== 'practice' && quizState.sessionId) {
           await updateDoc(progRef, { sessionLog: arrayUnion({ id: quizState.sessionId, at: Date.now() }) });
           const stale = (progData.sessionLog || []).filter(s => s && typeof s.at === 'number' && s.at < Date.now() - 70 * 86400000);
           if (stale.length) { try { await updateDoc(progRef, { sessionLog: arrayRemove(...stale) }); } catch (e) {} }
