@@ -504,6 +504,7 @@
               <div class="form-group" style="margin-bottom:0;min-width:150px"><label>處理結果</label><select id="audit-f-status"><option value="resolved">已處理（全部）</option><option value="fixed">✅ 已修正</option><option value="rejected">❌ 不成立</option><option value="hidden">🚫 已隱藏</option><option value="all">含未處理</option></select></div>
               <button class="btn btn-ghost" id="audit-refresh">🔄 重新整理</button>
             </div>
+            <div id="audit-stats" style="margin-bottom:14px"></div>
             <div id="audit-list"><div class="loading">⏳ 展開後載入…</div></div>
           </div>
         </div>
@@ -5247,8 +5248,50 @@ TP18,新北 TP18,2026"></textarea>
         const cls = [...new Set(_auditReports.filter(r => r.reportedByClassId).map(r => r.reportedByClassId))].sort();
         const fillSel = (id, arr, label) => { const s = document.getElementById(id); const cur = s.value; s.innerHTML = `<option value="">${label}</option>` + arr.map(v => `<option value="${auditEsc(v)}">${auditEsc(v)}</option>`).join(''); s.value = cur; };
         fillSel('audit-f-reviewer', revs, '全部指導員'); fillSel('audit-f-class', cls, '全部班級');
+        renderAuditStats();
         renderAudit();
       } catch (e) { list.innerHTML = `<div style="color:#f87171">❌ ${auditEsc(e.message)}</div>`; }
+    }
+
+    // 每位指導員處理勘誤統計（全系統總計、不受下方篩選影響、排除測試帳號）
+    function renderAuditStats() {
+      const el = document.getElementById('audit-stats'); if (!el || !_auditReports) return;
+      const STK = ['fixed', 'rejected', 'hidden'];
+      const by = {};   // name -> { reports, qids:Set, fixed, rejected, hidden }
+      _auditReports.forEach(r => {
+        const st = r.status || 'pending';
+        if (st === 'pending') return;                       // 只算已處理
+        const name = r.reviewedByName || '(未具名)';
+        if (name.includes('測試')) return;                   // 排除測試帳號
+        const o = by[name] || (by[name] = { reports: 0, qids: new Set(), fixed: 0, rejected: 0, hidden: 0 });
+        o.reports++; if (r.questionId) o.qids.add(r.questionId);
+        if (STK.includes(st)) o[st]++;
+      });
+      const rows = Object.entries(by).map(([name, o]) => ({ name, ...o, questions: o.qids.size }))
+        .sort((a, b) => b.reports - a.reports);
+      if (!rows.length) { el.innerHTML = ''; return; }
+      const totReports = rows.reduce((s, r) => s + r.reports, 0);
+      const totQ = new Set(); _auditReports.forEach(r => { const st = r.status || 'pending'; if (st !== 'pending' && !(r.reviewedByName || '').includes('測試') && r.questionId) totQ.add(r.questionId); });
+      el.innerHTML = `
+        <div style="border:1px solid #334155;border-radius:10px;padding:12px 14px;background:#0f172a">
+          <div style="font-size:13px;color:#e2e8f0;font-weight:700;margin-bottom:2px">📊 各教官處理勘誤統計</div>
+          <div style="font-size:11px;color:#64748b;margin-bottom:10px">全系統總計、不受下方篩選影響、已排除測試帳號。「題數」＝處理過的不同題目數（一題被多人/多次回報只算一題）。</div>
+          <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap">
+            <thead><tr style="color:#94a3b8;text-align:right;border-bottom:1px solid #334155">
+              <th style="text-align:left;padding:5px 8px">指導員</th><th style="padding:5px 8px">處理筆數</th><th style="padding:5px 8px">不同題數</th>
+              <th style="padding:5px 8px;color:#6ee7b7">✅ 修正</th><th style="padding:5px 8px;color:#fca5a5">❌ 不成立</th><th style="padding:5px 8px;color:#fbbf24">🚫 隱藏</th>
+            </tr></thead><tbody>
+            ${rows.map(r => `<tr style="text-align:right;border-bottom:1px solid #1e293b">
+              <td style="text-align:left;padding:5px 8px;color:#e2e8f0;font-weight:600">${auditEsc(r.name)}</td>
+              <td style="padding:5px 8px;color:#e2e8f0;font-weight:700">${r.reports}</td>
+              <td style="padding:5px 8px;color:#a5b4fc">${r.questions}</td>
+              <td style="padding:5px 8px;color:#6ee7b7">${r.fixed}</td><td style="padding:5px 8px;color:#fca5a5">${r.rejected}</td><td style="padding:5px 8px;color:#fbbf24">${r.hidden}</td>
+            </tr>`).join('')}
+            <tr style="text-align:right;border-top:2px solid #334155;color:#cbd5e1;font-weight:700">
+              <td style="text-align:left;padding:5px 8px">合計</td><td style="padding:5px 8px">${totReports}</td><td style="padding:5px 8px">${totQ.size}</td><td colspan="3"></td>
+            </tr>
+          </tbody></table></div>
+        </div>`;
     }
 
     function renderAudit() {
