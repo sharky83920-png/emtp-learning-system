@@ -439,7 +439,7 @@
               </select>
             </div>
             <div style="background:#f8fafc;border-radius:8px;padding:14px;margin-bottom:14px;border:1px solid #e2e8f0">
-              <div style="color:#1e293b;font-weight:600;margin-bottom:8px">📚 出處（選填、有助於分類）</div>
+              <div style="color:#1e293b;font-weight:600;margin-bottom:8px">📚 出處（<span style="color:#ef4444">必填</span>：書籍、章節、頁碼）</div>
               <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
                 <div class="form-group" style="margin-bottom:0">
                   <label style="font-size:12px">書籍</label>
@@ -2383,9 +2383,15 @@
         errEl.innerHTML = `<div class="err-msg">❌ 選項 ${miss} 至少要有文字或圖片</div>`; return;
       }
 
-      // 沒章節/維度 → 提醒（章節是下拉、一定是阿拉伯數字；但沒選會無法歸維度、不進雷達）
+      // 出處必填：書籍、章節、頁碼三者皆要（缺出處的題目無法查證、勘誤困難）
+      if (!bookId || !chapterId || !page) {
+        const missSrc = [!bookId && '書籍', !chapterId && '章節', !page && '頁碼'].filter(Boolean).join('、');
+        errEl.innerHTML = `<div class="err-msg">❌ 出處為必填，請填寫：${missSrc}</div>`; return;
+      }
+
+      // 章節未對應維度 → 提醒（出處已必填，這裡只剩「該章節沒設定維度」的情況）
       if (!dimension) {
-        if (!confirm('⚠️ 你沒有選章節（或該章節未對應維度），此題不會計入 6 角雷達。\n建議回去選一個章節。確定仍要這樣送出嗎？')) return;
+        if (!confirm('⚠️ 此章節未對應 6 角雷達維度，此題不會計入雷達。\n確定仍要送出嗎？')) return;
       }
 
       // 重複日期提醒：同一出題日已出過題 → 提示第幾題、按確定才繼續
