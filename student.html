@@ -200,13 +200,14 @@
 
     <!-- F14-C: 題目勘誤回報 modal -->
     <div id="errreport-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:1300;justify-content:center;align-items:center;padding:20px">
-      <div style="background:white;border-radius:16px;max-width:440px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden">
-        <div style="background:#f59e0b;color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center">
+      <div style="background:white;border-radius:16px;max-width:520px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;max-height:90vh;display:flex;flex-direction:column">
+        <div style="background:#f59e0b;color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
           <h3 style="margin:0;font-size:17px">⚠️ 題目勘誤回報</h3>
           <button id="errreport-close" style="background:rgba(255,255,255,0.25);border:none;color:white;font-size:22px;width:30px;height:30px;border-radius:50%;cursor:pointer;line-height:1">×</button>
         </div>
-        <div style="padding:18px 20px">
+        <div style="padding:18px 20px;overflow-y:auto">
           <div style="font-size:13px;color:#64748b;margin-bottom:12px">題號：<span id="errreport-qid" style="font-family:monospace;color:#1e293b;font-weight:600">—</span></div>
+          <div id="errreport-question" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:12px;max-height:240px;overflow-y:auto;font-size:13px"></div>
           <label style="display:block;font-size:13px;color:#475569;margin-bottom:6px;font-weight:600">問題描述（例：標答應該是 B、選項 C 有錯字…）</label>
           <textarea id="errreport-reason" rows="4" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px;resize:vertical" placeholder="請描述這題哪裡有問題"></textarea>
           <div id="errreport-msg" style="margin-top:8px"></div>
@@ -3172,6 +3173,21 @@
     function openErrReport(qid) {
       errReportQid = qid;
       document.getElementById('errreport-qid').textContent = qid;
+      // 帶入該題題目與選項供對照（資料已在檢討畫面的 quizReview、零額外讀取）
+      const qEl = document.getElementById('errreport-question');
+      const item = (quizReview || []).find(x => x.q && x.q.id === qid);
+      if (item) {
+        const q = item.q, opts = q.options || {};
+        const ans = item.a?.correctAnswer;
+        let h = `<div style="color:#1e293b;line-height:1.6;white-space:pre-wrap;margin-bottom:8px">${q.questionText || ''}</div>${qImgTag(q.questionImageUrl, { mt: '0 0 8px' })}`;
+        ['A', 'B', 'C', 'D'].forEach(k => {
+          const isAns = ans === k;
+          h += `<div style="padding:4px 8px;border-radius:6px;margin-bottom:2px;${isAns ? 'background:#dcfce7;color:#065f46;font-weight:600' : 'color:#475569'}">${k}. ${opts[k]?.text || ''}${isAns ? '　✔ 標答' : ''}${qImgTag(opts[k]?.imageUrl, { mt: '6px' })}</div>`;
+        });
+        qEl.innerHTML = h; qEl.style.display = 'block';
+      } else {
+        qEl.innerHTML = ''; qEl.style.display = 'none';
+      }
       document.getElementById('errreport-reason').value = '';
       document.getElementById('errreport-msg').innerHTML = '';
       document.getElementById('errreport-submit').disabled = false;
