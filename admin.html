@@ -5586,14 +5586,27 @@ TP18,新北 TP18,2026"></textarea>
     }
 
     // 真刪除題目（僅後台 Master、雙重確認、永久移除）
+    // 連帶刪除該題所有勘誤回報——否則勘誤列表會留下「題目已不存在」的孤兒紀錄
     async function deleteQuestionHard(qid) {
-      if (!confirm(`⚠️ 真刪除題目 ${qid}？\n\n這會「永久移除」這一題（跟『隱藏』不同、不可復原）。\n一般只用來刪測試題 / 誤建題。`)) return;
-      if (!confirm(`再次確認：${qid} 永久刪除、無法復原，確定？`)) return;
+      let reports = [];
       try {
-        await deleteDoc(doc(db, 'questions', qid));
+        const rSnap = await getDocs(query(collection(db, 'question_error_reports'), where('questionId', '==', qid)));
+        rSnap.forEach(d => reports.push({ id: d.id, ...d.data() }));
+      } catch (e) { alert('❌ 查詢此題勘誤回報失敗，先不刪除：' + e.message); return; }
+      const pending = reports.filter(r => (r.status || 'pending') === 'pending').length;
+      const corrNote = reports.length
+        ? `\n\n📋 此題有 ${reports.length} 筆勘誤回報（${pending} 筆待處理），會一併永久刪除。\n若想保留勘誤紀錄，請改用「隱藏」而不是真刪除。`
+        : '';
+      if (!confirm(`⚠️ 真刪除題目 ${qid}？\n\n這會「永久移除」這一題（跟『隱藏』不同、不可復原）。\n一般只用來刪測試題 / 誤建題。${corrNote}`)) return;
+      if (!confirm(`再次確認：${qid} 永久刪除${reports.length ? `（含 ${reports.length} 筆勘誤回報）` : ''}、無法復原，確定？`)) return;
+      try {
+        const bw = writeBatch(db);
+        bw.delete(doc(db, 'questions', qid));
+        reports.forEach(r => bw.delete(doc(db, 'question_error_reports', r.id)));
+        await bw.commit();
         qmCache = qmCache.filter(q => q.id !== qid);
         renderQuestionsPage();
-        alert(`✅ 已永久刪除 ${qid}`);
+        alert(`✅ 已永久刪除 ${qid}${reports.length ? `＋${reports.length} 筆勘誤回報` : ''}`);
       } catch (e) { alert('❌ ' + e.message); }
     }
 
