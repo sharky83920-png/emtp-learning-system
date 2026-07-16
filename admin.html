@@ -1185,6 +1185,37 @@ TP18,新北 TP18,2026"></textarea>
     </div>
   </div>
 
+  <div class="modal-overlay" id="exam-detail-modal">
+    <div class="modal" style="max-width:1040px" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3 id="exd-title">📝 逐筆成績</h3><button class="modal-close" id="exd-close">×</button></div>
+      <div class="modal-body">
+        <div id="exd-meta" style="color:#94a3b8;font-size:12px;margin-bottom:10px"></div>
+        <div class="toolbar" style="margin-bottom:10px">
+          <button class="btn" id="exd-tab-total">🌊 河流（總分）</button>
+          <button class="btn btn-ghost" id="exd-tab-radar">📡 雷達（6 維度）</button>
+          <span style="flex:1"></span>
+          <span id="exd-msg" style="font-size:12px;color:#34d399"></span>
+        </div>
+        <div id="exd-body"></div>
+      </div>
+      <div class="modal-footer">
+        <span style="flex:1;font-size:12px;color:#64748b">改分數→按該列 💾；沒成績的人可直接補建。存檔後班級彙總自動重算。</span>
+        <button class="btn btn-ghost" id="exd-cancel">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="student-scores-modal">
+    <div class="modal" style="max-width:940px" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3 id="sts-title">📊 學員成績</h3><button class="modal-close" id="sts-close">×</button></div>
+      <div class="modal-body"><div id="sts-body"></div></div>
+      <div class="modal-footer">
+        <span style="flex:1;font-size:12px;color:#64748b">唯讀查詢；要修改請到「📊 成績管理 → 📋 考試管理 → 👁 逐筆」</span>
+        <button class="btn btn-ghost" id="sts-cancel">關閉</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, updatePassword } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
@@ -1780,7 +1811,7 @@ TP18,新北 TP18,2026"></textarea>
           const accountCell = hasAccount
             ? '<span class="tag-pill">✅ 已建</span>'
             : (s.email ? `<button class="btn" data-create-auth="${s.id}">🔑 建帳號</button>` : '<span class="tag-pill gray">需先填 Email</span>');
-          html += `<tr><td class="num">${s.studentNo}</td><td>${s.name || '—'}</td><td style="color:#94a3b8;font-size:13px">${s.email || '—'}</td><td>${accountCell}</td><td>${stateTag}</td><td style="white-space:nowrap"><button class="btn btn-ghost" data-dl-rf="${s.id}" title="下載首刷雷達">🕸️</button><button class="btn btn-ghost" data-dl-re="${s.id}" title="下載考試雷達">🎯</button><button class="btn btn-ghost" data-dl-rv="${s.id}" title="下載河流圖">🌊</button><button class="btn btn-ghost" data-edit-s="${s.id}" title="編輯">✏️</button>${isArchived ? `<button class="btn btn-ghost" data-unarchive-s="${s.id}">📂 恢復</button>` : `<button class="btn btn-orange" data-archive-s="${s.id}" title="封存">📦</button>`}<button class="btn btn-red" data-del-s="${s.id}" title="刪除">🗑</button></td></tr>`;
+          html += `<tr><td class="num">${s.studentNo}</td><td>${s.name || '—'}</td><td style="color:#94a3b8;font-size:13px">${s.email || '—'}</td><td>${accountCell}</td><td>${stateTag}</td><td style="white-space:nowrap"><button class="btn btn-ghost" data-dl-rf="${s.id}" title="下載首刷雷達">🕸️</button><button class="btn btn-ghost" data-dl-re="${s.id}" title="下載考試雷達">🎯</button><button class="btn btn-ghost" data-dl-rv="${s.id}" title="下載河流圖">🌊</button><button class="btn btn-ghost" data-scores-s="${s.id}" title="成績查詢（唯讀）">📊</button><button class="btn btn-ghost" data-edit-s="${s.id}" title="編輯">✏️</button>${isArchived ? `<button class="btn btn-ghost" data-unarchive-s="${s.id}">📂 恢復</button>` : `<button class="btn btn-orange" data-archive-s="${s.id}" title="封存">📦</button>`}<button class="btn btn-red" data-del-s="${s.id}" title="刪除">🗑</button></td></tr>`;
         });
         html += '</tbody></table>';
         listEl.innerHTML = html;
@@ -1789,6 +1820,7 @@ TP18,新北 TP18,2026"></textarea>
         listEl.querySelectorAll('button[data-unarchive-s]').forEach(b => b.addEventListener('click', () => unarchiveStudent(b.dataset.unarchiveS)));
         listEl.querySelectorAll('button[data-edit-s]').forEach(b => b.addEventListener('click', () => openStudentEdit(b.dataset.editS)));
         listEl.querySelectorAll('button[data-del-s]').forEach(b => b.addEventListener('click', () => deleteStudent(b.dataset.delS)));
+        listEl.querySelectorAll('button[data-scores-s]').forEach(b => b.addEventListener('click', () => openStudentScores(b.dataset.scoresS)));
         // 成績圖下載（動作欄）
         const stuById = {}; filtered.forEach(s => stuById[s.id] = { id: s.id, classId: s.classId || classId, studentNo: s.studentNo, name: s.name || s.id });
         listEl.querySelectorAll('button[data-dl-rf]').forEach(b => b.addEventListener('click', () => exRowRadar(stuById[b.dataset.dlRf], 'first', b)));
@@ -4802,6 +4834,7 @@ TP18,新北 TP18,2026"></textarea>
             <td style="text-align:center">${e.totalCount > 0 ? `<span class="tag-pill">${e.totalCount} 筆</span>` : '—'}</td>
             <td style="text-align:center">${e.radarCount > 0 ? `<span class="tag-pill">${e.radarCount} 筆</span>` : '—'}</td>
             <td>
+              <button class="btn btn-ghost" data-exd-class="${e.classId}" data-exd-name="${e.examName}" data-exd-date="${e.examDate || ''}" data-exd-type="${e.examType || ''}" title="逐筆檢視／修改每位學員的成績">👁️ 逐筆</button>
               <button class="btn btn-red" data-ex-del-class="${e.classId}" data-ex-del-name="${e.examName}">🗑️ 刪除</button>
             </td>
           </tr>`;
@@ -4809,8 +4842,277 @@ TP18,新北 TP18,2026"></textarea>
         html += '</tbody></table>';
         el.innerHTML = html;
         el.querySelectorAll('button[data-ex-del-class]').forEach(b => b.addEventListener('click', () => deleteExam(b.dataset.exDelClass, b.dataset.exDelName)));
+        el.querySelectorAll('button[data-exd-class]').forEach(b => b.addEventListener('click', () => exdOpen(b.dataset.exdClass, b.dataset.exdName, b.dataset.exdDate, b.dataset.exdType)));
       } catch (e) { el.innerHTML = `<div class="err-msg">${e.message}</div>`; }
     }
+
+    // ----- 逐筆成績檢視／編輯（考試管理 → 👁️ 逐筆）-----
+    // 成績本來就是「一人一場一筆」獨立文件；這裡只是開窗逐筆改／補建／刪，不改資料模型。
+    // 手改一律留痕：lastEditedBy/lastEditedAt，首次手改時保存 original*（供稽核、並讓批次 rollback 事前示警）。
+    const EXD_ABSENT = ['請假', '缺考', '免修'];
+    let exdCtx = null;   // { classId, examName, examDate, examType, mode, students, totalByNo, radarByNo, changed }
+
+    function exdOpen(classId, examName, examDate, examType) {
+      exdCtx = { classId, examName, examDate: examDate || '', examType: examType || '', mode: 'total', changed: false };
+      document.getElementById('exd-title').textContent = `📝 ${examName}　${classId}`;
+      exdMsg('');
+      document.getElementById('exam-detail-modal').classList.add('active');
+      exdLoad();
+    }
+
+    function exdClose() {
+      const changed = exdCtx && exdCtx.changed;
+      document.getElementById('exam-detail-modal').classList.remove('active');
+      exdCtx = null;
+      if (changed) renderExamList(document.getElementById('exams-content'));   // 筆數變了才重畫清單（清單會掃全表、沒必要就別掃）
+    }
+
+    function exdMsg(text, isErr) {
+      const el = document.getElementById('exd-msg');
+      if (!el) return;
+      el.style.color = isErr ? '#f87171' : '#34d399';
+      el.textContent = text;
+    }
+
+    async function exdLoad() {
+      if (!exdCtx) return;
+      const { classId, examName } = exdCtx;
+      const body = document.getElementById('exd-body');
+      body.innerHTML = '<div class="loading">⏳ 載入該場成績...</div>';
+      try {
+        // 只撈這一場（classId + examName 兩個等值條件）＝ 全班數十筆，不掃全表
+        const [stuSnap, tSnap, rSnap] = await Promise.all([
+          getDocs(query(collection(db, 'students'), where('classId', '==', classId))),
+          getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', classId), where('examName', '==', examName))),
+          getDocs(query(collection(db, 'exam_scores_radar'), where('classId', '==', classId), where('examName', '==', examName)))
+        ]);
+        const students = [];   // 含封存學員：否則他們的成績會被當成孤兒
+        stuSnap.forEach(d => { const x = d.data(); students.push({ id: d.id, no: String(x.studentNo), name: x.name || d.id, archived: x.isActive === false }); });
+        students.sort((a, b) => (Number(a.no) || 0) - (Number(b.no) || 0));
+        const totalByNo = {}, radarByNo = {};
+        tSnap.forEach(d => { const x = d.data(); totalByNo[String(x.studentNo)] = Object.assign({ docId: d.id }, x); });
+        rSnap.forEach(d => { const x = d.data(); radarByNo[String(x.studentNo)] = Object.assign({ docId: d.id }, x); });
+        Object.assign(exdCtx, { students, totalByNo, radarByNo });
+        document.getElementById('exd-meta').innerHTML = `📅 ${exdCtx.examDate || '—'}　│　🌊 河流 <b style="color:#e2e8f0">${tSnap.size}</b> 筆　│　📡 雷達 <b style="color:#e2e8f0">${rSnap.size}</b> 筆　│　班級名冊 <b style="color:#e2e8f0">${students.length}</b> 人`;
+        exdRender();
+      } catch (e) { body.innerHTML = `<div class="err-msg">${e.message}</div>`; }
+    }
+
+    function exdOrigText(rec, mode) {
+      if (mode === 'total') {
+        if (rec.originalScore === undefined && rec.originalStatus === undefined) return '';
+        const o = (rec.originalStatus && rec.originalStatus !== 'scored') ? '未計分' : (rec.originalScore == null ? '無' : rec.originalScore + ' 分');
+        return `　｜上傳當初：${o}`;
+      }
+      if (!rec.originalDimensions) return '';
+      return '　｜上傳當初：' + EX_DIMS.map(d => { const x = rec.originalDimensions[d]; return `${d} ${x ? x.correct + '/' + x.total : '—'}`; }).join('、');
+    }
+
+    function exdRowHtml(s, rec, mode) {
+      const has = !!rec;
+      let cells = '';
+      if (mode === 'total') {
+        const absent = has && rec.status !== 'scored';
+        const sv = absent ? (rec.absentReason || '請假') : 'scored';
+        cells += `<td><input type="number" step="0.01" min="0" max="100" class="exd-score" value="${has && rec.totalScore != null ? rec.totalScore : ''}" style="width:92px"${absent ? ' disabled' : ''}></td>`;
+        cells += `<td><select class="exd-status" style="width:96px"><option value="scored"${sv === 'scored' ? ' selected' : ''}>計分</option>${EXD_ABSENT.map(k => `<option value="${k}"${sv === k ? ' selected' : ''}>${k}</option>`).join('')}</select></td>`;
+      } else {
+        EX_DIMS.forEach(d => {
+          const o = (has && rec.dimensions && rec.dimensions[d]) || null;
+          cells += `<td style="text-align:center;white-space:nowrap"><input type="number" min="0" class="exd-c" data-dim="${d}" value="${o ? o.correct : ''}" style="width:42px;padding:4px;text-align:center"><span style="color:#64748b"> / </span><input type="number" min="0" class="exd-t" data-dim="${d}" value="${o ? o.total : ''}" style="width:42px;padding:4px;text-align:center"></td>`;
+        });
+      }
+      const marks = [];
+      if (!has) marks.push('<span class="tag-pill gray">無成績</span>');
+      if (has && rec.createdManually) marks.push('<span class="tag-pill">✍️ 手動建立</span>');
+      if (has && rec.lastEditedBy) marks.push(`<span class="tag-pill" style="background:#78350f;color:#fcd34d" title="${rec.lastEditedBy}${exdOrigText(rec, mode)}">✏️ 已手改</span>`);
+      return `<tr data-no="${s.no}"${s.orphan ? ' style="opacity:.7"' : ''}>
+        <td class="num">${s.no}</td>
+        <td style="white-space:nowrap">${s.name}${s.archived ? ' <span class="tag-pill gray">📦</span>' : ''}</td>
+        ${cells}
+        <td style="white-space:nowrap">${marks.join(' ') || '—'}</td>
+        <td style="white-space:nowrap"><button class="btn btn-green" data-exd-save="${s.no}" title="儲存這一列">💾</button>${has ? `<button class="btn btn-red" data-exd-del="${s.no}" title="刪除這一筆成績">🗑</button>` : ''}</td>
+      </tr>`;
+    }
+
+    function exdSyncStatus(tr) {
+      if (!tr) return;
+      const sel = tr.querySelector('.exd-status'), inp = tr.querySelector('.exd-score');
+      if (!sel || !inp) return;
+      if (sel.value !== 'scored') { inp.value = ''; inp.disabled = true; } else { inp.disabled = false; }
+    }
+
+    function exdRender() {
+      if (!exdCtx) return;
+      const { mode, students, totalByNo, radarByNo } = exdCtx;
+      document.getElementById('exd-tab-total').className = mode === 'total' ? 'btn' : 'btn btn-ghost';
+      document.getElementById('exd-tab-radar').className = mode === 'radar' ? 'btn' : 'btn btn-ghost';
+      const map = mode === 'total' ? totalByNo : radarByNo;
+      // 名冊上沒有、卻有成績的（學員被刪後留下的孤兒）也要列出來，否則看不到也刪不掉
+      const noSet = new Set(students.map(s => s.no));
+      const orphans = Object.keys(map).filter(no => !noSet.has(no)).sort((a, b) => (Number(a) || 0) - (Number(b) || 0));
+      let html = '<table class="table"><thead><tr><th>學號</th><th>姓名</th>';
+      html += mode === 'total'
+        ? '<th>總分</th><th>狀態</th>'
+        : EX_DIMS.map(d => `<th style="text-align:center">${d}<div style="font-size:10px;color:#64748b;font-weight:400">對 / 總</div></th>`).join('');
+      html += '<th>紀錄</th><th>動作</th></tr></thead><tbody>';
+      const rows = students.concat(orphans.map(no => ({ id: '', no, name: '（名冊已無此人）', orphan: true })));
+      rows.forEach(s => { html += exdRowHtml(s, map[s.no], mode); });
+      html += '</tbody></table>';
+      const el = document.getElementById('exd-body');
+      el.innerHTML = html;
+      el.querySelectorAll('button[data-exd-save]').forEach(b => b.addEventListener('click', () => exdSaveRow(b.dataset.exdSave)));
+      el.querySelectorAll('button[data-exd-del]').forEach(b => b.addEventListener('click', () => exdDeleteRow(b.dataset.exdDel)));
+      el.querySelectorAll('tr[data-no]').forEach(tr => {
+        tr.addEventListener('input', () => { if (!tr._dirty) { tr._dirty = true; tr.style.background = '#422006'; } });
+        const sel = tr.querySelector('.exd-status');
+        if (sel) sel.addEventListener('change', () => exdSyncStatus(tr));
+      });
+    }
+
+    async function exdSaveRow(no) {
+      if (!exdCtx) return;
+      const { classId, examName, examDate, examType, mode } = exdCtx;
+      const tr = document.querySelector(`#exd-body tr[data-no="${no}"]`);
+      if (!tr) return;
+      const map = mode === 'total' ? exdCtx.totalByNo : exdCtx.radarByNo;
+      const existing = map[String(no)];
+      const stu = exdCtx.students.find(s => s.no === String(no));
+      const payload = {};
+      // 驗證沿用批次上傳那一套（0–100、答對不得大於總題）
+      if (mode === 'total') {
+        const sel = tr.querySelector('.exd-status').value;
+        if (sel === 'scored') {
+          const raw = tr.querySelector('.exd-score').value.trim();
+          const v = parseFloat(raw);
+          if (raw === '' || isNaN(v)) { exdMsg(`❌ ${no} 號：請填分數，或把狀態改成請假／缺考／免修`, true); return; }
+          if (v < 0 || v > 100) { exdMsg(`❌ ${no} 號：分數必須在 0–100 之間`, true); return; }
+          payload.totalScore = v; payload.status = 'scored'; payload.absentReason = null;
+        } else {
+          payload.totalScore = null; payload.status = 'absent_excused'; payload.absentReason = sel;
+        }
+      } else {
+        const dims = {};
+        for (const d of EX_DIMS) {
+          const c = parseInt(tr.querySelector(`.exd-c[data-dim="${d}"]`).value, 10);
+          const t = parseInt(tr.querySelector(`.exd-t[data-dim="${d}"]`).value, 10);
+          const cc = isNaN(c) ? 0 : c, tt = isNaN(t) ? 0 : t;
+          if (cc < 0 || tt < 0) { exdMsg(`❌ ${no} 號 ${d}：不可為負數`, true); return; }
+          if (cc > tt) { exdMsg(`❌ ${no} 號 ${d}：答對 ${cc} 不可大於總題 ${tt}`, true); return; }
+          dims[d] = { correct: cc, total: tt };
+        }
+        if (EX_DIMS.every(d => dims[d].total === 0)) { exdMsg(`❌ ${no} 號：六維總題數全為 0 等於沒成績（要刪請按 🗑）`, true); return; }
+        payload.dimensions = dims;
+      }
+      const collName = mode === 'total' ? 'exam_scores_total' : 'exam_scores_radar';
+      const btn = tr.querySelector('button[data-exd-save]');
+      if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+      try {
+        if (existing) {
+          const patch = Object.assign({}, payload, { lastEditedBy: currentUser.email, lastEditedAt: serverTimestamp() });
+          if (!existing.lastEditedBy) {   // 只有第一次手改才存原始值：之後再改也不覆蓋，原始永遠是上傳當初那筆
+            if (mode === 'total') { patch.originalScore = existing.totalScore != null ? existing.totalScore : null; patch.originalStatus = existing.status || null; }
+            else patch.originalDimensions = existing.dimensions || null;
+          }
+          await updateDoc(doc(db, collName, existing.docId), patch);
+        } else {
+          await setDoc(doc(collection(db, collName)), Object.assign({
+            studentId: stu ? stu.id : `${classId.toLowerCase()}-${no}`,
+            studentNo: String(no),
+            classId, examName, examDate, examType,
+            createdManually: true,   // 手動補建、不掛 uploadBatchId → 不會被批次 rollback 掃到
+            uploadedBy: currentUser.email, uploadedAt: serverTimestamp(),
+            lastEditedBy: currentUser.email, lastEditedAt: serverTimestamp()
+          }, payload));
+        }
+        exdCtx.changed = true;
+        await recalcExamSummary(classId);   // 成績有變動→重算班彙總（學員端河流/雷達即時反映）
+        exdMsg(`✅ 已儲存 ${no} 號 ${stu ? stu.name : ''}`);
+        await exdLoad();
+      } catch (e) {
+        exdMsg('❌ ' + e.message, true);
+        if (btn) { btn.disabled = false; btn.textContent = '💾'; }
+      }
+    }
+
+    async function exdDeleteRow(no) {
+      if (!exdCtx) return;
+      const { classId, examName, mode } = exdCtx;
+      const map = mode === 'total' ? exdCtx.totalByNo : exdCtx.radarByNo;
+      const existing = map[String(no)];
+      if (!existing) return;
+      const stu = exdCtx.students.find(s => s.no === String(no));
+      if (!confirm(`⚠️ 刪除 ${no} 號 ${stu ? stu.name : ''} 在「${examName}」的${mode === 'total' ? '河流總分' : '雷達'}成績？\n\n只刪這一筆、不影響同場其他人。不可復原。`)) return;
+      try {
+        await deleteDoc(doc(db, mode === 'total' ? 'exam_scores_total' : 'exam_scores_radar', existing.docId));
+        exdCtx.changed = true;
+        await recalcExamSummary(classId);
+        exdMsg(`🗑 已刪除 ${no} 號的這筆成績`);
+        await exdLoad();
+      } catch (e) { exdMsg('❌ ' + e.message, true); }
+    }
+
+    (function bindExdModal() {
+      const close = document.getElementById('exd-close'), cancel = document.getElementById('exd-cancel');
+      if (close) close.addEventListener('click', exdClose);
+      if (cancel) cancel.addEventListener('click', exdClose);
+      const tt = document.getElementById('exd-tab-total'), tr2 = document.getElementById('exd-tab-radar');
+      if (tt) tt.addEventListener('click', () => { if (exdCtx && exdCtx.mode !== 'total') { exdCtx.mode = 'total'; exdMsg(''); exdRender(); } });
+      if (tr2) tr2.addEventListener('click', () => { if (exdCtx && exdCtx.mode !== 'radar') { exdCtx.mode = 'radar'; exdMsg(''); exdRender(); } });
+    })();
+
+    // ----- 學員成績查詢（學員管理 → 📊，唯讀）-----
+    async function openStudentScores(studentId) {
+      const modal = document.getElementById('student-scores-modal');
+      const body = document.getElementById('sts-body');
+      document.getElementById('sts-title').textContent = '📊 學員成績';
+      body.innerHTML = '<div class="loading">⏳ 載入成績...</div>';
+      modal.classList.add('active');
+      try {
+        const [sDoc, tSnap, rSnap] = await Promise.all([
+          getDoc(doc(db, 'students', studentId)),
+          getDocs(query(collection(db, 'exam_scores_total'), where('studentId', '==', studentId))),
+          getDocs(query(collection(db, 'exam_scores_radar'), where('studentId', '==', studentId)))
+        ]);
+        const s = sDoc.exists() ? sDoc.data() : {};
+        document.getElementById('sts-title').textContent = `📊 ${s.studentNo != null ? s.studentNo + ' 號 ' : ''}${s.name || studentId}　${s.classId || ''}`;
+        const byExam = {};
+        const keyOf = x => `${x.examDate || ''}|${x.examName || ''}`;
+        tSnap.forEach(d => { const x = d.data(); const k = keyOf(x); (byExam[k] = byExam[k] || { examName: x.examName, examDate: x.examDate, examType: x.examType })._t = x; });
+        rSnap.forEach(d => { const x = d.data(); const k = keyOf(x); (byExam[k] = byExam[k] || { examName: x.examName, examDate: x.examDate, examType: x.examType })._r = x; });
+        const rows = Object.values(byExam).sort((a, b) => (b.examDate || '').localeCompare(a.examDate || ''));   // 日期一律字串比較
+        if (!rows.length) { body.innerHTML = '<div class="placeholder"><div class="icon">📭</div><h3>這位學員還沒有考試成績</h3></div>'; return; }
+        const typeLabels = { quiz: '小考', midterm: '期中', final: '期末', mock: '模擬' };
+        let html = `<p style="color:#94a3b8;margin-bottom:8px">共 ${rows.length} 場考試（🌊 河流 ${tSnap.size} 筆 ／ 📡 雷達 ${rSnap.size} 筆）</p>`;
+        html += '<table class="table"><thead><tr><th>日期</th><th>考試</th><th>類型</th><th>總分</th>' + EX_DIMS.map(d => `<th style="text-align:center">${d}</th>`).join('') + '<th>紀錄</th></tr></thead><tbody>';
+        rows.forEach(e => {
+          const t = e._t, r = e._r;
+          let scoreCell = '<span style="color:#475569">—</span>';
+          if (t) scoreCell = (t.status === 'scored' && t.totalScore != null)
+            ? `<strong style="color:#60a5fa">${t.totalScore}</strong>`
+            : `<span class="tag-pill gray">${t.absentReason || '未計分'}</span>`;
+          const dimCells = EX_DIMS.map(d => {
+            const o = r && r.dimensions && r.dimensions[d];
+            if (!o || !o.total) return '<td style="text-align:center;color:#475569">—</td>';
+            const pct = (o.correct / o.total) * 100;
+            return `<td style="text-align:center;white-space:nowrap;color:${pct >= 60 ? '#34d399' : '#f87171'}">${o.correct}/${o.total}</td>`;
+          }).join('');
+          const marks = [];
+          if ((t && t.lastEditedBy) || (r && r.lastEditedBy)) marks.push('<span class="tag-pill" style="background:#78350f;color:#fcd34d">✏️ 手改</span>');
+          if ((t && t.createdManually) || (r && r.createdManually)) marks.push('<span class="tag-pill">✍️ 手動建立</span>');
+          html += `<tr><td style="white-space:nowrap">${e.examDate || '—'}</td><td><strong>${e.examName}</strong></td><td><span class="tag-pill gray">${typeLabels[e.examType] || e.examType || '—'}</span></td><td>${scoreCell}</td>${dimCells}<td style="white-space:nowrap">${marks.join(' ') || '—'}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        body.innerHTML = html;
+      } catch (e) { body.innerHTML = `<div class="err-msg">${e.message}</div>`; }
+    }
+
+    (function bindStsModal() {
+      const hide = () => document.getElementById('student-scores-modal').classList.remove('active');
+      const close = document.getElementById('sts-close'), cancel = document.getElementById('sts-cancel');
+      if (close) close.addEventListener('click', hide);
+      if (cancel) cancel.addEventListener('click', hide);
+    })();
 
     async function deleteExam(classId, examName) {
       if (!confirm(`⚠️ 確定刪除「${examName}」此考試所有成績？\n班級：${classId}\n（包含河流 + 雷達兩種、不可復原）`)) return;
@@ -4874,6 +5176,12 @@ TP18,新北 TP18,2026"></textarea>
         const collName = b.type === 'exam_total' ? 'exam_scores_total' : 'exam_scores_radar';
         const q = query(collection(db, collName), where('uploadBatchId', '==', batchId));
         const snap = await getDocs(q);
+        // 保護：這批裡若有「上傳後又被逐筆手改過」的成績，rollback 會把手改結果一起刪掉 → 先示警、要你再點一次頭
+        const edited = snap.docs.filter(d => d.data().lastEditedBy);
+        if (edited.length) {
+          const who = edited.slice(0, 6).map(d => `${d.data().studentNo} 號`).join('、');
+          if (!confirm(`⚠️⚠️ 這批有 ${edited.length} 筆成績「上傳後又被手動修改過」（${who}${edited.length > 6 ? ' 等' : ''}）。\n\nRollback 會連同手改後的內容一起刪除、不可復原。\n\n仍要刪除整批嗎？`)) return;
+        }
         const wb = writeBatch(db);
         snap.forEach(d => wb.delete(d.ref));
         wb.update(doc(db, 'upload_batches', batchId), { isReverted: true, revertedAt: serverTimestamp(), revertedBy: currentUser.email });
