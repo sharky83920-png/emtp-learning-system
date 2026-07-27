@@ -1577,7 +1577,6 @@ TP18,新北 TP18,2026"></textarea>
     document.getElementById('cls-perm-none').addEventListener('click', () => document.querySelectorAll('.class-perm-cb').forEach(cb => cb.checked = false));
     document.getElementById('class-modal-close').addEventListener('click', () => document.getElementById('class-modal').classList.remove('active'));
     document.getElementById('class-modal-cancel').addEventListener('click', () => document.getElementById('class-modal').classList.remove('active'));
-    document.getElementById('class-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('class-modal').classList.remove('active'); });
 
     document.getElementById('class-modal-save').addEventListener('click', async () => {
       const classId = document.getElementById('class-id').value.trim();
@@ -1636,7 +1635,6 @@ TP18,新北 TP18,2026"></textarea>
     });
     document.getElementById('cb-close').addEventListener('click', () => document.getElementById('class-batch-modal').classList.remove('active'));
     document.getElementById('cb-cancel').addEventListener('click', () => document.getElementById('class-batch-modal').classList.remove('active'));
-    document.getElementById('class-batch-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('class-batch-modal').classList.remove('active'); });
     document.getElementById('cb-preview-btn').addEventListener('click', async () => {
       const lines = document.getElementById('cb-data').value.split('\n').map(l => l.trim()).filter(l => l);
       const prevEl = document.getElementById('cb-preview');
@@ -1698,7 +1696,6 @@ TP18,新北 TP18,2026"></textarea>
     });
     document.getElementById('ib-close').addEventListener('click', () => document.getElementById('instructor-batch-modal').classList.remove('active'));
     document.getElementById('ib-cancel').addEventListener('click', () => document.getElementById('instructor-batch-modal').classList.remove('active'));
-    document.getElementById('instructor-batch-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('instructor-batch-modal').classList.remove('active'); });
     document.getElementById('ib-preview-btn').addEventListener('click', async () => {
       const lines = document.getElementById('ib-data').value.split('\n').map(l => l.trim()).filter(l => l);
       const prevEl = document.getElementById('ib-preview');
@@ -1837,12 +1834,20 @@ TP18,新北 TP18,2026"></textarea>
 
     async function archiveStudent(studentId) {
       if (!confirm('封存此學員？')) return;
-      try { await updateDoc(doc(db, 'students', studentId), { isActive: false, archivedAt: serverTimestamp() }); loadStudents(); loadOverviewStats(); }
-      catch (e) { alert('❌ ' + e.message); }
+      try {
+        await updateDoc(doc(db, 'students', studentId), { isActive: false, archivedAt: serverTimestamp() });
+        const s = (await getDoc(doc(db, 'students', studentId))).data();
+        if (s?.classId) await recalcExamSummary(s.classId);   // 甲：封存後重算河流/熱力圖（擋掉封存後補登的成績、保留封存前歷史）
+        loadStudents(); loadOverviewStats();
+      } catch (e) { alert('❌ ' + e.message); }
     }
     async function unarchiveStudent(studentId) {
-      try { await updateDoc(doc(db, 'students', studentId), { isActive: true, archivedAt: null }); loadStudents(); loadOverviewStats(); }
-      catch (e) { alert('❌ ' + e.message); }
+      try {
+        await updateDoc(doc(db, 'students', studentId), { isActive: true, archivedAt: null });
+        const s = (await getDoc(doc(db, 'students', studentId))).data();
+        if (s?.classId) await recalcExamSummary(s.classId);   // 復訓後重算（重新計入該生所有成績）
+        loadStudents(); loadOverviewStats();
+      } catch (e) { alert('❌ ' + e.message); }
     }
     async function deleteStudent(studentId) {
       const s = (await getDoc(doc(db, 'students', studentId))).data() || {};
@@ -1876,7 +1881,6 @@ TP18,新北 TP18,2026"></textarea>
     }
     document.getElementById('se-edit-close').addEventListener('click', () => document.getElementById('student-edit-modal').classList.remove('active'));
     document.getElementById('se-edit-cancel').addEventListener('click', () => document.getElementById('student-edit-modal').classList.remove('active'));
-    document.getElementById('student-edit-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('student-edit-modal').classList.remove('active'); });
 
     // ===== 成績圖匯出（後台：雷達/河流 → PNG / 批次 ZIP）=====
     const EX_DIMS = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'];
@@ -2128,7 +2132,6 @@ TP18,新北 TP18,2026"></textarea>
     });
     document.getElementById('student-modal-close').addEventListener('click', () => document.getElementById('student-modal').classList.remove('active'));
     document.getElementById('student-modal-cancel').addEventListener('click', () => document.getElementById('student-modal').classList.remove('active'));
-    document.getElementById('student-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('student-modal').classList.remove('active'); });
 
    document.getElementById('student-modal-save').addEventListener('click', async () => {
       const classId = document.getElementById('student-class-display').value;
@@ -2191,7 +2194,6 @@ TP18,新北 TP18,2026"></textarea>
     });
     document.getElementById('batch-modal-close').addEventListener('click', () => document.getElementById('batch-modal').classList.remove('active'));
     document.getElementById('batch-modal-cancel').addEventListener('click', () => document.getElementById('batch-modal').classList.remove('active'));
-    document.getElementById('batch-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('batch-modal').classList.remove('active'); });
 
     document.getElementById('btn-batch-preview').addEventListener('click', async () => {
       const classId = document.getElementById('batch-class-display').value;
@@ -2433,7 +2435,6 @@ TP18,新北 TP18,2026"></textarea>
     document.getElementById('btn-add-instructor').addEventListener('click', () => openInstructorModal(null));
     document.getElementById('instructor-modal-close').addEventListener('click', () => document.getElementById('instructor-modal').classList.remove('active'));
     document.getElementById('instructor-modal-cancel').addEventListener('click', () => document.getElementById('instructor-modal').classList.remove('active'));
-    document.getElementById('instructor-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('instructor-modal').classList.remove('active'); });
 
     document.getElementById('instructor-modal-save').addEventListener('click', async () => {
       const name = document.getElementById('instructor-name').value.trim();
@@ -3000,7 +3001,6 @@ TP18,新北 TP18,2026"></textarea>
     }
     document.getElementById('ms-group-close').addEventListener('click', () => document.getElementById('ms-group-modal').classList.remove('active'));
     document.getElementById('ms-group-cancel').addEventListener('click', () => document.getElementById('ms-group-modal').classList.remove('active'));
-    document.getElementById('ms-group-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('ms-group-modal').classList.remove('active'); });
     document.getElementById('ms-group-save').addEventListener('click', async () => {
       const id = document.getElementById('ms-group-id').value.trim().toUpperCase();
       const name = document.getElementById('ms-group-name').value.trim();
@@ -3110,7 +3110,6 @@ TP18,新北 TP18,2026"></textarea>
     }
     document.getElementById('ms-unit-close').addEventListener('click', () => document.getElementById('ms-unit-modal').classList.remove('active'));
     document.getElementById('ms-unit-cancel').addEventListener('click', () => document.getElementById('ms-unit-modal').classList.remove('active'));
-    document.getElementById('ms-unit-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('ms-unit-modal').classList.remove('active'); });
     document.getElementById('ms-unit-save').addEventListener('click', async () => {
       const name = document.getElementById('ms-unit-name').value.trim();
       const type = document.getElementById('ms-unit-type').value;
@@ -3211,7 +3210,6 @@ TP18,新北 TP18,2026"></textarea>
     }
     document.getElementById('ms-role-close').addEventListener('click', () => document.getElementById('ms-role-modal').classList.remove('active'));
     document.getElementById('ms-role-cancel').addEventListener('click', () => document.getElementById('ms-role-modal').classList.remove('active'));
-    document.getElementById('ms-role-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('ms-role-modal').classList.remove('active'); });
     document.getElementById('ms-role-save').addEventListener('click', async () => {
       const name = document.getElementById('ms-role-name').value.trim();
       const order = parseInt(document.getElementById('ms-role-order').value);
@@ -3382,7 +3380,6 @@ TP18,新北 TP18,2026"></textarea>
     }
     document.getElementById('ms-item-close').addEventListener('click', () => document.getElementById('ms-item-modal').classList.remove('active'));
     document.getElementById('ms-item-cancel').addEventListener('click', () => document.getElementById('ms-item-modal').classList.remove('active'));
-    document.getElementById('ms-item-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('ms-item-modal').classList.remove('active'); });
     document.getElementById('ms-item-save').addEventListener('click', async () => {
       const id = document.getElementById('ms-item-id').value.trim().toUpperCase();
       const groupId = document.getElementById('ms-item-group').value;
@@ -3686,7 +3683,6 @@ TP18,新北 TP18,2026"></textarea>
     }
     document.getElementById('ms-skill-close').addEventListener('click', () => document.getElementById('ms-skill-modal').classList.remove('active'));
     document.getElementById('ms-skill-cancel').addEventListener('click', () => document.getElementById('ms-skill-modal').classList.remove('active'));
-    document.getElementById('ms-skill-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('ms-skill-modal').classList.remove('active'); });
     document.getElementById('ms-skill-save').addEventListener('click', async () => {
       const id = document.getElementById('ms-skill-id').value.trim().toUpperCase();
       const name = document.getElementById('ms-skill-name').value.trim();
@@ -4094,7 +4090,6 @@ TP18,新北 TP18,2026"></textarea>
     }
     document.getElementById('ms-book-close').addEventListener('click', () => document.getElementById('ms-book-modal').classList.remove('active'));
     document.getElementById('ms-book-cancel').addEventListener('click', () => document.getElementById('ms-book-modal').classList.remove('active'));
-    document.getElementById('ms-book-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('ms-book-modal').classList.remove('active'); });
     document.getElementById('ms-book-save').addEventListener('click', async () => {
       const id = document.getElementById('ms-book-id').value.trim().toUpperCase();
       const fullName = document.getElementById('ms-book-fullname').value.trim();
@@ -4227,7 +4222,6 @@ TP18,新北 TP18,2026"></textarea>
     }
     document.getElementById('ms-chapter-close').addEventListener('click', () => document.getElementById('ms-chapter-modal').classList.remove('active'));
     document.getElementById('ms-chapter-cancel').addEventListener('click', () => document.getElementById('ms-chapter-modal').classList.remove('active'));
-    document.getElementById('ms-chapter-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('ms-chapter-modal').classList.remove('active'); });
     document.getElementById('ms-chapter-save').addEventListener('click', async () => {
       const bookId = document.getElementById('ms-chapter-book').value;
       const num = document.getElementById('ms-chapter-number').value.trim();
@@ -4779,14 +4773,27 @@ TP18,新北 TP18,2026"></textarea>
       if (!classId) return;
       try {
         const DIMS = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'];
-        const [rSnap, tSnap] = await Promise.all([
+        const [rSnap, tSnap, sSnap] = await Promise.all([
           getDocs(query(collection(db, 'exam_scores_radar'), where('classId', '==', classId))),
-          getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', classId)))
+          getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', classId))),
+          getDocs(query(collection(db, 'students'), where('classId', '==', classId)))
         ]);
+        // 甲：封存學員以「封存日」為時間分界——封存前的成績照舊計入河流/熱力圖、封存後(含事後補登)不計入。
+        //（缺封存日 → 視為遠未來＝全部保留、不竄改歷史；退訓者不會再有新成績，實務上等於歷史原樣保留）
+        const _archiveDateStr = (ts) => {
+          try {
+            const d = ts && ts.toDate ? ts.toDate() : (ts && ts.seconds ? new Date(ts.seconds * 1000) : null);
+            if (!d) return '9999-12-31';
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          } catch (e) { return '9999-12-31'; }
+        };
+        const archivedCut = {};   // studentNo(字串) -> 封存日 'YYYY-MM-DD'
+        sSnap.forEach(d => { const s = d.data(); if (s.isActive === false) archivedCut[String(s.studentNo)] = _archiveDateStr(s.archivedAt); });
+        const countsIn = (rec) => { const cut = archivedCut[String(rec.studentNo)]; if (!cut) return true; if (!rec.examDate) return true; return rec.examDate <= cut; };
         const radar = {}; DIMS.forEach(d => radar[d] = { c: 0, t: 0 });
-        rSnap.forEach(d => { const e = d.data(); if (!e.dimensions) return; DIMS.forEach(k => { const s = e.dimensions[k]; if (s) { radar[k].c += s.correct || 0; radar[k].t += s.total || 0; } }); });
+        rSnap.forEach(d => { const e = d.data(); if (!countsIn(e)) return; if (!e.dimensions) return; DIMS.forEach(k => { const s = e.dimensions[k]; if (s) { radar[k].c += s.correct || 0; radar[k].t += s.total || 0; } }); });
         const byExam = {};
-        tSnap.forEach(d => { const x = d.data(); if (x.status !== 'scored' || x.totalScore == null) return; const k = x.examName; if (!byExam[k]) byExam[k] = { date: x.examDate || '', scores: [] }; byExam[k].scores.push(x.totalScore); if (x.examDate) byExam[k].date = x.examDate; });
+        tSnap.forEach(d => { const x = d.data(); if (!countsIn(x)) return; if (x.status !== 'scored' || x.totalScore == null) return; const k = x.examName; if (!byExam[k]) byExam[k] = { date: x.examDate || '', scores: [] }; byExam[k].scores.push(x.totalScore); if (x.examDate) byExam[k].date = x.examDate; });
         const river = {};
         Object.entries(byExam).forEach(([name, e]) => {
           const arr = e.scores.slice().sort((a, b) => a - b); const n = arr.length, enough = n >= 5;
@@ -6056,7 +6063,6 @@ TP18,新北 TP18,2026"></textarea>
     }
     document.getElementById('qm-edit-close').addEventListener('click', () => document.getElementById('qm-edit-modal').classList.remove('active'));
     document.getElementById('qm-edit-cancel').addEventListener('click', () => document.getElementById('qm-edit-modal').classList.remove('active'));
-    document.getElementById('qm-edit-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('qm-edit-modal').classList.remove('active'); });
     document.getElementById('qm-edit-save').addEventListener('click', () => qmSaveEdit());
     // 結案鈕動態文字：出題者欄有字 → 顯示「回報者＋出題者」，否則「回報者」
     function updateQmBtnLabel() {
@@ -6256,7 +6262,6 @@ TP18,新北 TP18,2026"></textarea>
     // F13-H: 題庫批次匯入
     document.getElementById('qm-bulk-close').addEventListener('click', () => document.getElementById('qm-bulk-modal').classList.remove('active'));
     document.getElementById('qm-bulk-cancel').addEventListener('click', () => document.getElementById('qm-bulk-modal').classList.remove('active'));
-    document.getElementById('qm-bulk-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('qm-bulk-modal').classList.remove('active'); });
     document.getElementById('qm-bulk-file').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -6740,7 +6745,6 @@ TP18,新北 TP18,2026"></textarea>
 
     document.getElementById('create-auth-close').addEventListener('click', () => document.getElementById('create-auth-modal').classList.remove('active'));
     document.getElementById('create-auth-cancel').addEventListener('click', () => document.getElementById('create-auth-modal').classList.remove('active'));
-    document.getElementById('create-auth-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('create-auth-modal').classList.remove('active'); });
 
     document.getElementById('create-auth-save').addEventListener('click', async () => {
       if (!currentCreateAuthStudent) return;

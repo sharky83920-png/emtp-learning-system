@@ -1057,7 +1057,6 @@
     function closeCorrModal() { document.getElementById('corr-modal').style.display = 'none'; currentCorr = null; }
     document.getElementById('corr-modal-close').addEventListener('click', closeCorrModal);
     document.getElementById('corr-modal-cancel').addEventListener('click', closeCorrModal);
-    document.getElementById('corr-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeCorrModal(); });
     document.getElementById('corr-resolve-fix').addEventListener('click', () => resolveCorr());
     // 結案鈕動態文字：出題者欄有字 → 顯示「回報者＋出題者」，否則「回報者」
     function updateCorrBtnLabel() {
@@ -2365,14 +2364,27 @@
       if (!classId) return;
       try {
         const DIMS = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'];
-        const [rSnap, tSnap] = await Promise.all([
+        const [rSnap, tSnap, sSnap] = await Promise.all([
           getDocs(query(collection(db, 'exam_scores_radar'), where('classId', '==', classId))),
-          getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', classId)))
+          getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', classId))),
+          getDocs(query(collection(db, 'students'), where('classId', '==', classId)))
         ]);
+        // 甲：封存學員以「封存日」為時間分界——封存前的成績照舊計入河流/熱力圖、封存後(含事後補登)不計入。
+        //（缺封存日 → 視為遠未來＝全部保留、不竄改歷史；退訓者不會再有新成績，實務上等於歷史原樣保留）
+        const _archiveDateStr = (ts) => {
+          try {
+            const d = ts && ts.toDate ? ts.toDate() : (ts && ts.seconds ? new Date(ts.seconds * 1000) : null);
+            if (!d) return '9999-12-31';
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          } catch (e) { return '9999-12-31'; }
+        };
+        const archivedCut = {};   // studentNo(字串) -> 封存日 'YYYY-MM-DD'
+        sSnap.forEach(d => { const s = d.data(); if (s.isActive === false) archivedCut[String(s.studentNo)] = _archiveDateStr(s.archivedAt); });
+        const countsIn = (rec) => { const cut = archivedCut[String(rec.studentNo)]; if (!cut) return true; if (!rec.examDate) return true; return rec.examDate <= cut; };
         const radar = {}; DIMS.forEach(d => radar[d] = { c: 0, t: 0 });
-        rSnap.forEach(d => { const e = d.data(); if (!e.dimensions) return; DIMS.forEach(k => { const s = e.dimensions[k]; if (s) { radar[k].c += s.correct || 0; radar[k].t += s.total || 0; } }); });
+        rSnap.forEach(d => { const e = d.data(); if (!countsIn(e)) return; if (!e.dimensions) return; DIMS.forEach(k => { const s = e.dimensions[k]; if (s) { radar[k].c += s.correct || 0; radar[k].t += s.total || 0; } }); });
         const byExam = {};
-        tSnap.forEach(d => { const x = d.data(); if (x.status !== 'scored' || x.totalScore == null) return; const k = x.examName; if (!byExam[k]) byExam[k] = { date: x.examDate || '', scores: [] }; byExam[k].scores.push(x.totalScore); if (x.examDate) byExam[k].date = x.examDate; });
+        tSnap.forEach(d => { const x = d.data(); if (!countsIn(x)) return; if (x.status !== 'scored' || x.totalScore == null) return; const k = x.examName; if (!byExam[k]) byExam[k] = { date: x.examDate || '', scores: [] }; byExam[k].scores.push(x.totalScore); if (x.examDate) byExam[k].date = x.examDate; });
         const river = {};
         Object.entries(byExam).forEach(([name, e]) => {
           const arr = e.scores.slice().sort((a, b) => a - b); const n = arr.length, enough = n >= 5;
