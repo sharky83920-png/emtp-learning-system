@@ -740,6 +740,23 @@
     </div>
   </div>
 
+  <!-- 封存學員（指定退訓生效日）Modal -->
+  <div class="modal-overlay" id="student-archive-modal">
+    <div class="modal" style="max-width:420px" onclick="event.stopPropagation()">
+      <div class="modal-header"><h3>📦 封存學員（退訓）</h3><button class="modal-close" id="sa-close">×</button></div>
+      <div class="modal-body">
+        <div class="form-group"><label>學員</label><input type="text" id="sa-name" readonly style="background:#0a0f1f;color:#94a3b8"></div>
+        <div class="form-group"><label>退訓生效日</label><input type="date" id="sa-date"></div>
+        <p style="color:#94a3b8;font-size:12px;margin-bottom:8px">💡 統計以生效日 0 點為界：前一天（含）以前的成績保留計入，生效日當天起的考試不再計入班級統計。例：7/27 退訓 → 填 7/27，7/28 的考試就不算。</p>
+        <div id="sa-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="sa-cancel">取消</button>
+        <button class="btn btn-orange" id="sa-confirm">📦 確認封存</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 單筆新增學員 Modal -->
   <div class="modal-overlay" id="student-modal">
     <div class="modal" onclick="event.stopPropagation()">
@@ -1803,7 +1820,7 @@ TP18,新北 TP18,2026"></textarea>
         html += '<table class="table"><thead><tr><th>學號</th><th>姓名</th><th>Email</th><th>帳號</th><th>狀態</th><th>動作</th></tr></thead><tbody>';
         filtered.forEach(s => {
           const isArchived = s.isActive === false;
-          const stateTag = isArchived ? '<span class="tag-pill gray">📦 封存</span>' : '<span class="tag-pill">✅</span>';
+          const stateTag = isArchived ? `<span class="tag-pill gray" title="退訓生效日（統計以當日 0 點為界、當天起不計）">📦 封存${s.archivedDate ? '·' + s.archivedDate : ''}</span>` : '<span class="tag-pill">✅</span>';
           const hasAccount = s.hasAuthAccount === true;
           const accountCell = hasAccount
             ? '<span class="tag-pill">✅ 已建</span>'
@@ -1832,18 +1849,37 @@ TP18,新北 TP18,2026"></textarea>
       loadStudents();
     });
 
+    let archiveTargetId = null;
     async function archiveStudent(studentId) {
-      if (!confirm('封存此學員？')) return;
       try {
-        await updateDoc(doc(db, 'students', studentId), { isActive: false, archivedAt: serverTimestamp() });
-        const s = (await getDoc(doc(db, 'students', studentId))).data();
-        if (s?.classId) await recalcExamSummary(s.classId);   // 甲：封存後重算河流/熱力圖（擋掉封存後補登的成績、保留封存前歷史）
-        loadStudents(); loadOverviewStats();
+        const s = (await getDoc(doc(db, 'students', studentId))).data() || {};
+        archiveTargetId = studentId;
+        document.getElementById('sa-name').value = `${s.studentNo ?? ''}號 ${s.name || ''}`.trim();
+        const now = new Date();
+        document.getElementById('sa-date').value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        document.getElementById('sa-error').innerHTML = '';
+        document.getElementById('student-archive-modal').classList.add('active');
       } catch (e) { alert('❌ ' + e.message); }
     }
+    document.getElementById('sa-close').addEventListener('click', () => document.getElementById('student-archive-modal').classList.remove('active'));
+    document.getElementById('sa-cancel').addEventListener('click', () => document.getElementById('student-archive-modal').classList.remove('active'));
+    document.getElementById('sa-confirm').addEventListener('click', async () => {
+      const dateStr = document.getElementById('sa-date').value;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) { document.getElementById('sa-error').innerHTML = '<div class="err-msg">請選擇退訓生效日</div>'; return; }
+      const btn = document.getElementById('sa-confirm');
+      btn.disabled = true;
+      try {
+        await updateDoc(doc(db, 'students', archiveTargetId), { isActive: false, archivedAt: serverTimestamp(), archivedDate: dateStr });
+        const s = (await getDoc(doc(db, 'students', archiveTargetId))).data();
+        if (s?.classId) await recalcExamSummary(s.classId);   // 甲：封存後重算河流/熱力圖（以退訓生效日 0 點為界、當天起不計）
+        document.getElementById('student-archive-modal').classList.remove('active');
+        loadStudents(); loadOverviewStats();
+      } catch (e) { document.getElementById('sa-error').innerHTML = `<div class="err-msg">${e.message}</div>`; }
+      finally { btn.disabled = false; }
+    });
     async function unarchiveStudent(studentId) {
       try {
-        await updateDoc(doc(db, 'students', studentId), { isActive: true, archivedAt: null });
+        await updateDoc(doc(db, 'students', studentId), { isActive: true, archivedAt: null, archivedDate: null });
         const s = (await getDoc(doc(db, 'students', studentId))).data();
         if (s?.classId) await recalcExamSummary(s.classId);   // 復訓後重算（重新計入該生所有成績）
         loadStudents(); loadOverviewStats();
@@ -4787,9 +4823,9 @@ TP18,新北 TP18,2026"></textarea>
             return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
           } catch (e) { return '9999-12-31'; }
         };
-        const archivedCut = {};   // studentNo(字串) -> 封存日 'YYYY-MM-DD'
-        sSnap.forEach(d => { const s = d.data(); if (s.isActive === false) archivedCut[String(s.studentNo)] = _archiveDateStr(s.archivedAt); });
-        const countsIn = (rec) => { const cut = archivedCut[String(rec.studentNo)]; if (!cut) return true; if (!rec.examDate) return true; return rec.examDate <= cut; };
+        const archivedCut = {};   // studentNo(字串) -> { d:'YYYY-MM-DD', strict:布林 }；archivedDate(指定退訓生效日)＝0點分界當天不計、fallback archivedAt(按鈕時刻)＝當天仍計
+        sSnap.forEach(d => { const s = d.data(); if (s.isActive === false) archivedCut[String(s.studentNo)] = s.archivedDate ? { d: s.archivedDate, strict: true } : { d: _archiveDateStr(s.archivedAt), strict: false }; });
+        const countsIn = (rec) => { const cut = archivedCut[String(rec.studentNo)]; if (!cut) return true; if (!rec.examDate) return true; return cut.strict ? rec.examDate < cut.d : rec.examDate <= cut.d; };
         const radar = {}; DIMS.forEach(d => radar[d] = { c: 0, t: 0 });
         rSnap.forEach(d => { const e = d.data(); if (!countsIn(e)) return; if (!e.dimensions) return; DIMS.forEach(k => { const s = e.dimensions[k]; if (s) { radar[k].c += s.correct || 0; radar[k].t += s.total || 0; } }); });
         const byExam = {};

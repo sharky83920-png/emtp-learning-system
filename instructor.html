@@ -2378,9 +2378,9 @@
             return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
           } catch (e) { return '9999-12-31'; }
         };
-        const archivedCut = {};   // studentNo(字串) -> 封存日 'YYYY-MM-DD'
-        sSnap.forEach(d => { const s = d.data(); if (s.isActive === false) archivedCut[String(s.studentNo)] = _archiveDateStr(s.archivedAt); });
-        const countsIn = (rec) => { const cut = archivedCut[String(rec.studentNo)]; if (!cut) return true; if (!rec.examDate) return true; return rec.examDate <= cut; };
+        const archivedCut = {};   // studentNo(字串) -> { d:'YYYY-MM-DD', strict:布林 }；archivedDate(指定退訓生效日)＝0點分界當天不計、fallback archivedAt(按鈕時刻)＝當天仍計
+        sSnap.forEach(d => { const s = d.data(); if (s.isActive === false) archivedCut[String(s.studentNo)] = s.archivedDate ? { d: s.archivedDate, strict: true } : { d: _archiveDateStr(s.archivedAt), strict: false }; });
+        const countsIn = (rec) => { const cut = archivedCut[String(rec.studentNo)]; if (!cut) return true; if (!rec.examDate) return true; return cut.strict ? rec.examDate < cut.d : rec.examDate <= cut.d; };
         const radar = {}; DIMS.forEach(d => radar[d] = { c: 0, t: 0 });
         rSnap.forEach(d => { const e = d.data(); if (!countsIn(e)) return; if (!e.dimensions) return; DIMS.forEach(k => { const s = e.dimensions[k]; if (s) { radar[k].c += s.correct || 0; radar[k].t += s.total || 0; } }); });
         const byExam = {};
