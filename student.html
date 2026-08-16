@@ -2630,6 +2630,8 @@
     // ===== F14-C: 錯題本狀態 =====
     let mistakeBookEnabled = false;      // 班級是否開放錯題本
     let mistakeSet = new Set();          // 已收藏的 questionId
+    let mistakeItems = [];               // 錯題本記憶體清單（含真實 doc id）→ 移除後就地重繪、不再整包重讀
+    let _mbLoadSeq = 0;                  // 載入世代序號：連點/切 tab 造成並發時，只有最後一次能寫畫面
     let quizReview = [];                 // 最近一次測驗檢討資料（finishQuiz 後仍可用）
     let errReportQid = null;             // 目前正在回報勘誤的題號
 
@@ -3109,6 +3111,33 @@
       }
     }
 
+    // 🐛 修「移除卡在載入中」：Firestore 的 deleteDoc/getDocs 在斷線或連線重建時只會一直 pending、
+    //    不會 reject（本站未開本地快取、無資料可回退）→ catch 永遠不觸發、畫面永遠停在「⏳ 載入中...」。
+    //    加逾時把「無限等待」轉成可處理的錯誤；逾時不代表失敗，只代表不要再讓使用者乾等。
+    function withTimeout(promise, ms, tag) {
+      let t = null;
+      return Promise.race([
+        promise.finally(() => clearTimeout(t)),
+        new Promise((_, reject) => {
+          t = setTimeout(() => reject(Object.assign(new Error(tag || '逾時'), { __timeout: true })), ms);
+        })
+      ]);
+    }
+
+    // 錯題本頂端的臨時提示條（renderMistakeBook 重繪時自然消失）
+    function showMbNotice(msg) {
+      const el = document.getElementById('mistake-book-content');
+      if (!el) return;
+      let n = document.getElementById('mb-notice');
+      if (!n) {
+        n = document.createElement('div');
+        n.id = 'mb-notice';
+        n.style.cssText = 'background:#fef3c7;border:1px solid #fcd34d;color:#92400e;font-size:13px;line-height:1.6;padding:10px 12px;border-radius:8px;margin-bottom:12px';
+        el.prepend(n);
+      }
+      n.textContent = msg;
+    }
+
     async function loadMistakeBook() {
       const el = document.getElementById('mistake-book-content');
       if (!el) return;
@@ -3116,71 +3145,139 @@
         el.innerHTML = '<div class="empty-hint">此班級未開放錯題本</div>';
         return;
       }
+      const seq = ++_mbLoadSeq;
       el.innerHTML = '<div class="loading">⏳ 載入中...</div>';
       try {
-        const snap = await getDocs(query(collection(db, 'mistake_book'), where('studentId', '==', currentStudent.id)));
+        const snap = await withTimeout(
+          getDocs(query(collection(db, 'mistake_book'), where('studentId', '==', currentStudent.id))),
+          12000, '載入逾時'
+        );
+        if (seq !== _mbLoadSeq) return;          // 已有更新的載入在跑 → 丟棄本次結果，別覆蓋畫面
         const items = [];
         snap.forEach(d => items.push({ id: d.id, ...d.data() }));
+        mistakeItems = items;
         mistakeSet = new Set(items.map(i => i.questionId));
-        if (items.length === 0) {
-          el.innerHTML = '<div class="empty-hint">📭 錯題本還是空的<br><br>做完綜合測驗後、在檢討畫面點 ☆ 星星把想複習的題目收藏進來。</div>';
-          return;
-        }
-        // 分維度
-        const dimName = { D1: '緊急救護系統', D2: '基礎醫學含評估', D3: '創傷', D4: '非創傷', D5: '特殊族群', D6: '災難及特殊情境' };
-        const groups = {};
-        items.forEach(it => { const d = it.dimension || '其他'; (groups[d] = groups[d] || []).push(it); });
-        items.sort((a, b) => (b.addedAt?.seconds || 0) - (a.addedAt?.seconds || 0));
-        let html = `<div style="color:#64748b;font-size:13px;margin-bottom:12px">共收藏 <strong style="color:#3b82f6">${items.length}</strong> 題、依維度分類。點 ⭐ 可移除。</div>`;
-        Object.keys(groups).sort().forEach(dim => {
-          const list = groups[dim].sort((a, b) => (b.addedAt?.seconds || 0) - (a.addedAt?.seconds || 0));
-          html += `<div style="font-size:13px;font-weight:700;color:#1e40af;background:#dbeafe;padding:6px 12px;border-radius:8px;margin:14px 0 8px">${dim}${dimName[dim] ? ' ' + dimName[dim] : ''}（${list.length}）</div>`;
-          list.forEach(it => {
-            const opts = it.options || {};
-            const src = it.source || {};
-            const srcLine = (src.bookId || src.chapterNumber || src.page)
-              ? `<div style="color:#64748b;font-size:12px;margin-top:10px">📖 出處：${src.bookId ? src.bookId + ' ' : ''}${src.chapterNumber ? '第 ' + src.chapterNumber + ' 章 ' : ''}${src.page ? 'P.' + src.page : ''}</div>`
-              : '<div style="color:#cbd5e1;font-size:12px;margin-top:10px">📖 出處：（未填）</div>';
-            // 所有選項（標出正解）；資料來自收藏當下的快照、純檢視
-            const optsHtml = ['A', 'B', 'C', 'D', 'E', 'F'].filter(k => opts[k] && opts[k].text != null).map(k => {
-              const isAns = k === it.correctAnswer;
-              return `<div style="display:flex;gap:8px;padding:8px 10px;border-radius:8px;margin-bottom:6px;background:${isAns ? '#dcfce7' : '#f8fafc'};border:1px solid ${isAns ? '#86efac' : '#e2e8f0'}">
-                <span style="font-weight:700;color:${isAns ? '#15803d' : '#475569'}">${k}.</span>
-                <span style="flex:1;color:#1e293b;white-space:pre-wrap">${opts[k].text || ''}${qImgTag(opts[k].imageUrl, { mt: '6px' })}</span>
-                ${isAns ? '<span style="color:#15803d;font-weight:700;white-space:nowrap">✔ 正解</span>' : ''}
-              </div>`;
-            }).join('');
-            html += `
-              <div style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:10px">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-                  <div style="flex:1;color:#1e293b;font-size:14px;line-height:1.6;white-space:pre-wrap">${it.questionText || '(題目內容已不可用)'}</div>
-                  <button class="mb-remove-btn" data-qid="${it.questionId}" title="從錯題本移除" style="background:none;border:none;cursor:pointer;font-size:20px;line-height:1">⭐</button>
-                </div>
-                <details style="margin-top:10px">
-                  <summary style="cursor:pointer;color:#2563eb;font-size:13px;font-weight:600">📖 看完整題目、所有選項與出處</summary>
-                  <div style="margin-top:10px">
-                    ${qImgTag(it.questionImageUrl, { mt: '0 0 10px' })}
-                    ${optsHtml || '<div style="color:#94a3b8;font-size:13px">（此題無選項快照）</div>'}
-                    ${srcLine}
-                    <div style="color:#cbd5e1;font-size:11px;margin-top:8px">🔒 僅供檢視、不可修改</div>
-                  </div>
-                </details>
-              </div>`;
-          });
-        });
-        el.innerHTML = html;
-        el.querySelectorAll('.mb-remove-btn').forEach(b => b.addEventListener('click', () => removeMistake(b.dataset.qid)));
+        renderMistakeBook();
       } catch (e) {
-        el.innerHTML = `<div class="err-msg">${e.message}</div>`;
+        if (seq !== _mbLoadSeq) return;
+        el.innerHTML = `<div class="err-msg">${e.__timeout ? '⏳ 載入逾時，可能是網路不穩' : e.message}</div>
+          <div style="text-align:center;margin-top:12px"><button id="mb-retry" class="btn-eval">🔄 重試</button></div>`;
+        const rb = document.getElementById('mb-retry');
+        if (rb) rb.addEventListener('click', loadMistakeBook);
       }
     }
 
-    async function removeMistake(qid) {
+    // 純繪製（不碰網路）：資料來源＝記憶體 mistakeItems → 移除一題可就地重繪、零讀取
+    function renderMistakeBook() {
+      const el = document.getElementById('mistake-book-content');
+      if (!el) return;
+      const items = mistakeItems;
+      if (items.length === 0) {
+        el.innerHTML = '<div class="empty-hint">📭 錯題本還是空的<br><br>做完綜合測驗後、在檢討畫面點 ☆ 星星把想複習的題目收藏進來。</div>';
+        return;
+      }
+      // 分維度
+      const dimName = { D1: '緊急救護系統', D2: '基礎醫學含評估', D3: '創傷', D4: '非創傷', D5: '特殊族群', D6: '災難及特殊情境' };
+      const groups = {};
+      items.forEach(it => { const d = it.dimension || '其他'; (groups[d] = groups[d] || []).push(it); });
+      items.sort((a, b) => (b.addedAt?.seconds || 0) - (a.addedAt?.seconds || 0));
+      let html = `<div style="color:#64748b;font-size:13px;margin-bottom:12px">共收藏 <strong id="mb-total" style="color:#3b82f6">${items.length}</strong> 題、依維度分類。點 ⭐ 可移除。</div>`;
+      Object.keys(groups).sort().forEach(dim => {
+        const list = groups[dim].sort((a, b) => (b.addedAt?.seconds || 0) - (a.addedAt?.seconds || 0));
+        html += `<div class="mb-group" data-dim="${dim}"><div style="font-size:13px;font-weight:700;color:#1e40af;background:#dbeafe;padding:6px 12px;border-radius:8px;margin:14px 0 8px">${dim}${dimName[dim] ? ' ' + dimName[dim] : ''}（<span class="mb-dim-count">${list.length}</span>）</div>`;
+        list.forEach(it => {
+          const opts = it.options || {};
+          const src = it.source || {};
+          const srcLine = (src.bookId || src.chapterNumber || src.page)
+            ? `<div style="color:#64748b;font-size:12px;margin-top:10px">📖 出處：${src.bookId ? src.bookId + ' ' : ''}${src.chapterNumber ? '第 ' + src.chapterNumber + ' 章 ' : ''}${src.page ? 'P.' + src.page : ''}</div>`
+            : '<div style="color:#cbd5e1;font-size:12px;margin-top:10px">📖 出處：（未填）</div>';
+          // 所有選項（標出正解）；資料來自收藏當下的快照、純檢視
+          const optsHtml = ['A', 'B', 'C', 'D', 'E', 'F'].filter(k => opts[k] && opts[k].text != null).map(k => {
+            const isAns = k === it.correctAnswer;
+            return `<div style="display:flex;gap:8px;padding:8px 10px;border-radius:8px;margin-bottom:6px;background:${isAns ? '#dcfce7' : '#f8fafc'};border:1px solid ${isAns ? '#86efac' : '#e2e8f0'}">
+              <span style="font-weight:700;color:${isAns ? '#15803d' : '#475569'}">${k}.</span>
+              <span style="flex:1;color:#1e293b;white-space:pre-wrap">${opts[k].text || ''}${qImgTag(opts[k].imageUrl, { mt: '6px' })}</span>
+              ${isAns ? '<span style="color:#15803d;font-weight:700;white-space:nowrap">✔ 正解</span>' : ''}
+            </div>`;
+          }).join('');
+          html += `
+            <div class="mb-card" data-qid="${it.questionId}" style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+                <div style="flex:1;color:#1e293b;font-size:14px;line-height:1.6;white-space:pre-wrap">${it.questionText || '(題目內容已不可用)'}</div>
+                <button class="mb-remove-btn" data-qid="${it.questionId}" data-docid="${it.id}" title="從錯題本移除" style="background:none;border:none;cursor:pointer;font-size:20px;line-height:1">⭐</button>
+              </div>
+              <details style="margin-top:10px">
+                <summary style="cursor:pointer;color:#2563eb;font-size:13px;font-weight:600">📖 看完整題目、所有選項與出處</summary>
+                <div style="margin-top:10px">
+                  ${qImgTag(it.questionImageUrl, { mt: '0 0 10px' })}
+                  ${optsHtml || '<div style="color:#94a3b8;font-size:13px">（此題無選項快照）</div>'}
+                  ${srcLine}
+                  <div style="color:#cbd5e1;font-size:11px;margin-top:8px">🔒 僅供檢視、不可修改</div>
+                </div>
+              </details>
+            </div>`;
+        });
+        html += `</div>`;   // /.mb-group
+      });
+      el.innerHTML = html;
+      el.querySelectorAll('.mb-remove-btn').forEach(b => b.addEventListener('click', () => removeMistake(b)));
+    }
+
+    // 樂觀移除：先讓題目消失、背景才送刪除 → 不再「刪一筆＋整包重讀」等兩次網路來回，
+    // 也不再有連點造成的並發重讀。真失敗才把卡片放回去。
+    async function removeMistake(btn) {
+      if (!btn || btn.dataset.busy === '1') return;                   // 防連點
+      const qid = btn.dataset.qid;
+      const docId = btn.dataset.docid || mistakeDocId(qid);           // 優先用查詢回來的真實 doc id
+      if (!docId || docId.indexOf('/') >= 0) { alert('❌ 這筆收藏的資料異常，請回報指導員'); return; }
+      btn.dataset.busy = '1'; btn.disabled = true; btn.style.opacity = '0.35'; btn.style.cursor = 'default';
+
+      const card = btn.closest('.mb-card');
+      const group = card ? card.closest('.mb-group') : null;
+      const countEl = group ? group.querySelector('.mb-dim-count') : null;
+      const totalEl = document.getElementById('mb-total');
+      const idx = mistakeItems.findIndex(i => i.id === docId);
+      const removed = idx >= 0 ? mistakeItems[idx] : null;
+      const setCounts = () => {
+        if (totalEl) totalEl.textContent = String(mistakeItems.length);
+        if (countEl) {
+          const n = group.querySelectorAll('.mb-card:not([data-gone="1"])').length;
+          countEl.textContent = String(n);
+          group.style.display = n === 0 ? 'none' : '';
+        }
+      };
+
+      // ── 樂觀更新：畫面立刻反應，不等網路 ──
+      if (idx >= 0) mistakeItems.splice(idx, 1);
+      mistakeSet.delete(qid);
+      if (card) { card.dataset.gone = '1'; card.style.display = 'none'; }
+      setCounts();
+      document.querySelectorAll(`.mb-star-btn[data-qid="${qid}"]`).forEach(b => {
+        b.textContent = '☆'; b.title = '加入錯題本';
+      });
+
       try {
-        await deleteDoc(doc(db, 'mistake_book', mistakeDocId(qid)));
-        mistakeSet.delete(qid);
-        loadMistakeBook();
-      } catch (e) { alert('❌ ' + e.message); }
+        await withTimeout(deleteDoc(doc(db, 'mistake_book', docId)), 8000, '移除逾時');
+        if (card) card.remove();
+        if (group && group.querySelectorAll('.mb-card').length === 0) group.remove();
+        if (mistakeItems.length === 0) renderMistakeBook();           // 收乾淨後顯示空狀態
+      } catch (e) {
+        if (e.__timeout) {
+          // 逾時 ≠ 失敗：Firestore 會在連線恢復後自動補送這筆刪除，維持已移除的畫面
+          showMbNotice('⚠️ 網路不穩，這題的移除已排入待送，回到有網路時會自動完成。請先別關閉頁面。');
+          return;
+        }
+        // 真的失敗 → 還原畫面與狀態
+        if (removed) mistakeItems.splice(Math.min(idx, mistakeItems.length), 0, removed);
+        mistakeSet.add(qid);
+        if (card) { delete card.dataset.gone; card.style.display = ''; }
+        setCounts();
+        document.querySelectorAll(`.mb-star-btn[data-qid="${qid}"]`).forEach(b => {
+          b.textContent = '⭐'; b.title = '已收藏、點擊取消';
+        });
+        btn.dataset.busy = ''; btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = 'pointer';
+        alert('❌ 移除失敗：' + e.message);
+      }
     }
 
     // ===== F14-C: 題目勘誤回報 =====
