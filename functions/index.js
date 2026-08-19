@@ -372,9 +372,22 @@ async function resolveAuthUser(kind, docId, d, cache) {
   try { return await fbAuth.getUserByEmail(email); } catch (e) { return null; }
 }
 
+/**
+ * 學員的「實際封存狀態」＝自己被封存 or 所屬班級被封存。
+ * （2026-08-19：發現封存班級不會連動學員，6 個已封存班級底下 225 人帳號全活著）
+ * classArchived 傳 Map<classId, bool> 可免逐筆查班級；傳 null 則自己查一次。
+ */
+async function effectiveArchived(kind, d, classArchived) {
+  if (isArchivedDoc(d)) return true;
+  if (kind !== "student" || !d.classId) return false;
+  if (classArchived) return !!classArchived.get(d.classId);
+  const c = await db.collection("classes").doc(d.classId).get();
+  return c.exists && isArchivedDoc(c.data());
+}
+
 /** 把單一帳號調成目標狀態；已經正確就不打 API（回 changed:false）。 */
-async function syncOneAuth(kind, docId, d, cache) {
-  const archived = isArchivedDoc(d);
+async function syncOneAuth(kind, docId, d, cache, classArchived) {
+  const archived = await effectiveArchived(kind, d, classArchived);
   const user = await resolveAuthUser(kind, docId, d, cache);
   if (!user) return { changed: false, reason: "no-auth-account", archived };
   const hasClaim = !!(user.customClaims && user.customClaims.archived);
@@ -399,10 +412,11 @@ function makeArchiveTrigger(collectionName, kind) {
       if (!after) return null;                                   // 文件被刪 → 帳號另行處理、不在此動
       const before = change.before.exists ? change.before.data() : null;
       const now = isArchivedDoc(after);
-      if (!before && !now) return null;                          // 新建且未封存 → 不用管
-      if (before && isArchivedDoc(before) === now) return null;  // 封存狀態沒變 → 不動
+      // 自身封存狀態沒變 → 不動（班級層級的變動交給 onClassArchiveChange 處理，不重複打 Auth API）。
+      // 新建的文件一律評估一次：加進「已封存班級」的新學員也要跟著停用。
+      if (before && isArchivedDoc(before) === now) return null;
       try {
-        const r = await syncOneAuth(kind, context.params.id, after, null);
+        const r = await syncOneAuth(kind, context.params.id, after, null, null);
         console.log(`[archiveSync] ${collectionName}/${context.params.id} archived=${now}`, JSON.stringify(r));
       } catch (e) {
         console.error(`[archiveSync] ${collectionName}/${context.params.id} 失敗`, e);
@@ -413,6 +427,37 @@ function makeArchiveTrigger(collectionName, kind) {
 
 exports.onStudentArchiveChange = makeArchiveTrigger("students", "student");
 exports.onInstructorArchiveChange = makeArchiveTrigger("instructors", "instructor");
+
+/**
+ * 班級封存/恢復 → 全班學員連動（使用者定義：封存班級＝該班一律停用，比照個人封存）。
+ * 單班最多數十人，逐筆處理並留節流空間，故放寬 timeout/記憶體。
+ */
+exports.onClassArchiveChange = functions
+  .region("us-central1")
+  .runWith({ timeoutSeconds: 540, memory: "512MB" })
+  .firestore.document("classes/{id}")
+  .onWrite(async (change, context) => {
+    const after = change.after.exists ? change.after.data() : null;
+    if (!after) return null;
+    const before = change.before.exists ? change.before.data() : null;
+    const now = isArchivedDoc(after);
+    if (before && isArchivedDoc(before) === now) return null;   // 封存狀態沒變 → 不動
+    const classId = context.params.id;
+    const classArchived = new Map([[classId, now]]);
+    const snap = await db.collection("students").where("classId", "==", classId).get();
+    let changed = 0, failed = 0;
+    for (const s of snap.docs) {
+      try {
+        const r = await syncOneAuth("student", s.id, s.data(), null, classArchived);
+        if (r.changed) changed++;
+      } catch (e) {
+        failed++;
+        console.error(`[archiveSync] students/${s.id} 失敗`, e);
+      }
+    }
+    console.log(`[archiveSync] classes/${classId} archived=${now} → 全班 ${snap.size} 人、調整 ${changed} 人、失敗 ${failed} 人`);
+    return null;
+  });
 
 /** 一次抓完所有 Auth 帳號建索引（420 人只用 1 次 API，不逐筆查）。 */
 async function loadAllAuthUsers() {
@@ -440,6 +485,8 @@ exports.syncArchivedAuth = functions
       throw new functions.https.HttpsError("permission-denied", "只有 Master 能執行");
     }
     const cache = await loadAllAuthUsers();
+    const clsSnap = await db.collection("classes").get();
+    const classArchived = new Map(clsSnap.docs.map((c) => [c.id, isArchivedDoc(c.data())]));
     const out = { disabled: [], enabled: [], noAccount: [], unchanged: 0, scanned: 0 };
     for (const [col, kind] of [["students", "student"], ["instructors", "instructor"]]) {
       const snap = await db.collection(col).get();
@@ -449,7 +496,7 @@ exports.syncArchivedAuth = functions
         const label = `${d.name || docSnap.id}${kind === "student" ? `(${docSnap.id})` : ""}`;
         let r;
         try {
-          r = await syncOneAuth(kind, docSnap.id, d, cache);
+          r = await syncOneAuth(kind, docSnap.id, d, cache, classArchived);
         } catch (e) {
           out.noAccount.push(`${label}: ${e.message}`);
           continue;

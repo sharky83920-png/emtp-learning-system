@@ -779,14 +779,26 @@
     // 這裡常駐監聽自己那一筆學員資料：後台一按封存、幾秒內就自動登出。
     // 讀取量：每個 session 1 次讀，之後只有該筆文件真的變動才計費 → 幾乎零成本。
     let _archiveWatch = null;
-    function stopArchiveWatch() { if (_archiveWatch) { try { _archiveWatch(); } catch (e) {} _archiveWatch = null; } }
-    function watchArchive(studentId) {
+    let _classWatch = null;
+    function stopArchiveWatch() {
+      if (_archiveWatch) { try { _archiveWatch(); } catch (e) {} _archiveWatch = null; }
+      if (_classWatch) { try { _classWatch(); } catch (e) {} _classWatch = null; }
+    }
+    function watchArchive(studentId, classId) {
       stopArchiveWatch();
       _archiveWatch = onSnapshot(doc(db, 'students', studentId), (snap) => {
         if (!snap.exists()) return;
         const d = snap.data();
         if (d.archivedAt || d.isActive === false) forceLogout('帳號已封存、請聯絡管理員');
       }, (e) => console.warn('[archiveWatch]', e));
+      // 班級封存＝全班停用（使用者定義）。班級被封存時同樣即時踢出，不必等重開 App。
+      if (classId) {
+        _classWatch = onSnapshot(doc(db, 'classes', classId), (snap) => {
+          if (!snap.exists()) return;
+          const c = snap.data();
+          if (c.archivedAt || c.isActive === false) forceLogout('您的班級已結訓封存、請聯絡管理員');
+        }, (e) => console.warn('[classWatch]', e));
+      }
     }
     async function forceLogout(msg) {
       stopArchiveWatch();
@@ -828,7 +840,7 @@
           await forceLogout('帳號已封存、請聯絡管理員');
           return;
         }
-        watchArchive(studentId);   // 進站後常駐監聽：封存時即時踢出、不用等重開 App
+        watchArchive(studentId, currentStudent.classId);   // 進站後常駐監聽（本人＋班級）：封存時即時踢出、不用等重開 App
         const sp = document.getElementById('boot-splash'); if (sp) sp.style.display = 'none';
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('dashboard').style.display = 'block';
