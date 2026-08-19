@@ -651,16 +651,35 @@
     // 保險：萬一驗證一直沒回（離線等），6 秒後也把開機畫面收掉、退回登入畫面
     setTimeout(() => { const sp = document.getElementById('boot-splash'); if (sp && sp.style.display !== 'none') showLogin(); }, 6000);
 
+    // ── 封存＝即時斷線（2026-08-19，與學員端同一機制）──
+    let _archiveWatch = null;
+    function stopArchiveWatch() { if (_archiveWatch) { try { _archiveWatch(); } catch (e) {} _archiveWatch = null; } }
+    function watchArchive(instructorId) {
+      stopArchiveWatch();
+      _archiveWatch = onSnapshot(doc(db, 'instructors', instructorId), (snap) => {
+        if (!snap.exists()) return;
+        const d = snap.data();
+        if (d.archivedAt || d.isActive === false) forceLogout('此指導員帳號已停用');
+      }, (e) => console.warn('[archiveWatch]', e));
+    }
+    async function forceLogout(msg) {
+      stopArchiveWatch();
+      currentInstructor = null;
+      try { await signOut(auth); } catch (e) {}
+      showLogin(msg);
+    }
+
     onAuthStateChanged(auth, async (user) => {
-      if (!user) { currentInstructor = null; showLogin(); return; }
+      if (!user) { stopArchiveWatch(); currentInstructor = null; showLogin(); return; }
       try {
         const q = query(collection(db, 'instructors'), where('email', '==', user.email));
         const snap = await getDocs(q);
         if (snap.empty) { await signOut(auth); showLogin('此帳號不是指導員'); return; }
         const d = snap.docs[0];
         const data = d.data();
-        if (data.isActive === false) { await signOut(auth); showLogin('此指導員帳號已停用'); return; }
+        if (data.isActive === false || data.archivedAt) { await forceLogout('此指導員帳號已停用'); return; }
         currentInstructor = { id: d.id, ...data };
+        watchArchive(d.id);   // 常駐監聽：封存時即時踢出、不用等重開頁面
         enterDashboard();
       } catch (e) {
         await signOut(auth); showLogin('驗證失敗：' + e.message);

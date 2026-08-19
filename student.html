@@ -596,7 +596,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, arrayUnion, arrayRemove, runTransaction, orderBy, limit, increment } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, arrayUnion, arrayRemove, runTransaction, orderBy, limit, increment, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
     import { getMessaging, getToken, onMessage, isSupported as fcmSupported } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-messaging.js";
     import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js";
@@ -774,9 +774,31 @@
     // 保險：萬一驗證一直沒回（離線等），6 秒後也把開機畫面收掉、退回登入畫面
     setTimeout(() => { const sp = document.getElementById('boot-splash'); if (sp && sp.style.display !== 'none') showLogin(); }, 6000);
 
+    // ── 封存＝即時斷線（2026-08-19）──
+    // 原本封存只在「開網頁那一刻」檢查一次，手機把 App 掛著不關就永遠檢查不到 → 退訓者還能繼續做題。
+    // 這裡常駐監聽自己那一筆學員資料：後台一按封存、幾秒內就自動登出。
+    // 讀取量：每個 session 1 次讀，之後只有該筆文件真的變動才計費 → 幾乎零成本。
+    let _archiveWatch = null;
+    function stopArchiveWatch() { if (_archiveWatch) { try { _archiveWatch(); } catch (e) {} _archiveWatch = null; } }
+    function watchArchive(studentId) {
+      stopArchiveWatch();
+      _archiveWatch = onSnapshot(doc(db, 'students', studentId), (snap) => {
+        if (!snap.exists()) return;
+        const d = snap.data();
+        if (d.archivedAt || d.isActive === false) forceLogout('帳號已封存、請聯絡管理員');
+      }, (e) => console.warn('[archiveWatch]', e));
+    }
+    async function forceLogout(msg) {
+      stopArchiveWatch();
+      currentStudent = null;
+      try { await signOut(auth); } catch (e) {}
+      showLogin(msg);
+    }
+
     onAuthStateChanged(auth, async (user) => {
       console.log('[Auth] state changed:', user?.email || 'null');
       if (!user) {
+        stopArchiveWatch();
         showLogin();
         return;
       }
@@ -802,11 +824,11 @@
         }
         currentStudent = { id: sDoc.id, ...sDoc.data() };
         console.log('[Auth] student data:', { isActive: currentStudent.isActive, archivedAt: currentStudent.archivedAt, fullData: currentStudent });
-        if (currentStudent.archivedAt) {
-          await signOut(auth);
-          showLogin('帳號已封存、請聯絡管理員');
+        if (currentStudent.archivedAt || currentStudent.isActive === false) {
+          await forceLogout('帳號已封存、請聯絡管理員');
           return;
         }
+        watchArchive(studentId);   // 進站後常駐監聽：封存時即時踢出、不用等重開 App
         const sp = document.getElementById('boot-splash'); if (sp) sp.style.display = 'none';
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('dashboard').style.display = 'block';

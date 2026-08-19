@@ -573,6 +573,16 @@
 
       <section class="tab-content" id="tab-settings">
         <div class="card">
+          <h2><span>🔒 帳號安全 — 封存者強制登出</span></h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
+            💡 封存學員/指導員時，系統會自動停用他的登入帳號並撤銷憑證（幾秒內對方就會被踢出、無法再做題）。<br>
+            這顆按鈕是給「封存機制上線前就已經封存」的舊帳號補做，或懷疑有人漏網時手動再對一次。恢復（解除封存）的人也會一併自動啟用回來。
+          </p>
+          <button class="btn btn-orange" id="btn-sync-archived">🔒 立即同步 — 強制登出所有封存者</button>
+          <div id="sync-archived-result" style="margin-top:12px"></div>
+        </div>
+
+        <div class="card">
           <h2><span>🌐 全域系統設定</span></h2>
           <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
             💡 全系統共用的設定。儲存後立即生效（學員端下次載入會套用）。
@@ -1238,6 +1248,7 @@ TP18,新北 TP18,2026"></textarea>
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, updatePassword } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
     import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, where, writeBatch, onSnapshot, Timestamp, arrayUnion, increment, runTransaction, getCountFromServer } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
+    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js";
     import { getMessaging, getToken, onMessage, isSupported as fcmSupported } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-messaging.js";
 
     const firebaseConfig = {
@@ -1254,6 +1265,7 @@ TP18,新北 TP18,2026"></textarea>
     const auth = getAuth(app);
     const db = getFirestore(app);
     const storage = getStorage(app);
+    const fns = getFunctions(app, 'asia-east1');   // 與 Cloud Functions 部署同區
     const MASTER_EMAILS = ['sharky83920@gmail.com'];
    // 次要 Auth 實例：用來建學員帳號、不會把 Master 踢出
     const secondaryApp = initializeApp(firebaseConfig, 'secondary');
@@ -2571,6 +2583,39 @@ TP18,新北 TP18,2026"></textarea>
       finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
     });
     
+    // === 帳號安全：封存者強制登出（2026-08-19）===
+    // 封存原本只改 Firestore 文件，Firebase Auth 帳號還活著 → 已登入的人不登出就能繼續做題。
+    // 這裡呼叫 Cloud Function 把所有封存者的登入帳號停用 + 撤銷憑證（恢復者則啟用回來）。
+    document.getElementById('btn-sync-archived').addEventListener('click', async () => {
+      if (!confirm('要把所有「已封存」的學員/指導員強制登出嗎？\n\n・他們的登入帳號會被停用、現有憑證撤銷\n・已恢復（解除封存）的人會自動啟用回來\n・對正常在學的人完全沒影響')) return;
+      const btn = document.getElementById('btn-sync-archived');
+      const box = document.getElementById('sync-archived-result');
+      btn.disabled = true; btn.textContent = '⏳ 同步中（人多時約 10~60 秒）...';
+      box.innerHTML = '';
+      try {
+        const res = await httpsCallable(fns, 'syncArchivedAuth')({});
+        const r = res.data || {};
+        const list = (arr) => arr && arr.length ? arr.map(x => `<li>${x}</li>`).join('') : '<li style="color:#94a3b8">（無）</li>';
+        box.innerHTML = `
+          <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px 18px">
+            <div style="font-weight:700;color:#166534;margin-bottom:8px">✅ 同步完成（掃描 ${r.scanned || 0} 筆）</div>
+            <div style="font-size:13px;line-height:1.8">
+              <b>🔒 已停用並強制登出（${(r.disabled || []).length}）</b><ul style="margin:4px 0 10px 20px">${list(r.disabled)}</ul>
+              <b>🔓 已恢復啟用（${(r.enabled || []).length}）</b><ul style="margin:4px 0 10px 20px">${list(r.enabled)}</ul>
+              <b>⚠️ 封存但查無登入帳號（${(r.noAccount || []).length}）</b><ul style="margin:4px 0 10px 20px">${list(r.noAccount)}</ul>
+              <div style="color:#64748b">狀態原本就正確、未更動：${r.unchanged || 0} 筆</div>
+            </div>
+            <div style="color:#64748b;font-size:12px;margin-top:10px">
+              ⏱ 對方手機若正開著頁面，幾秒內就會自動跳回登入畫面；即使頁面完全離線，憑證最遲 1 小時內失效、之後再也換不到新的。
+            </div>
+          </div>`;
+      } catch (e) {
+        box.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = '🔒 立即同步 — 強制登出所有封存者';
+      }
+    });
+
     // === 系統設定 (F8) ===
     async function loadSettings() {
       loadGlobalSettings();

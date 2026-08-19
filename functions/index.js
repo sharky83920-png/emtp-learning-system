@@ -337,3 +337,134 @@ exports.drawQuiz = functions
     orderByRound(pool, counts);
     return { questions: pool.slice(0, count), poolSize: pool.length };
   });
+
+// ═══════════════════════════════════════════════════════════
+// 5) 封存＝真的斷線（Auth 帳號停用 + 撤銷憑證 + archived 標記）
+//
+//    破口（2026-08-19 發現）：封存原本只改 Firestore 文件，Firebase Auth 帳號
+//    完全沒動 → 已登入的手機憑證還活著且會自動續期，只要不登出就能繼續做題。
+//
+//    修法：
+//      a) students / instructors 文件的封存狀態一變 → 自動停用/啟用 Auth 帳號
+//         （不管從後台按鈕、批次匯入、還是 Firebase Console 手改都會生效）
+//      b) 另給 Master 一顆「全體同步」按鈕處理存量（syncArchivedAuth）
+//      c) 停用後同時 revokeRefreshTokens：拿不到新 token，舊 token 最多 1 小時失效
+//      d) 蓋 custom claim archived=true → firestore.rules 可在資料庫層擋寫入
+// ═══════════════════════════════════════════════════════════
+const MASTER_EMAIL = "sharky83920@gmail.com";
+const fbAuth = admin.auth();
+
+/** 文件是否處於封存狀態（archivedAt 有值 或 isActive===false）。 */
+function isArchivedDoc(d) {
+  return !!(d && (d.archivedAt || d.isActive === false));
+}
+
+/** 找出這筆學員/指導員對應的 Auth 帳號：authUid 優先，其次 email。 */
+async function resolveAuthUser(kind, docId, d, cache) {
+  if (d.authUid) {
+    if (cache && cache.byUid.has(d.authUid)) return cache.byUid.get(d.authUid);
+    if (!cache) { try { return await fbAuth.getUser(d.authUid); } catch (e) { /* uid 失效 → 改用 email */ } }
+  }
+  // 學員登入帳號＝「班級小寫-座號@emtp.local」＝ 文件 id + @emtp.local；指導員用真實 email
+  const email = (kind === "student" ? `${docId}@emtp.local` : d.email || "").toLowerCase();
+  if (!email) return null;
+  if (cache) return cache.byEmail.get(email) || null;
+  try { return await fbAuth.getUserByEmail(email); } catch (e) { return null; }
+}
+
+/** 把單一帳號調成目標狀態；已經正確就不打 API（回 changed:false）。 */
+async function syncOneAuth(kind, docId, d, cache) {
+  const archived = isArchivedDoc(d);
+  const user = await resolveAuthUser(kind, docId, d, cache);
+  if (!user) return { changed: false, reason: "no-auth-account", archived };
+  const hasClaim = !!(user.customClaims && user.customClaims.archived);
+  if (user.disabled === archived && hasClaim === archived) {
+    return { changed: false, reason: "already", archived };
+  }
+  const claims = Object.assign({}, user.customClaims || {});
+  if (archived) claims.archived = true; else delete claims.archived;
+  await fbAuth.setCustomUserClaims(user.uid, claims);
+  await fbAuth.updateUser(user.uid, { disabled: archived });
+  if (archived) await fbAuth.revokeRefreshTokens(user.uid);   // 撤銷續期憑證：舊 token 到期後就再也換不到新的
+  return { changed: true, reason: "synced", archived, uid: user.uid, email: user.email };
+}
+
+/** 文件變動 → 只在「封存狀態真的改變」時同步 Auth（避免每次改成績都打 Auth API）。 */
+function makeArchiveTrigger(collectionName, kind) {
+  return functions
+    .region("us-central1")
+    .firestore.document(`${collectionName}/{id}`)
+    .onWrite(async (change, context) => {
+      const after = change.after.exists ? change.after.data() : null;
+      if (!after) return null;                                   // 文件被刪 → 帳號另行處理、不在此動
+      const before = change.before.exists ? change.before.data() : null;
+      const now = isArchivedDoc(after);
+      if (!before && !now) return null;                          // 新建且未封存 → 不用管
+      if (before && isArchivedDoc(before) === now) return null;  // 封存狀態沒變 → 不動
+      try {
+        const r = await syncOneAuth(kind, context.params.id, after, null);
+        console.log(`[archiveSync] ${collectionName}/${context.params.id} archived=${now}`, JSON.stringify(r));
+      } catch (e) {
+        console.error(`[archiveSync] ${collectionName}/${context.params.id} 失敗`, e);
+      }
+      return null;
+    });
+}
+
+exports.onStudentArchiveChange = makeArchiveTrigger("students", "student");
+exports.onInstructorArchiveChange = makeArchiveTrigger("instructors", "instructor");
+
+/** 一次抓完所有 Auth 帳號建索引（420 人只用 1 次 API，不逐筆查）。 */
+async function loadAllAuthUsers() {
+  const byUid = new Map();
+  const byEmail = new Map();
+  let pageToken;
+  do {
+    const res = await fbAuth.listUsers(1000, pageToken);
+    res.users.forEach((u) => {
+      byUid.set(u.uid, u);
+      if (u.email) byEmail.set(u.email.toLowerCase(), u);
+    });
+    pageToken = res.pageToken;
+  } while (pageToken);
+  return { byUid, byEmail };
+}
+
+/** Master 專用：把所有學員/指導員的 Auth 狀態對齊封存狀態（處理存量、立即強制登出）。 */
+exports.syncArchivedAuth = functions
+  .region("asia-east1")
+  .runWith({ timeoutSeconds: 540, memory: "256MB" })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "請先登入");
+    if (context.auth.token.email !== MASTER_EMAIL) {
+      throw new functions.https.HttpsError("permission-denied", "只有 Master 能執行");
+    }
+    const cache = await loadAllAuthUsers();
+    const out = { disabled: [], enabled: [], noAccount: [], unchanged: 0, scanned: 0 };
+    for (const [col, kind] of [["students", "student"], ["instructors", "instructor"]]) {
+      const snap = await db.collection(col).get();
+      for (const docSnap of snap.docs) {
+        const d = docSnap.data();
+        out.scanned++;
+        const label = `${d.name || docSnap.id}${kind === "student" ? `(${docSnap.id})` : ""}`;
+        let r;
+        try {
+          r = await syncOneAuth(kind, docSnap.id, d, cache);
+        } catch (e) {
+          out.noAccount.push(`${label}: ${e.message}`);
+          continue;
+        }
+        if (r.reason === "no-auth-account") {
+          if (r.archived) out.noAccount.push(label);   // 只有封存者沒帳號才值得回報
+        } else if (!r.changed) {
+          out.unchanged++;
+        } else if (r.archived) {
+          out.disabled.push(label);
+        } else {
+          out.enabled.push(label);
+        }
+      }
+    }
+    console.log("[syncArchivedAuth]", JSON.stringify(out));
+    return out;
+  });

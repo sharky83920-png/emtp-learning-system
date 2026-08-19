@@ -1,5 +1,7 @@
 rules_version = '2';
-// EMTP-learning system — Firestore Security Rules（F17 基礎防護 v1）
+// EMTP-learning system — Firestore Security Rules（F17 基礎防護 v2 / 2026-08-19 封存斷線）
+// v2 變更：所有寫入改用 activeUser()＝已登入且非封存者。封存者由 Cloud Function
+//         （onStudentArchiveChange / onInstructorArchiveChange）停用帳號並蓋 archived claim。
 // 部署：Firebase Console → Firestore → 規則 → 貼上 → 發布
 // 設計原則：
 //   1. 敏感寫入（系統設定/公式/主檔/班級/帳號）只有 Master 能寫
@@ -15,13 +17,19 @@ service cloud.firestore {
 
     function authed() { return request.auth != null; }
     function isMaster() { return authed() && request.auth.token.email == 'sharky83920@gmail.com'; }
+    // 封存者（Cloud Function 在停用帳號時蓋上 archived claim）→ 一律不得寫入。
+    // 沒有這個 claim 的一般使用者 request.auth.token.archived 是 undefined、!= true 成立、不受影響。
+    // 用 'archived' in ... 先確認欄位存在再比對：現役使用者的 token 根本沒這個欄位，
+    // 這樣寫可確保「沒有 claim ＝ 正常放行」，絕不會誤鎖到在學的人。
+    function notArchived() { return !('archived' in request.auth.token) || request.auth.token.archived != true; }
+    function activeUser()  { return authed() && notArchived(); }
 
     // ── 登入下拉需要未登入可讀 ──
     match /classes/{id}      {
       allow read: if true;
       allow create, delete: if isMaster();
       // Master 全權；指導員（登入者）只能改 settings 相關欄位（能量條/錯題本設定），不能動 displayName/isActive 等其他班級資料。學員端無此寫入功能。
-      allow update: if isMaster() || (authed() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['settings', 'settingsUpdatedAt', 'settingsUpdatedBy']));
+      allow update: if isMaster() || (activeUser() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['settings', 'settingsUpdatedAt', 'settingsUpdatedBy']));
     }
     match /students/{id}     { allow read: if true; allow write: if isMaster(); }
     match /instructors/{id}  { allow read: if true; allow write: if isMaster(); }
@@ -36,12 +44,12 @@ service cloud.firestore {
     match /core_skills/{id}      { allow read: if true; allow write: if isMaster(); }
     match /books/{id}            { allow read: if true; allow write: if isMaster(); }
     match /chapters/{id}         { allow read: if true; allow write: if isMaster(); }
-    match /counters/{id}         { allow read: if authed(); allow write: if authed(); }
+    match /counters/{id}         { allow read: if authed(); allow write: if activeUser(); }
 
     // ── 著作權 / 稽核 ──
     match /app_versions/{id}  { allow read: if isMaster(); allow write: if isMaster(); }
-    match /audit_logs/{id}    { allow read: if isMaster(); allow create: if authed(); allow update, delete: if false; }
-    match /user_consents/{id} { allow read: if isMaster(); allow create: if authed(); }
+    match /audit_logs/{id}    { allow read: if isMaster(); allow create: if activeUser(); allow update, delete: if false; }
+    match /user_consents/{id} { allow read: if isMaster(); allow create: if activeUser(); }
 
     // ── EPA 評核（eval.html 免登入、靠 token）──
     match /milestone_evaluations/{id} {
@@ -51,43 +59,43 @@ service cloud.firestore {
     }
     match /evaluation_tokens/{id} {
       allow read: if true;                   // eval 驗證 token
-      allow create: if authed();             // 學員產生連結
+      allow create: if activeUser();             // 學員產生連結
       allow update: if true;                 // 評核完成更新次數
     }
 
     // ── 題庫 / 答題 ──
     match /questions/{id} {
       allow read: if authed();
-      allow create: if authed();             // 學員出題
-      allow update: if authed();             // 指導員勘誤校正
+      allow create: if activeUser();             // 學員出題
+      allow update: if activeUser();             // 指導員勘誤校正
       allow delete: if isMaster();           // 真刪除僅限 Master（後台）；指導員端只能隱藏
     }
-    match /question_attempts/{id}      { allow read: if authed(); allow create: if authed(); allow update, delete: if isMaster(); }
-    match /student_quiz_progress/{id}  { allow read: if authed(); allow write: if authed(); }
-    match /mistake_book/{id}           { allow read: if authed(); allow write: if authed(); }
-    match /question_error_reports/{id} { allow read: if authed(); allow create: if authed(); allow update: if authed(); allow delete: if isMaster(); }
-    match /question_schedule/{id}      { allow read: if authed(); allow write: if authed(); }
-    match /question_submissions/{id}   { allow read: if authed(); allow create: if authed(); allow update, delete: if isMaster(); }
+    match /question_attempts/{id}      { allow read: if authed(); allow create: if activeUser(); allow update, delete: if isMaster(); }
+    match /student_quiz_progress/{id}  { allow read: if authed(); allow write: if activeUser(); }
+    match /mistake_book/{id}           { allow read: if authed(); allow write: if activeUser(); }
+    match /question_error_reports/{id} { allow read: if authed(); allow create: if activeUser(); allow update: if activeUser(); allow delete: if isMaster(); }
+    match /question_schedule/{id}      { allow read: if authed(); allow write: if activeUser(); }
+    match /question_submissions/{id}   { allow read: if authed(); allow create: if activeUser(); allow update, delete: if isMaster(); }
 
     // ── 核心技術簽核 / QR ──
-    match /core_skill_signoffs/{id}  { allow read: if authed(); allow create: if authed(); allow update, delete: if isMaster(); }
-    match /qr_signoff_sessions/{id}  { allow read: if authed(); allow create: if authed(); allow update: if authed(); }
+    match /core_skill_signoffs/{id}  { allow read: if authed(); allow create: if activeUser(); allow update, delete: if isMaster(); }
+    match /qr_signoff_sessions/{id}  { allow read: if authed(); allow create: if activeUser(); allow update: if activeUser(); }
 
     // ── 成績 ──
-    match /exam_scores_total/{id} { allow read: if authed(); allow write: if authed(); }
-    match /exam_scores_radar/{id} { allow read: if authed(); allow write: if authed(); }
+    match /exam_scores_total/{id} { allow read: if authed(); allow write: if activeUser(); }
+    match /exam_scores_radar/{id} { allow read: if authed(); allow write: if activeUser(); }
     match /class_radar/{id}       { allow read: if authed(); allow write: if isMaster(); }
     match /question_stats/{id}    { allow read: if authed(); allow write: if isMaster(); }   // 每題首刷統計彙總（後台重算寫入）
-    match /student_first_radar/{id} { allow read: if authed(); allow write: if authed(); }   // 個人首刷雷達彙總（學員交卷時增量更新；雷達讀 1 筆、不掃全部作答）
-    match /class_exam_summary/{id} { allow read: if authed(); allow write: if authed(); }   // 班級考試彙總（考試雷達班平均+河流每場落點；指導員/後台上傳成績後重算寫入，學員端讀 1 筆不掃整班）
-    match /upload_batches/{id}    { allow read: if authed(); allow write: if authed(); }
+    match /student_first_radar/{id} { allow read: if authed(); allow write: if activeUser(); }   // 個人首刷雷達彙總（學員交卷時增量更新；雷達讀 1 筆、不掃全部作答）
+    match /class_exam_summary/{id} { allow read: if authed(); allow write: if activeUser(); }   // 班級考試彙總（考試雷達班平均+河流每場落點；指導員/後台上傳成績後重算寫入，學員端讀 1 筆不掃整班）
+    match /upload_batches/{id}    { allow read: if authed(); allow write: if activeUser(); }
 
     // ── 公告 / 通知 ──
-    match /announcements/{id} { allow read: if authed(); allow write: if authed(); }
-    match /notifications/{id} { allow read: if authed(); allow create: if authed(); allow update: if authed(); allow delete: if isMaster(); }
+    match /announcements/{id} { allow read: if authed(); allow write: if activeUser(); }
+    match /notifications/{id} { allow read: if authed(); allow create: if activeUser(); allow update: if activeUser(); allow delete: if isMaster(); }
 
     // ── 推播 token（FCM）：登入者可寫入/更新自己裝置的 token；Cloud Function 用 Admin SDK 讀（不受規則限制）──
-    match /push_tokens/{id} { allow read: if isMaster(); allow create, update, delete: if authed(); }
+    match /push_tokens/{id} { allow read: if isMaster(); allow create, update, delete: if activeUser(); }
 
     // ── 其餘一律拒絕 ──
     match /{document=**} { allow read, write: if false; }
