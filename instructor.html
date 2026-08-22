@@ -277,6 +277,28 @@
       </section>
 
       <section class="tab-content" id="tab-corrections">
+        <div class="card" id="airev-i-card" style="display:none">
+          <h2 style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center;gap:8px" id="airev-i-toggle">
+            <span>🤖 審核 AI 題目 <span style="font-size:12px;color:#94a3b8;font-weight:400">御史大夫出的題，審過才進題庫</span>
+              <span id="airev-i-badge" style="display:none;background:#7c3aed;color:#fff;border-radius:10px;padding:2px 9px;font-size:12px;margin-left:6px"></span>
+            </span>
+            <span id="airev-i-caret" style="font-size:14px;color:#94a3b8">▶ 展開</span>
+          </h2>
+          <div id="airev-i-wrap" style="display:none">
+            <p style="color:#64748b;font-size:13px;margin:10px 0 12px">💡 <strong>批准</strong>＝直接進題庫（取當日題號）。<strong>修改後重送</strong>＝退回給御史大夫重寫再送審。<strong>退件</strong>＝這題不要了。三個動作都可以先在視窗裡把題目改好。</p>
+            <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+              <label style="font-size:13px;color:#475569">狀態</label>
+              <select id="airev-i-f-status" style="padding:7px 12px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit">
+                <option value="pending">🕒 待審</option>
+                <option value="approved">✅ 已批准</option>
+                <option value="resent">♻️ 已退回重寫</option>
+                <option value="rejected">❌ 已退件</option>
+              </select>
+              <button id="airev-i-refresh" class="btn-logout">🔄 重新整理</button>
+            </div>
+            <div id="airev-i-list"><div class="placeholder"><div class="icon">⏳</div><p>展開後載入…</p></div></div>
+          </div>
+        </div>
         <div class="card" id="corr-audit-card" style="display:none">
           <h2 style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center;gap:8px" id="corr-audit-toggle"><span>🔍 勘誤回覆稽核 <span style="font-size:12px;color:#94a3b8;font-weight:400">看哪個指導員回覆了哪個學員（唯讀、全系統）</span></span><span id="corr-audit-caret" style="font-size:14px;color:#94a3b8">▶ 展開</span></h2>
           <div id="corr-audit-wrap" style="display:none">
@@ -455,6 +477,58 @@
   </div>
 
   <!-- 勘誤處理 modal -->
+  <div id="airev-i-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:1200;justify-content:center;align-items:flex-start;padding:20px;overflow-y:auto">
+    <div style="background:white;border-radius:16px;max-width:640px;width:100%;margin-top:20px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden">
+      <div style="background:#7c3aed;color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center">
+        <h3 style="margin:0;font-size:17px">🤖 審核 AI 題目</h3>
+        <button id="airev-i-close" style="background:rgba(255,255,255,0.25);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:22px;cursor:pointer;line-height:1">×</button>
+      </div>
+      <div style="padding:18px 20px;max-height:72vh;overflow-y:auto">
+        <div id="airev-i-ainote" style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#5b21b6"></div>
+        <div class="form-group"><label style="display:block;margin-bottom:5px">題目 <span style="color:#dc2626">*</span></label>
+          <textarea id="airev-i-qtext" rows="3" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px;line-height:1.55"></textarea>
+        </div>
+        <div class="form-group">
+          <label style="display:block;margin-bottom:5px">📷 題幹附圖（選填）</label>
+          <input type="file" id="airev-i-img-text" accept="image/*" style="font-size:12px">
+          <img id="airev-i-img-text-pv" style="display:none;max-width:100%;margin-top:8px;border-radius:8px;border:1px solid #cbd5e1">
+        </div>
+        <div id="airev-i-options"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group"><label style="display:block;margin-bottom:5px">正確答案 <span style="color:#dc2626">*</span></label>
+            <select id="airev-i-answer" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select>
+          </div>
+          <div class="form-group"><label style="display:block;margin-bottom:5px">難易度</label>
+            <select id="airev-i-difficulty" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit"><option value="easy">易</option><option value="medium" selected>中</option><option value="hard">難</option></select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group"><label style="display:block;margin-bottom:5px">書籍 <span style="color:#dc2626">*</span></label>
+            <select id="airev-i-book" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit"><option value="">—</option></select>
+          </div>
+          <div class="form-group"><label style="display:block;margin-bottom:5px">章節 <span style="color:#dc2626">*</span></label>
+            <select id="airev-i-chapter" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit"><option value="">先選書籍</option></select>
+          </div>
+        </div>
+        <div class="form-group"><label style="display:block;margin-bottom:5px">頁碼 <span style="color:#dc2626">*</span></label>
+          <input id="airev-i-page" placeholder="例 964" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit">
+        </div>
+        <div id="airev-i-dim-hint" style="font-size:12px;margin:-4px 0 12px"></div>
+        <div class="form-group">
+          <label style="display:block;margin-bottom:5px">✍️ 給御史大夫的意見 <span style="color:#64748b;font-weight:400;font-size:12px">（「修改後重送」與「退件」必填）</span></label>
+          <textarea id="airev-i-comment" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px" placeholder="例：C 選項的劑量錯了；或 這題考點重複，換一個缺口"></textarea>
+        </div>
+        <div id="airev-i-msg"></div>
+      </div>
+      <div style="padding:14px 20px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">
+        <button id="airev-i-cancel" style="background:#e2e8f0;color:#475569;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit">取消</button>
+        <button id="airev-i-reject" style="background:#fee2e2;color:#991b1b;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600">❌ 退件</button>
+        <button id="airev-i-resend" style="background:#fef3c7;color:#92400e;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600">♻️ 修改後重送</button>
+        <button id="airev-i-approve" style="background:#10b981;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600">✅ 批准入庫</button>
+      </div>
+    </div>
+  </div>
+
   <div id="corr-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:1200;justify-content:center;align-items:flex-start;padding:20px;overflow-y:auto">
     <div style="background:white;border-radius:16px;max-width:620px;width:100%;margin-top:20px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden">
       <div style="background:#f59e0b;color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center">
@@ -509,7 +583,8 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-    import { getFirestore, collection, query, where, getDocs, getCountFromServer, doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp, onSnapshot, Timestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, query, where, getDocs, getCountFromServer, doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp, onSnapshot, Timestamp, arrayUnion, runTransaction } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
     import { getMessaging, getToken, onMessage, isSupported as fcmSupported } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-messaging.js";
 
     const firebaseConfig = {
@@ -527,6 +602,7 @@
     // 教室共用電腦可用登出鍵清除。setPersistence 是非同步，先擋住登入流程避免搶在設定前送出。
     const authReady = setPersistence(auth, browserLocalPersistence).catch(() => {});
     const db = getFirestore(app);
+    const storage = getStorage(app);   // 🤖 AI 題審核時補圖用
 
     let currentInstructor = null;   // { id, email, name, managedClassIds }
     let selectedClassId = null;
@@ -719,12 +795,21 @@
     function applyClassPermissions() {
       const p = classPerms || {};
       // 分頁層級：沒權限整個分頁鈕藏掉（點不過去）
-      document.getElementById('tabbtn-corrections').style.display = (p.canHandleCorrections || p.canAuditCorrections) ? '' : 'none';
+      document.getElementById('tabbtn-corrections').style.display = (p.canHandleCorrections || p.canAuditCorrections || p.canReviewAiQuestions) ? '' : 'none';
       document.getElementById('tabbtn-signoff').style.display = p.canQRSignoff ? '' : 'none';
       if (p.canHandleCorrections) refreshCorrectionBadge(); else setCorrectionBadge(0);
       // 勘誤分頁內：處理卡 / 稽核卡 各自依權限顯示
       const _hc = document.getElementById('corr-handle-card'); if (_hc) _hc.style.display = p.canHandleCorrections ? '' : 'none';
       const _ac = document.getElementById('corr-audit-card'); if (_ac) _ac.style.display = p.canAuditCorrections ? '' : 'none';
+      // 🤖 AI 題目審核卡：沒授權整張不出現；只有 AI 權限（沒勘誤權限）時，分頁徽章改顯示待審則數
+      const _aic = document.getElementById('airev-i-card');
+      if (_aic) {
+        _aic.style.display = p.canReviewAiQuestions ? '' : 'none';
+        if (p.canReviewAiQuestions) {
+          initAirevI();
+          airevIRefreshCount().then(n => { if (!p.canHandleCorrections) setCorrectionBadge(n); });
+        }
+      }
       // 卡片層級：出題追蹤頁內的能量條 / 各班出題戰力
       document.getElementById('energy-card').style.display = p.canEditEnergyBar ? '' : 'none';
       document.getElementById('classpower-card').style.display = p.canViewClassPower ? '' : 'none';
@@ -785,6 +870,320 @@
         window.scrollTo(0, 0);
       });
     });
+
+    // ===== 🤖 御史大夫 · AI 題目審核（指導員端；與總控台同一個佇列）=====
+    // 權限＝班級進階權限 canReviewAiQuestions；沒授權整張卡不出現。
+    // 🔴 批准是唯一會寫進正本題庫 questions 的動作；退件不真刪（底層留給御史大夫當錯題本）。
+    const AIREVI_LABEL = { pending: '🕒 待審', approved: '✅ 已批准', resent: '♻️ 已退回重寫', rejected: '❌ 已退件' };
+    const AIREVI_KEYS = ['A', 'B', 'C', 'D'];
+    let _airevICache = [], _airevICtx = null, _airevIImgs = {}, _airevIBound = false;
+    function airevIEsc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+    function initAirevI() {
+      if (_airevIBound) return; _airevIBound = true;
+      const tog = document.getElementById('airev-i-toggle');
+      const wrap = document.getElementById('airev-i-wrap'), caret = document.getElementById('airev-i-caret');
+      tog.addEventListener('click', () => {
+        const open = wrap.style.display === 'none';
+        wrap.style.display = open ? 'block' : 'none';
+        caret.textContent = open ? '▼ 收合' : '▶ 展開';
+        if (open && !_airevICache.length) loadAirevI();
+      });
+      document.getElementById('airev-i-refresh').addEventListener('click', loadAirevI);
+      document.getElementById('airev-i-f-status').addEventListener('change', loadAirevI);
+      document.getElementById('airev-i-close').addEventListener('click', () => document.getElementById('airev-i-modal').style.display = 'none');
+      document.getElementById('airev-i-cancel').addEventListener('click', () => document.getElementById('airev-i-modal').style.display = 'none');
+      document.getElementById('airev-i-img-text').addEventListener('change', (e) => airevIUpload('text', e.target.files[0]));
+      document.getElementById('airev-i-book').addEventListener('change', () => { airevIPopChapter(document.getElementById('airev-i-book').value, '', ''); airevIDimHint(); });
+      document.getElementById('airev-i-chapter').addEventListener('change', airevIDimHint);
+      document.getElementById('airev-i-approve').addEventListener('click', airevIApprove);
+      document.getElementById('airev-i-resend').addEventListener('click', () => airevISetStatus('resent', '請寫一行意見，御史大夫要照著改', '退回給御史大夫重寫？\n\n它下次上工會重讀教科書、照你的意見修好再送一次審。'));
+      document.getElementById('airev-i-reject').addEventListener('click', () => airevISetStatus('rejected', '請寫一行退件理由（御史大夫要靠它學）', '退件？\n\n這題從此不會再出現在清單裡。理由會留給御史大夫當錯題本。'));
+    }
+
+    // 待審則數（count 聚合、極省讀取）
+    async function airevIRefreshCount() {
+      const pill = document.getElementById('airev-i-badge');
+      try {
+        const n = (await getCountFromServer(query(collection(db, 'ai_question_proposals'), where('status', '==', 'pending')))).data().count;
+        if (n > 0) { pill.style.display = ''; pill.textContent = `待審 ${n}`; } else { pill.style.display = 'none'; }
+        return n;
+      } catch (e) { pill.style.display = 'none'; return 0; }
+    }
+
+    async function loadAirevI() {
+      const list = document.getElementById('airev-i-list');
+      const st = document.getElementById('airev-i-f-status').value;
+      list.innerHTML = '<div class="placeholder"><div class="icon">⏳</div><p>載入中…</p></div>';
+      try {
+        await ensureCorrBooksChapters();
+        const snap = await getDocs(query(collection(db, 'ai_question_proposals'), where('status', '==', st)));
+        _airevICache = [];
+        snap.forEach(d => _airevICache.push({ id: d.id, ...d.data() }));
+        _airevICache.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        renderAirevI();
+        airevIRefreshCount();
+      } catch (e) { list.innerHTML = `<div style="color:#dc2626;font-size:13px">載入失敗：${airevIEsc(e.message)}</div>`; }
+    }
+
+    function renderAirevI() {
+      const list = document.getElementById('airev-i-list');
+      const st = document.getElementById('airev-i-f-status').value;
+      if (!_airevICache.length) {
+        list.innerHTML = `<div class="placeholder"><div class="icon">📭</div><p>目前沒有「${AIREVI_LABEL[st]}」的提案</p></div>`;
+        return;
+      }
+      list.innerHTML = _airevICache.map(pr => {
+        const src = pr.source || {}, opts = pr.options || {}, note = pr.aiNote || {};
+        const optHtml = AIREVI_KEYS.map(k => {
+          const on = pr.correctAnswer === k;
+          const img = opts[k] && opts[k].imageUrl ? ' 📷' : '';
+          return `<div style="padding:4px 8px;border-radius:6px;margin:3px 0;font-size:14px;${on ? 'background:#d1fae5;color:#065f46;font-weight:600' : 'color:#475569'}">${k}. ${airevIEsc(opts[k] && opts[k].text)}${img}</div>`;
+        }).join('');
+        const similar = Array.isArray(note.similar) && note.similar.length
+          ? `<div style="color:#b45309;font-size:12px;margin-top:6px">💡 相近既有題：${note.similar.map(x => airevIEsc(x.id || x)).join('、')}</div>` : '';
+        const qid = pr.approvedQuestionId ? `<span style="color:#059669;font-family:monospace"> → 已入庫 ${airevIEsc(pr.approvedQuestionId)}</span>` : '';
+        const cmt = pr.lastComment ? `<div style="color:#b91c1c;font-size:12px;margin-top:6px">✍️ 審核意見：${airevIEsc(pr.lastComment)}</div>` : '';
+        return `<div style="background:#faf5ff;border:1px solid #e9d5ff;border-left:3px solid #7c3aed;border-radius:10px;padding:14px;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+            <div style="font-size:12px;color:#64748b">📖 ${airevIEsc(src.bookId)}　Ch ${airevIEsc(src.chapterNumber)}　p.${airevIEsc(src.page) || '—'}　${pr.derivedDimension ? `<span style="color:#7c3aed">${airevIEsc(pr.derivedDimension)}</span>` : '<span style="color:#b45309">未對應維度</span>'}${qid}</div>
+            <div style="font-size:12px;color:#94a3b8">${AIREVI_LABEL[pr.status] || airevIEsc(pr.status)}${pr.round > 1 ? `　第 ${pr.round} 次送審` : ''}</div>
+          </div>
+          <div style="color:#1e293b;margin-bottom:6px;white-space:pre-wrap;font-size:14px;line-height:1.6">${airevIEsc(pr.questionText)}</div>
+          ${optHtml}
+          ${note.point ? `<div style="color:#64748b;font-size:12px;margin-top:8px">🎯 考點：${airevIEsc(note.point)}</div>` : ''}
+          ${similar}
+          ${cmt}
+          <div style="margin-top:10px"><button class="btn-logout" data-airevi="${airevIEsc(pr.id)}">🔍 審核 / 編輯</button></div>
+        </div>`;
+      }).join('');
+      list.querySelectorAll('[data-airevi]').forEach(b => b.addEventListener('click', () => openAirevI(b.dataset.airevi)));
+    }
+
+    // ── 視窗：書籍/章節連動（用勘誤那份 corrBooks/corrChapters 快取）──
+    function airevIPopBook(selBookId) {
+      const sel = document.getElementById('airev-i-book');
+      sel.innerHTML = '<option value="">—</option>' + corrBooks.map(b => `<option value="${airevIEsc(b.id)}">${airevIEsc(b.id)}</option>`).join('');
+      if (selBookId) sel.value = selBookId;
+    }
+    function airevIPopChapter(bookId, selChapterId, selChapterNumber) {
+      const sel = document.getElementById('airev-i-chapter');
+      if (!bookId) { sel.innerHTML = '<option value="">先選書籍</option>'; return; }
+      const chs = corrChapters.filter(c => c.bookId === bookId).sort((a, b) => (parseInt(a.chapterNumber) || 0) - (parseInt(b.chapterNumber) || 0));
+      sel.innerHTML = '<option value="">請選章節</option>' + chs.map(c => `<option value="${airevIEsc(c.id)}" data-dim="${airevIEsc(c.dimension)}" data-num="${airevIEsc(c.chapterNumber)}">Ch ${airevIEsc(c.chapterNumber)} ${airevIEsc(c.chapterName)}</option>`).join('');
+      if (selChapterId && chs.some(c => c.id === selChapterId)) sel.value = selChapterId;
+      else if (selChapterNumber != null && selChapterNumber !== '') { const m = chs.find(c => String(c.chapterNumber) === String(selChapterNumber)); if (m) sel.value = m.id; }
+    }
+    function airevIDimHint() {
+      const dim = document.getElementById('airev-i-chapter').selectedOptions[0]?.dataset.dim;
+      const el = document.getElementById('airev-i-dim-hint');
+      el.innerHTML = dim
+        ? `✅ 批准後此題編入維度 <strong style="color:#059669">${dim} ${CORR_DIM_NAMES[dim] || ''}</strong>`
+        : '<span style="color:#b45309">⚠️ 此章節未設定維度，批准後不計入雷達</span>';
+    }
+
+    function airevIRenderImg(k) {
+      const pv = document.getElementById(k === 'text' ? 'airev-i-img-text-pv' : `airev-i-img-${k}-pv`);
+      if (!pv) return;
+      if (_airevIImgs[k]) { pv.src = _airevIImgs[k]; pv.style.display = 'block'; } else { pv.style.display = 'none'; }
+    }
+
+    async function openAirevI(id) {
+      const pr = _airevICache.find(x => x.id === id);
+      if (!pr) return;
+      await ensureCorrBooksChapters();
+      _airevICtx = { id, status: pr.status, round: pr.round || 1 };
+      const opts = pr.options || {}, src = pr.source || {}, note = pr.aiNote || {};
+      _airevIImgs = { text: pr.questionImageUrl || null, A: (opts.A || {}).imageUrl || null, B: (opts.B || {}).imageUrl || null, C: (opts.C || {}).imageUrl || null, D: (opts.D || {}).imageUrl || null };
+
+      document.getElementById('airev-i-ainote').innerHTML =
+        `${note.point ? `<div>🎯 <b>考點</b>：${airevIEsc(note.point)}</div>` : ''}` +
+        `${note.gap ? `<div>🕳 <b>缺口</b>：${airevIEsc(note.gap)}</div>` : ''}` +
+        `${note.excerpt ? `<div style="margin-top:6px">📖 <b>原文依據</b>：${airevIEsc(note.excerpt)}</div>` : ''}` +
+        `${Array.isArray(note.similar) && note.similar.length ? `<div style="margin-top:6px">💡 <b>相近既有題</b>：${note.similar.map(x => airevIEsc(x.id || x)).join('、')}（僅提示，重複也可照批准）</div>` : ''}` +
+        `<div style="margin-top:6px;font-size:12px">第 ${pr.round || 1} 次送審　${AIREVI_LABEL[pr.status] || ''}</div>`;
+
+      document.getElementById('airev-i-qtext').value = pr.questionText || '';
+      document.getElementById('airev-i-answer').value = pr.correctAnswer || 'A';
+      document.getElementById('airev-i-difficulty').value = pr.difficulty || 'medium';
+      document.getElementById('airev-i-page').value = src.page || '';
+      document.getElementById('airev-i-comment').value = '';
+      document.getElementById('airev-i-msg').innerHTML = '';
+      airevIRenderImg('text');
+
+      document.getElementById('airev-i-options').innerHTML = AIREVI_KEYS.map(k => `
+        <div class="form-group">
+          <label style="display:block;margin-bottom:5px">選項 ${k} <span style="color:#dc2626">*</span></label>
+          <textarea id="airev-i-opt-${k}" rows="1" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px"></textarea>
+          <input type="file" id="airev-i-img-${k}" accept="image/*" style="margin-top:6px;font-size:12px">
+          <img id="airev-i-img-${k}-pv" style="display:none;max-width:60%;margin-top:6px;border-radius:8px;border:1px solid #cbd5e1">
+        </div>`).join('');
+      AIREVI_KEYS.forEach(k => {
+        document.getElementById(`airev-i-opt-${k}`).value = (opts[k] && opts[k].text) || '';
+        document.getElementById(`airev-i-img-${k}`).addEventListener('change', (e) => airevIUpload(k, e.target.files[0]));
+        airevIRenderImg(k);
+      });
+
+      airevIPopBook(src.bookId || '');
+      airevIPopChapter(src.bookId || '', src.chapterId || '', src.chapterNumber);
+      airevIDimHint();
+      document.getElementById('airev-i-modal').style.display = 'flex';
+    }
+
+    // 圖片：選檔即上傳（縮 1200px、JPEG）→ questions/_AI/
+    async function airevIResize(file, maxWidth = 1200) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onerror = reject;
+          img.onload = () => {
+            const scale = Math.min(1, maxWidth / img.width);
+            const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            canvas.toBlob(b => b ? resolve(b) : reject(new Error('blob fail')), 'image/jpeg', 0.85);
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    async function airevIUpload(k, file) {
+      if (!file) return;
+      const msg = document.getElementById('airev-i-msg');
+      if (!file.type.startsWith('image/')) { msg.innerHTML = '<div style="color:#dc2626;font-size:13px">❌ 檔案必須是圖片</div>'; return; }
+      msg.innerHTML = '<div style="color:#64748b;font-size:13px">⏳ 上傳圖片中…</div>';
+      try {
+        const blob = await airevIResize(file, 1200);
+        const path = `questions/_AI/q_${k}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`;
+        const r = storageRef(storage, path);
+        await uploadBytes(r, blob, { contentType: 'image/jpeg' });
+        _airevIImgs[k] = await getDownloadURL(r);
+        airevIRenderImg(k);
+        msg.innerHTML = '<div style="color:#059669;font-size:13px">✅ 圖片已上傳（按下方任一按鈕才會存檔）</div>';
+      } catch (e) { msg.innerHTML = `<div style="color:#dc2626;font-size:13px">❌ 上傳失敗：${airevIEsc(e.message)}</div>`; }
+    }
+
+    function airevICollect() {
+      const chSel = document.getElementById('airev-i-chapter').selectedOptions[0];
+      const options = {};
+      AIREVI_KEYS.forEach(k => { options[k] = { text: document.getElementById(`airev-i-opt-${k}`).value.trim(), imageUrl: _airevIImgs[k] || null }; });
+      return {
+        questionText: document.getElementById('airev-i-qtext').value.trim(),
+        questionImageUrl: _airevIImgs.text || null,
+        options,
+        correctAnswer: document.getElementById('airev-i-answer').value,
+        difficulty: document.getElementById('airev-i-difficulty').value,
+        source: {
+          bookId: document.getElementById('airev-i-book').value || null,
+          chapterId: document.getElementById('airev-i-chapter').value || null,
+          chapterNumber: chSel ? (chSel.dataset.num || null) : null,
+          page: document.getElementById('airev-i-page').value.trim() || null
+        },
+        derivedDimension: (chSel && chSel.dataset.dim) || null
+      };
+    }
+    function airevIValidate(d) {
+      if (!d.questionText) return '題目不可空白';
+      const miss = AIREVI_KEYS.filter(k => !d.options[k].text && !d.options[k].imageUrl);
+      if (miss.length) return `選項 ${miss.join('、')} 至少要有文字或圖片`;
+      const s = d.source;
+      const missSrc = [!s.bookId && '書籍', !s.chapterId && '章節', !s.page && '頁碼'].filter(Boolean);
+      if (missSrc.length) return `出處為必填，請補：${missSrc.join('、')}`;
+      return '';
+    }
+
+    // ── ✅ 批准入庫（與總控台同一套：counters 取號、掛 _AI 來源）──
+    async function airevIApprove() {
+      if (!_airevICtx) return;
+      const d = airevICollect();
+      const msg = document.getElementById('airev-i-msg');
+      const err = airevIValidate(d);
+      if (err) { msg.innerHTML = `<div style="color:#dc2626;font-size:13px">❌ ${airevIEsc(err)}</div>`; return; }
+      if (!d.derivedDimension && !confirm('⚠️ 此章節未對應 6 角雷達維度，此題不會計入雷達。\n確定仍要批准入庫嗎？')) return;
+      if (!confirm('確定批准這一題？\n\n批准後會立刻取得題號並進入正式題庫。')) return;
+      const btn = document.getElementById('airev-i-approve');
+      btn.disabled = true; btn.textContent = '⏳ 入庫中…';
+      try {
+        const today = new Date();
+        const rocY = today.getFullYear() - 1911;
+        const mm = String(today.getMonth() + 1).padStart(2, '0'), dd = String(today.getDate()).padStart(2, '0');
+        const dateStr = `${rocY}${mm}${dd}`;
+        const scheduledDate = `${today.getFullYear()}-${mm}-${dd}`;
+        const counterRef = doc(db, 'counters', dateStr);
+        const questionId = await runTransaction(db, async (tx) => {
+          const counterDoc = await tx.get(counterRef);
+          let nextNum = counterDoc.exists() ? (counterDoc.data().lastNumber || 0) + 1 : 1;
+          let qid = `${dateStr}-${nextNum}`;
+          let qRef = doc(db, 'questions', qid);
+          let exist = await tx.get(qRef);
+          let guard = 0;
+          while (exist.exists() && guard < 500) { nextNum++; qid = `${dateStr}-${nextNum}`; qRef = doc(db, 'questions', qid); exist = await tx.get(qRef); guard++; }
+          const fullData = {
+            serialDate: dateStr,
+            serialNumber: nextNum,
+            createdBy: 'ai',
+            createdByName: '御史大夫',
+            createdByRole: 'ai',
+            createdByClassId: '_AI',
+            scheduledDate,
+            questionText: d.questionText,
+            questionImageUrl: d.questionImageUrl,
+            difficulty: d.difficulty,
+            options: d.options,
+            correctAnswer: d.correctAnswer,
+            source: d.source,
+            derivedDimension: d.derivedDimension
+          };
+          tx.set(qRef, {
+            ...fullData,
+            originalVersion: { ...fullData, savedAt: Timestamp.now() },
+            aiProposalId: _airevICtx.id,
+            approvedBy: (currentInstructor && currentInstructor.name) || 'instructor',
+            attemptCount: 0, correctRate: 0, reportCount: 0,
+            isVisible: true, isActive: true,
+            createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+          });
+          tx.set(counterRef, { date: dateStr, lastNumber: nextNum, updatedAt: serverTimestamp() }, { merge: true });
+          return qid;
+        });
+        await updateDoc(doc(db, 'ai_question_proposals', _airevICtx.id), {
+          ...d, status: 'approved', approvedQuestionId: questionId,
+          reviewedBy: (currentInstructor && currentInstructor.name) || 'instructor',
+          reviewedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+          lastComment: document.getElementById('airev-i-comment').value.trim() || null
+        });
+        document.getElementById('airev-i-modal').style.display = 'none';
+        alert(`✅ 已批准入庫！\n\n題號：${questionId}`);
+        loadAirevI();
+      } catch (e) {
+        msg.innerHTML = `<div style="color:#dc2626;font-size:13px">❌ 入庫失敗：${airevIEsc(e.message)}</div>`;
+      } finally { btn.disabled = false; btn.textContent = '✅ 批准入庫'; }
+    }
+
+    // ── ♻️ 修改後重送 / ❌ 退件 ──
+    async function airevISetStatus(status, needMsg, confirmText) {
+      if (!_airevICtx) return;
+      const comment = document.getElementById('airev-i-comment').value.trim();
+      const msg = document.getElementById('airev-i-msg');
+      if (!comment) { msg.innerHTML = `<div style="color:#dc2626;font-size:13px">❌ ${airevIEsc(needMsg)}</div>`; return; }
+      if (!confirm(confirmText)) return;
+      try {
+        const d = airevICollect();
+        await updateDoc(doc(db, 'ai_question_proposals', _airevICtx.id), {
+          ...d, status,
+          round: (_airevICtx.round || 1) + (status === 'resent' ? 1 : 0),
+          lastComment: comment,
+          reviewedBy: (currentInstructor && currentInstructor.name) || 'instructor',
+          reviewedAt: serverTimestamp(), updatedAt: serverTimestamp()
+        });
+        document.getElementById('airev-i-modal').style.display = 'none';
+        loadAirevI();
+      } catch (e) { msg.innerHTML = `<div style="color:#dc2626;font-size:13px">❌ 失敗：${airevIEsc(e.message)}</div>`; }
+    }
 
     // ===== 🔍 勘誤回覆稽核（唯讀：看哪個指導員回覆哪個學員，全系統）=====
     let _corrAuditReports = null;
