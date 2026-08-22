@@ -2357,6 +2357,7 @@ TP18,新北 TP18,2026"></textarea>
       { key: 'canEditSourceAuth', label: '設定題庫權限' },
       { key: 'canEditChapterAuth', label: '設定章節權限' },
       { key: 'canHandleCorrections', label: '處理勘誤' },
+      { key: 'canReviewAiQuestions', label: '🤖 審核 AI 題目（御史大夫）' },
       { key: 'canUploadScores', label: '上傳總分成績（河流）' },
       { key: 'canUploadRadar', label: '上傳雷達成績（6維度）' },
       { key: 'canEditScores', label: '個人成績修正' },
@@ -5487,6 +5488,8 @@ TP18,新北 TP18,2026"></textarea>
     }
 
     // ===== 🚰 題目來源水龍頭（每班可抽範圍：來源班 + 各來源章節）=====
+    // 🤖 御史大夫（AI 出題）的虛擬來源 id：不是真班級，只當水龍頭的一個來源鍵；AI 題的 createdByClassId 就是它。
+    const AI_SOURCE_ID = '_AI';
     let _fcClasses = [], _fcBooks = [], _fcChByBook = {}, _fcTarget = null, _fcConfig = { sources: {} };
     async function loadFaucetPage() {
       try {
@@ -5533,9 +5536,11 @@ TP18,新北 TP18,2026"></textarea>
     function renderFaucet() {
       const body = document.getElementById('faucet-body');
       if (!_fcTarget) return;
-      const configured = _fcClasses.filter(c => _fcSrc(c.id).enabled).length;
-      let html = `<div style="color:#94a3b8;font-size:12px;margin-bottom:10px">目前已開放 <b style="color:#10b981">${configured}</b> 個來源班。未開放的來源＝該班的題目抽不到。</div>`;
-      html += _fcClasses.map(c => {
+      // 來源清單＝🤖 AI 題庫（虛擬來源，永遠排最前）＋ 各班級
+      const _fcAll = [{ id: AI_SOURCE_ID, displayName: '🤖 AI 題庫（御史大夫）', isAI: true }].concat(_fcClasses);
+      const configured = _fcAll.filter(c => _fcSrc(c.id).enabled).length;
+      let html = `<div style="color:#94a3b8;font-size:12px;margin-bottom:10px">目前已開放 <b style="color:#10b981">${configured}</b> 個來源。未開放的來源＝該來源的題目抽不到。<br>🤖 AI 題庫＝御史大夫出、審核通過的題目，<b>預設關閉</b>，勾選後這個班才抽得到。</div>`;
+      html += _fcAll.map(c => {
         const cfg = _fcSrc(c.id);
         const isSelf = c.id === _fcTarget;
         let inner = '';
@@ -5563,6 +5568,7 @@ TP18,新北 TP18,2026"></textarea>
           <div class="fc-src-head">
             <label><input type="checkbox" class="fc-en" data-cid="${c.id}" ${cfg.enabled ? 'checked' : ''} ${isSelf ? 'disabled' : ''}> ${c.displayName}</label>
             ${isSelf ? '<span class="fc-self-tag">自己班 · 強制開啟</span>' : ''}
+            ${c.isAI ? '<span class="fc-self-tag" style="background:#4c1d95;color:#ddd6fe">AI 題 · 需明確勾選</span>' : ''}
           </div>
           ${inner}
         </div>`;

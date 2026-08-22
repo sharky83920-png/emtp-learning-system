@@ -282,12 +282,17 @@ async function getQuestionBank() {
   }
   return bankVisibleArray();
 }
+// 🤖 御史大夫（AI 出題）的虛擬來源 id：AI 題的 createdByClassId 就是它，不是真班級。
+const AI_SOURCE_ID = "_AI";
 // 水龍頭過濾（與 student.html faucetAllows 同邏輯）
+// 🔴 AI 題的防呆：「沒設定水龍頭 / 一個來源都沒開」時，一般題視為全開，但 AI 題一律不放行
+//    —— 否則沒設定過水龍頭的班（含未來新開的班）會自動吃到 AI 題，那是使用者沒同意過的。
 function faucetAllows(q, fc) {
-  if (!fc || !fc.sources) return true;
+  const isAI = q.createdByClassId === AI_SOURCE_ID;
+  if (!fc || !fc.sources) return !isAI;
   const sources = fc.sources;
   const enabledIds = Object.keys(sources).filter((k) => sources[k] && sources[k].enabled);
-  if (enabledIds.length === 0) return true;
+  if (enabledIds.length === 0) return !isAI;
   const cfg = q.createdByClassId && sources[q.createdByClassId];
   if (!cfg || !cfg.enabled) return false;
   if (cfg.allMode) return true;

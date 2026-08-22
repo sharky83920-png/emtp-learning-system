@@ -2763,10 +2763,11 @@
     // 水龍頭過濾：依本班 questionFaucet 設定，限定可抽到的「來源班級 + 章節」
     function faucetAllows(q) {
       const fc = _questionFaucet;
-      if (!fc || !fc.sources) return true;                                  // 沒設定 → 全開
+      const isAI = q.createdByClassId === '_AI';                            // 🤖 御史大夫出的題
+      if (!fc || !fc.sources) return !isAI;                                 // 沒設定 → 一般題全開；AI 題一律要明確勾選
       const sources = fc.sources;
       const enabledIds = Object.keys(sources).filter(k => sources[k] && sources[k].enabled);
-      if (enabledIds.length === 0) return true;                            // 防呆：完全沒開任何來源 → 視為全開
+      if (enabledIds.length === 0) return !isAI;                            // 防呆：完全沒開任何來源 → 一般題視為全開，AI 題不放行
       const cfg = q.createdByClassId && sources[q.createdByClassId];
       if (!cfg || !cfg.enabled) return false;                              // 此來源班未授權
       if (cfg.allMode) return true;                                        // 該來源無視章節限制

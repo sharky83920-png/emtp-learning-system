@@ -23,6 +23,10 @@ service cloud.firestore {
     // 這樣寫可確保「沒有 claim ＝ 正常放行」，絕不會誤鎖到在學的人。
     function notArchived() { return !('archived' in request.auth.token) || request.auth.token.archived != true; }
     function activeUser()  { return authed() && notArchived(); }
+    // 學員登入信箱＝「班級-座號@emtp.local」（含連字號）；指導員＝「身分證@emtp.local」（無連字號）。
+    // 用來把「只有教職端能看的東西」擋在學員之外（AI 提案含正解，未審過的題目不該讓學員讀到）。
+    function isStudentAccount() { return authed() && request.auth.token.email.matches('.*-.*@emtp[.]local'); }
+    function staffUser()        { return activeUser() && !isStudentAccount(); }
 
     // ── 登入下拉需要未登入可讀 ──
     match /classes/{id}      {
@@ -76,6 +80,21 @@ service cloud.firestore {
     match /question_error_reports/{id} { allow read: if authed(); allow create: if activeUser(); allow update: if activeUser(); allow delete: if isMaster(); }
     match /question_schedule/{id}      { allow read: if authed(); allow write: if activeUser(); }
     match /question_submissions/{id}   { allow read: if authed(); allow create: if activeUser(); allow update, delete: if isMaster(); }
+
+    // ── AI 出題（御史大夫）──
+    // 御史大夫本人跑在桌機、用 Admin SDK 寫入（繞過規則）。這裡開的是「人」在後台/指導員端審核用的權限。
+    // 🔴 學員一律讀不到：提案含正解，且是未經審核的內容。
+    match /ai_question_proposals/{id} {
+      allow read:   if staffUser();
+      allow create: if isMaster();          // 手動塞測試提案用；御史大夫走 Admin SDK
+      allow update: if staffUser();         // 審核＝批准 / 修改後重送 / 退件（改狀態與內容）
+      allow delete: if false;               // 永不真刪：退件只改狀態，底層留給御史大夫當錯題本
+    }
+    // 御史大夫設定與出題原則（main＝使用者寫、state＝御史大夫寫）
+    match /ai_director_config/{id} { allow read: if staffUser(); allow write: if isMaster(); }
+
+    // ── 成長雷達（分階段快照；雲端排程用 Admin SDK 寫、後台手動重算亦然）──
+    match /student_growth_radar/{id} { allow read: if authed(); allow write: if isMaster(); }
 
     // ── 核心技術簽核 / QR ──
     match /core_skill_signoffs/{id}  { allow read: if authed(); allow create: if activeUser(); allow update, delete: if isMaster(); }
