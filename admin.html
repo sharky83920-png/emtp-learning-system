@@ -495,6 +495,29 @@
           </div>
           <div id="faucet-body"><div class="loading">⏳ 請先選「設定目標班級」</div></div>
         </div>
+        <div class="card" id="airev-card" style="border:1px solid #7c3aed">
+          <h2 style="cursor:pointer;user-select:none" id="airev-toggle">
+            <span>🤖 御史大夫 · AI 題目審核　<span style="font-size:12px;color:#64748b;font-weight:400">AI 出的題必須審過才會進題庫</span>
+              <span id="airev-badge" style="display:none;background:#7c3aed;color:#fff;border-radius:10px;padding:2px 9px;font-size:12px;margin-left:6px"></span>
+            </span>
+            <span id="airev-caret" style="font-size:14px;color:#94a3b8">▶ 展開</span>
+          </h2>
+          <div id="airev-wrap" style="display:none">
+            <p style="color:#94a3b8;font-size:13px;margin:10px 0 12px">💡 <strong>批准</strong>＝直接進題庫（取當日題號、掛「🤖 AI 題庫」來源，該班水龍頭有勾才抽得到）。<strong>修改後重送</strong>＝退回給御史大夫重寫再送審。<strong>退件</strong>＝這題不要了（畫面上消失，底層留著給御史大夫學）。</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:14px">
+              <div class="form-group" style="margin-bottom:0;min-width:160px"><label>狀態</label>
+                <select id="airev-f-status">
+                  <option value="pending">🕒 待審</option>
+                  <option value="approved">✅ 已批准</option>
+                  <option value="resent">♻️ 已退回重寫</option>
+                  <option value="rejected">❌ 已退件</option>
+                </select>
+              </div>
+              <button class="btn btn-ghost" id="airev-refresh">🔄 重新整理</button>
+            </div>
+            <div id="airev-list"><div class="loading">⏳ 展開後載入…</div></div>
+          </div>
+        </div>
         <div class="card" id="audit-card">
           <h2 style="cursor:pointer;user-select:none" id="audit-toggle"><span>🔍 勘誤回覆稽核　<span style="font-size:12px;color:#64748b;font-weight:400">看哪個指導員回覆了哪個學員（唯讀、全系統）</span></span><span id="audit-caret" style="font-size:14px;color:#94a3b8">▶ 展開</span></h2>
           <div id="audit-wrap" style="display:none">
@@ -1208,6 +1231,40 @@ TP18,新北 TP18,2026"></textarea>
       <div class="modal-footer">
         <button class="btn btn-ghost" id="qm-edit-cancel">取消</button>
         <button class="btn btn-green" id="qm-edit-save">💾 儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="airev-modal">
+    <div class="modal" style="max-width:820px">
+      <div class="modal-header"><h3>🤖 審核 AI 題目</h3><button class="modal-close" id="airev-close">×</button></div>
+      <div class="modal-body">
+        <div id="airev-ainote" style="background:#2e1065;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#ddd6fe"></div>
+        <div class="form-group"><label>題目 <span style="color:#f87171">*</span></label><textarea id="airev-qtext" rows="3"></textarea></div>
+        <div class="form-group">
+          <label>📷 題幹附圖（選填，上傳後立即生效）</label>
+          <input type="file" id="airev-img-text" accept="image/*">
+          <img id="airev-img-text-pv" style="display:none;max-width:100%;margin-top:8px;border-radius:8px;border:1px solid #334155">
+        </div>
+        <div id="airev-options"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group"><label>正確答案 <span style="color:#f87171">*</span></label><select id="airev-answer"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div>
+          <div class="form-group"><label>難易度</label><select id="airev-difficulty"><option value="easy">易</option><option value="medium" selected>中</option><option value="hard">難</option></select></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group"><label>書籍 <span style="color:#f87171">*</span></label><select id="airev-book"><option value="">—</option></select></div>
+          <div class="form-group"><label>章節 <span style="color:#f87171">*</span></label><select id="airev-chapter"><option value="">先選書籍</option></select></div>
+        </div>
+        <div class="form-group"><label>頁碼 <span style="color:#f87171">*</span></label><input id="airev-page" placeholder="例 964"></div>
+        <div id="airev-dim-hint" style="font-size:12px;margin:-4px 0 12px"></div>
+        <div class="form-group"><label>✍️ 給御史大夫的意見 <span style="color:#94a3b8;font-weight:400;font-size:12px">（「修改後重送」與「退件」必填；它下次上工會讀，越寫越專業）</span></label><textarea id="airev-comment" rows="2" placeholder="例：C 選項的劑量錯了；或 這題考點與 1150612-2 重複，換一個缺口"></textarea></div>
+        <div id="airev-msg"></div>
+      </div>
+      <div class="modal-footer" style="flex-wrap:wrap;gap:8px">
+        <button class="btn btn-ghost" id="airev-cancel">取消</button>
+        <button class="btn btn-ghost" id="airev-reject" style="background:#7f1d1d;color:#fecaca">❌ 退件</button>
+        <button class="btn btn-ghost" id="airev-resend" style="background:#78350f;color:#fde68a">♻️ 修改後重送</button>
+        <button class="btn btn-green" id="airev-approve">✅ 批准入庫</button>
       </div>
     </div>
   </div>
@@ -5409,7 +5466,7 @@ TP18,新北 TP18,2026"></textarea>
     let qmChaptersCache = [];
     let qmStatsCache = {};        // questionId -> { n: 首刷人數, c: 首刷答對數 }
     let qmStatsUpdatedAt = null;  // 首刷統計上次重算時間
-    let qmFilters = { bookId: '', dimension: '', visibility: 'visible', dateStart: '', dateEnd: '', classId: '', studentName: '', keyword: '', rateMin: '', rateMax: '', minN: '' };
+    let qmFilters = { bookId: '', dimension: '', visibility: 'visible', origin: '', dateStart: '', dateEnd: '', classId: '', studentName: '', keyword: '', rateMin: '', rateMax: '', minN: '' };
     let qmBatchPreview = null;
 
     async function loadQuestionsPage() {
@@ -5439,6 +5496,7 @@ TP18,新北 TP18,2026"></textarea>
         chSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) qmChaptersCache.push({ id: d.id, ...data }); });
         renderQuestionsPage();
         loadAdminCorrections();
+        airevRefreshBadge();   // 🤖 AI 待審徽章
       } catch (e) { el.innerHTML = `<div class="err-msg">${e.message}</div>`; }
     }
     document.getElementById('btn-refresh-questions').addEventListener('click', loadQuestionsPage);
@@ -5618,6 +5676,324 @@ TP18,新北 TP18,2026"></textarea>
       } catch (e) { msg.innerHTML = `<span style="color:#ef4444">❌ ${e.message}</span>`; }
       finally { btn.disabled = false; btn.textContent = '💾 儲存授權'; }
     });
+
+    // ===== 🤖 御史大夫 · AI 題目審核 =====
+    // 提案存在 ai_question_proposals，御史大夫（桌機排程）用 Admin SDK 新增；這裡是「人」的審核端。
+    // 🔴 批准是唯一會寫進正本題庫 questions 的動作；退件不真刪（底層留給御史大夫當錯題本）。
+    const AIREV_LABEL = { pending: '🕒 待審', approved: '✅ 已批准', resent: '♻️ 已退回重寫', rejected: '❌ 已退件' };
+    const AIREV_KEYS = ['A', 'B', 'C', 'D'];
+    let _airevCache = [], _airevCtx = null, _airevImgs = {};
+    function airevEsc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+    document.getElementById('airev-toggle').addEventListener('click', () => {
+      const w = document.getElementById('airev-wrap'), c = document.getElementById('airev-caret');
+      const open = w.style.display === 'none';
+      w.style.display = open ? '' : 'none';
+      c.textContent = open ? '▼ 收合' : '▶ 展開';
+      if (open && !_airevCache.length) loadAiProposals();
+    });
+    document.getElementById('airev-refresh').addEventListener('click', loadAiProposals);
+    document.getElementById('airev-f-status').addEventListener('change', loadAiProposals);
+
+    // 書籍/章節主檔：題庫管理頁載過就沿用，沒載過（直接展開本卡）才自己補讀
+    async function airevEnsureBooks() {
+      if (qmBooksCache.length) return;
+      const [bSnap, chSnap] = await Promise.all([getDocs(collection(db, 'books')), getDocs(collection(db, 'chapters'))]);
+      qmBooksCache = []; bSnap.forEach(d => { const x = d.data(); if (x.isActive !== false) qmBooksCache.push({ id: d.id, ...x }); });
+      qmChaptersCache = []; chSnap.forEach(d => { const x = d.data(); if (x.isActive !== false) qmChaptersCache.push({ id: d.id, ...x }); });
+    }
+
+    // 待審則數徽章（count 聚合、極省讀取）
+    async function airevRefreshBadge() {
+      const el = document.getElementById('airev-badge');
+      try {
+        const n = (await getCountFromServer(query(collection(db, 'ai_question_proposals'), where('status', '==', 'pending')))).data().count;
+        if (n > 0) { el.style.display = ''; el.textContent = `待審 ${n}`; } else { el.style.display = 'none'; }
+      } catch (e) { el.style.display = 'none'; }
+    }
+
+    async function loadAiProposals() {
+      const list = document.getElementById('airev-list');
+      const st = document.getElementById('airev-f-status').value;
+      list.innerHTML = '<div class="loading">⏳ 載入中...</div>';
+      try {
+        await airevEnsureBooks();
+        const snap = await getDocs(query(collection(db, 'ai_question_proposals'), where('status', '==', st)));
+        _airevCache = [];
+        snap.forEach(d => _airevCache.push({ id: d.id, ...d.data() }));
+        _airevCache.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        renderAiProposals();
+        airevRefreshBadge();
+      } catch (e) { list.innerHTML = `<div class="err-msg">載入失敗：${airevEsc(e.message)}</div>`; }
+    }
+
+    function renderAiProposals() {
+      const list = document.getElementById('airev-list');
+      const st = document.getElementById('airev-f-status').value;
+      if (!_airevCache.length) {
+        list.innerHTML = `<div style="color:#64748b;padding:18px;text-align:center">目前沒有「${AIREV_LABEL[st]}」的提案。</div>`;
+        return;
+      }
+      list.innerHTML = _airevCache.map(pr => {
+        const src = pr.source || {};
+        const opts = pr.options || {};
+        const optHtml = AIREV_KEYS.map(k => {
+          const on = pr.correctAnswer === k;
+          const img = opts[k] && opts[k].imageUrl ? ' 📷' : '';
+          return `<div style="padding:4px 8px;border-radius:6px;margin:3px 0;${on ? 'background:#064e3b;color:#a7f3d0;font-weight:600' : 'color:#cbd5e1'}">${k}. ${airevEsc(opts[k] && opts[k].text)}${img}</div>`;
+        }).join('');
+        const note = pr.aiNote || {};
+        const similar = Array.isArray(note.similar) && note.similar.length
+          ? `<div style="color:#fbbf24;font-size:12px;margin-top:6px">💡 相近既有題：${note.similar.map(x => airevEsc(x.id || x)).join('、')}</div>` : '';
+        const qid = pr.approvedQuestionId ? `<span style="color:#34d399;font-family:monospace"> → 已入庫 ${airevEsc(pr.approvedQuestionId)}</span>` : '';
+        const cmt = pr.lastComment ? `<div style="color:#fca5a5;font-size:12px;margin-top:6px">✍️ 我的意見：${airevEsc(pr.lastComment)}</div>` : '';
+        return `<div style="background:#1e293b;border:1px solid #334155;border-left:3px solid #7c3aed;border-radius:10px;padding:14px;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+            <div style="font-size:12px;color:#94a3b8">📖 ${airevEsc(src.bookId)}　Ch ${airevEsc(src.chapterNumber)}　p.${airevEsc(src.page) || '—'}　${pr.derivedDimension ? `<span style="color:#a78bfa">${airevEsc(pr.derivedDimension)}</span>` : '<span style="color:#fbbf24">未對應維度</span>'}${qid}</div>
+            <div style="font-size:12px;color:#64748b">${AIREV_LABEL[pr.status] || airevEsc(pr.status)}${pr.round > 1 ? `　第 ${pr.round} 次送審` : ''}</div>
+          </div>
+          <div style="color:#e2e8f0;margin-bottom:6px;white-space:pre-wrap">${airevEsc(pr.questionText)}</div>
+          ${optHtml}
+          ${note.point ? `<div style="color:#94a3b8;font-size:12px;margin-top:8px">🎯 考點：${airevEsc(note.point)}</div>` : ''}
+          ${similar}
+          ${cmt}
+          <div style="margin-top:10px"><button class="btn btn-ghost" data-airev="${airevEsc(pr.id)}">🔍 審核 / 編輯</button></div>
+        </div>`;
+      }).join('');
+      list.querySelectorAll('[data-airev]').forEach(b => b.addEventListener('click', () => openAirev(b.dataset.airev)));
+    }
+
+    // ── 視窗：書籍/章節連動 ──
+    function airevPopulateBook(selBookId) {
+      const sel = document.getElementById('airev-book');
+      sel.innerHTML = '<option value="">—</option>' + qmBooksCache.map(b => `<option value="${airevEsc(b.id)}">${airevEsc(b.id)}</option>`).join('');
+      if (selBookId) sel.value = selBookId;
+    }
+    function airevPopulateChapter(bookId, selChapterId, selChapterNumber) {
+      const sel = document.getElementById('airev-chapter');
+      if (!bookId) { sel.innerHTML = '<option value="">先選書籍</option>'; return; }
+      const chs = qmChaptersCache.filter(c => c.bookId === bookId).sort((a, b) => (parseInt(a.chapterNumber) || 0) - (parseInt(b.chapterNumber) || 0));
+      sel.innerHTML = '<option value="">請選章節</option>' + chs.map(c => `<option value="${airevEsc(c.id)}" data-dim="${airevEsc(c.dimension)}" data-num="${airevEsc(c.chapterNumber)}">Ch ${airevEsc(c.chapterNumber)} ${airevEsc(c.chapterName)}</option>`).join('');
+      if (selChapterId && chs.some(c => c.id === selChapterId)) sel.value = selChapterId;
+      else if (selChapterNumber != null && selChapterNumber !== '') { const m = chs.find(c => String(c.chapterNumber) === String(selChapterNumber)); if (m) sel.value = m.id; }
+    }
+    function airevDimHint() {
+      const dim = document.getElementById('airev-chapter').selectedOptions[0]?.dataset.dim;
+      const el = document.getElementById('airev-dim-hint');
+      el.innerHTML = dim ? `✅ 批准後此題編入維度 <strong style="color:#34d399">${dim} ${QM_DIM_NAMES[dim] || ''}</strong>` : '<span style="color:#fbbf24">⚠️ 此章節未設定維度，批准後不計入雷達</span>';
+    }
+    document.getElementById('airev-book').addEventListener('change', () => { airevPopulateChapter(document.getElementById('airev-book').value, '', ''); airevDimHint(); });
+    document.getElementById('airev-chapter').addEventListener('change', airevDimHint);
+
+    // ── 開啟審核視窗 ──
+    function openAirev(id) {
+      const pr = _airevCache.find(x => x.id === id);
+      if (!pr) return;
+      _airevCtx = { id, status: pr.status, round: pr.round || 1 };
+      const opts = pr.options || {}, src = pr.source || {};
+      _airevImgs = { text: pr.questionImageUrl || null, A: (opts.A || {}).imageUrl || null, B: (opts.B || {}).imageUrl || null, C: (opts.C || {}).imageUrl || null, D: (opts.D || {}).imageUrl || null };
+
+      const note = pr.aiNote || {};
+      document.getElementById('airev-ainote').innerHTML =
+        `${note.point ? `<div>🎯 <b>考點</b>：${airevEsc(note.point)}</div>` : ''}` +
+        `${note.gap ? `<div>🕳 <b>缺口</b>：${airevEsc(note.gap)}</div>` : ''}` +
+        `${note.excerpt ? `<div style="margin-top:6px">📖 <b>原文依據</b>：${airevEsc(note.excerpt)}</div>` : ''}` +
+        `${Array.isArray(note.similar) && note.similar.length ? `<div style="margin-top:6px;color:#fde68a">💡 <b>相近既有題</b>：${note.similar.map(x => airevEsc(x.id || x)).join('、')}（僅提示，重複也可照批准）</div>` : ''}` +
+        `<div style="margin-top:6px;color:#a78bfa;font-size:12px">第 ${pr.round || 1} 次送審　${AIREV_LABEL[pr.status] || ''}</div>`;
+
+      document.getElementById('airev-qtext').value = pr.questionText || '';
+      document.getElementById('airev-answer').value = pr.correctAnswer || 'A';
+      document.getElementById('airev-difficulty').value = pr.difficulty || 'medium';
+      document.getElementById('airev-page').value = src.page || '';
+      document.getElementById('airev-comment').value = '';
+      document.getElementById('airev-msg').innerHTML = '';
+      airevRenderImg('text');
+
+      // 四個選項（文字 + 各自圖片上傳）
+      document.getElementById('airev-options').innerHTML = AIREV_KEYS.map(k => `
+        <div class="form-group">
+          <label>選項 ${k} <span style="color:#f87171">*</span></label>
+          <textarea id="airev-opt-${k}" rows="1"></textarea>
+          <input type="file" id="airev-img-${k}" accept="image/*" style="margin-top:6px">
+          <img id="airev-img-${k}-pv" style="display:none;max-width:60%;margin-top:6px;border-radius:8px;border:1px solid #334155">
+        </div>`).join('');
+      AIREV_KEYS.forEach(k => {
+        document.getElementById(`airev-opt-${k}`).value = (opts[k] && opts[k].text) || '';
+        document.getElementById(`airev-img-${k}`).addEventListener('change', (e) => airevUpload(k, e.target.files[0]));
+        airevRenderImg(k);
+      });
+
+      airevPopulateBook(src.bookId || '');
+      airevPopulateChapter(src.bookId || '', src.chapterId || '', src.chapterNumber);
+      airevDimHint();
+      document.getElementById('airev-modal').style.display = 'flex';
+    }
+    document.getElementById('airev-img-text').addEventListener('change', (e) => airevUpload('text', e.target.files[0]));
+    document.getElementById('airev-close').addEventListener('click', () => document.getElementById('airev-modal').style.display = 'none');
+    document.getElementById('airev-cancel').addEventListener('click', () => document.getElementById('airev-modal').style.display = 'none');
+
+    function airevRenderImg(k) {
+      const pv = document.getElementById(k === 'text' ? 'airev-img-text-pv' : `airev-img-${k}-pv`);
+      if (!pv) return;
+      if (_airevImgs[k]) { pv.src = _airevImgs[k]; pv.style.display = 'block'; } else { pv.style.display = 'none'; }
+    }
+    // 圖片：選檔即上傳（縮至 1200px、JPEG），存進 questions/_AI/
+    async function airevResize(file, maxWidth = 1200) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onerror = reject;
+          img.onload = () => {
+            const scale = Math.min(1, maxWidth / img.width);
+            const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            canvas.toBlob(b => b ? resolve(b) : reject(new Error('blob fail')), 'image/jpeg', 0.85);
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    async function airevUpload(k, file) {
+      if (!file) return;
+      const msg = document.getElementById('airev-msg');
+      if (!file.type.startsWith('image/')) { msg.innerHTML = '<div class="err-msg">❌ 檔案必須是圖片</div>'; return; }
+      msg.innerHTML = '<div class="loading">⏳ 上傳圖片中...</div>';
+      try {
+        const blob = await airevResize(file, 1200);
+        const path = `questions/_AI/q_${k}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`;
+        const r = storageRef(storage, path);
+        await uploadBytes(r, blob, { contentType: 'image/jpeg' });
+        _airevImgs[k] = await getDownloadURL(r);
+        airevRenderImg(k);
+        msg.innerHTML = '<div style="color:#34d399;font-size:13px">✅ 圖片已上傳（按下方任一按鈕才會存檔）</div>';
+      } catch (e) { msg.innerHTML = `<div class="err-msg">❌ 上傳失敗：${airevEsc(e.message)}</div>`; }
+    }
+
+    // ── 從視窗收集目前內容（三個動作共用；批准與重送都會把人改過的版本存回提案）──
+    function airevCollect() {
+      const chSel = document.getElementById('airev-chapter').selectedOptions[0];
+      const options = {};
+      AIREV_KEYS.forEach(k => { options[k] = { text: document.getElementById(`airev-opt-${k}`).value.trim(), imageUrl: _airevImgs[k] || null }; });
+      return {
+        questionText: document.getElementById('airev-qtext').value.trim(),
+        questionImageUrl: _airevImgs.text || null,
+        options,
+        correctAnswer: document.getElementById('airev-answer').value,
+        difficulty: document.getElementById('airev-difficulty').value,
+        source: {
+          bookId: document.getElementById('airev-book').value || null,
+          chapterId: document.getElementById('airev-chapter').value || null,
+          chapterNumber: chSel ? (chSel.dataset.num || null) : null,
+          page: document.getElementById('airev-page').value.trim() || null
+        },
+        derivedDimension: (chSel && chSel.dataset.dim) || null
+      };
+    }
+    // 批准前的必填檢查（與學員出題同一套規格：四選項齊全 + 出處三項齊全）
+    function airevValidate(d) {
+      if (!d.questionText) return '題目不可空白';
+      const miss = AIREV_KEYS.filter(k => !d.options[k].text && !d.options[k].imageUrl);
+      if (miss.length) return `選項 ${miss.join('、')} 至少要有文字或圖片`;
+      const s = d.source;
+      const missSrc = [!s.bookId && '書籍', !s.chapterId && '章節', !s.page && '頁碼'].filter(Boolean);
+      if (missSrc.length) return `出處為必填，請補：${missSrc.join('、')}`;
+      return '';
+    }
+
+    // ── ✅ 批准入庫（唯一寫進 questions 的動作）──
+    document.getElementById('airev-approve').addEventListener('click', async () => {
+      if (!_airevCtx) return;
+      const d = airevCollect();
+      const err = airevValidate(d);
+      const msg = document.getElementById('airev-msg');
+      if (err) { msg.innerHTML = `<div class="err-msg">❌ ${airevEsc(err)}</div>`; return; }
+      if (!d.derivedDimension && !confirm('⚠️ 此章節未對應 6 角雷達維度，此題不會計入雷達。\n確定仍要批准入庫嗎？')) return;
+      if (!confirm('確定批准這一題？\n\n批准後會立刻取得題號並進入正式題庫，勾了「🤖 AI 題庫」水龍頭的班級就抽得到。')) return;
+      const btn = document.getElementById('airev-approve');
+      btn.disabled = true; btn.textContent = '⏳ 入庫中...';
+      try {
+        // 題號＝入庫當天的民國年月日 + 流水號（與學員出題共用同一支 counters，不會撞號）
+        const today = new Date();
+        const rocY = today.getFullYear() - 1911;
+        const mm = String(today.getMonth() + 1).padStart(2, '0'), dd = String(today.getDate()).padStart(2, '0');
+        const dateStr = `${rocY}${mm}${dd}`;
+        const scheduledDate = `${today.getFullYear()}-${mm}-${dd}`;
+        const counterRef = doc(db, 'counters', dateStr);
+        const questionId = await runTransaction(db, async (tx) => {
+          const counterDoc = await tx.get(counterRef);
+          let nextNum = counterDoc.exists() ? (counterDoc.data().lastNumber || 0) + 1 : 1;
+          let qid = `${dateStr}-${nextNum}`;
+          let qRef = doc(db, 'questions', qid);
+          let exist = await tx.get(qRef);
+          let guard = 0;
+          while (exist.exists() && guard < 500) { nextNum++; qid = `${dateStr}-${nextNum}`; qRef = doc(db, 'questions', qid); exist = await tx.get(qRef); guard++; }
+          const fullData = {
+            serialDate: dateStr,
+            serialNumber: nextNum,
+            createdBy: 'ai',
+            createdByName: '御史大夫',
+            createdByRole: 'ai',              // 🔴 AI 題的唯一辨識標記：統計排除、日後要全收回也靠它
+            createdByClassId: AI_SOURCE_ID,   // '_AI'：水龍頭的虛擬來源，不屬於任何班
+            scheduledDate,
+            questionText: d.questionText,
+            questionImageUrl: d.questionImageUrl,
+            difficulty: d.difficulty,
+            options: d.options,
+            correctAnswer: d.correctAnswer,
+            source: d.source,
+            derivedDimension: d.derivedDimension
+          };
+          tx.set(qRef, {
+            ...fullData,
+            originalVersion: { ...fullData, savedAt: Timestamp.now() },
+            aiProposalId: _airevCtx.id,
+            approvedBy: currentUser.email,
+            attemptCount: 0, correctRate: 0, reportCount: 0,
+            isVisible: true, isActive: true,
+            createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+          });
+          tx.set(counterRef, { date: dateStr, lastNumber: nextNum, updatedAt: serverTimestamp() }, { merge: true });
+          return qid;
+        });
+        await updateDoc(doc(db, 'ai_question_proposals', _airevCtx.id), {
+          ...d, status: 'approved', approvedQuestionId: questionId,
+          reviewedBy: currentUser.email, reviewedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+          lastComment: document.getElementById('airev-comment').value.trim() || null
+        });
+        document.getElementById('airev-modal').style.display = 'none';
+        alert(`✅ 已批准入庫！\n\n題號：${questionId}\n來源：🤖 AI 題庫（勾了這個水龍頭的班級才抽得到）`);
+        loadAiProposals();
+      } catch (e) {
+        msg.innerHTML = `<div class="err-msg">❌ 入庫失敗：${airevEsc(e.message)}</div>`;
+      } finally { btn.disabled = false; btn.textContent = '✅ 批准入庫'; }
+    });
+
+    // ── ♻️ 修改後重送 / ❌ 退件（都要留意見給御史大夫）──
+    async function airevSetStatus(status, needMsg, confirmText) {
+      if (!_airevCtx) return;
+      const comment = document.getElementById('airev-comment').value.trim();
+      const msg = document.getElementById('airev-msg');
+      if (!comment) { msg.innerHTML = `<div class="err-msg">❌ ${airevEsc(needMsg)}</div>`; return; }
+      if (!confirm(confirmText)) return;
+      try {
+        const d = airevCollect();   // 人改過的版本一起存回，御史大夫看得到你怎麼改
+        await updateDoc(doc(db, 'ai_question_proposals', _airevCtx.id), {
+          ...d, status,
+          round: (_airevCtx.round || 1) + (status === 'resent' ? 1 : 0),
+          lastComment: comment,
+          reviewedBy: currentUser.email, reviewedAt: serverTimestamp(), updatedAt: serverTimestamp()
+        });
+        document.getElementById('airev-modal').style.display = 'none';
+        loadAiProposals();
+      } catch (e) { msg.innerHTML = `<div class="err-msg">❌ 失敗：${airevEsc(e.message)}</div>`; }
+    }
+    document.getElementById('airev-resend').addEventListener('click', () => airevSetStatus('resent', '請寫一行意見，御史大夫要照著改', '退回給御史大夫重寫？\n\n它下次上工會重讀教科書、照你的意見修好再送一次審。'));
+    document.getElementById('airev-reject').addEventListener('click', () => airevSetStatus('rejected', '請寫一行退件理由（御史大夫要靠它學）', '退件？\n\n這題從此不會再出現在你的清單裡。理由會留給御史大夫當錯題本。'));
 
     // ===== 🔍 勘誤回覆稽核（唯讀：看哪個指導員回覆哪個學員）=====
     let _auditReports = null;        // 已讀的 question_error_reports（記憶體快取，篩選不重讀）
@@ -5827,6 +6203,8 @@ TP18,新北 TP18,2026"></textarea>
       if (qmFilters.dimension && q.derivedDimension !== qmFilters.dimension) return false;
       if (qmFilters.visibility === 'visible' && q.isVisible === false) return false;
       if (qmFilters.visibility === 'hidden' && q.isVisible !== false) return false;
+      if (qmFilters.origin === 'ai' && q.createdByRole !== 'ai') return false;          // 🤖 只看 AI 題
+      if (qmFilters.origin === 'human' && q.createdByRole === 'ai') return false;       // 只看人出的題
       if (qmFilters.dateStart && (q.scheduledDate || '') < qmFilters.dateStart) return false;
       if (qmFilters.dateEnd && (q.scheduledDate || '') > qmFilters.dateEnd) return false;
       if (qmFilters.classId && q.createdByClassId !== qmFilters.classId) return false;
@@ -5878,6 +6256,14 @@ TP18,新北 TP18,2026"></textarea>
               <option value="visible"${qmFilters.visibility === 'visible' ? ' selected' : ''}>啟用中</option>
               <option value="hidden"${qmFilters.visibility === 'hidden' ? ' selected' : ''}>已隱藏</option>
               <option value="all"${qmFilters.visibility === 'all' ? ' selected' : ''}>全部</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>來源</label>
+            <select id="qm-f-origin">
+              <option value="">全部</option>
+              <option value="human"${qmFilters.origin === 'human' ? ' selected' : ''}>👤 學員 / 教官</option>
+              <option value="ai"${qmFilters.origin === 'ai' ? ' selected' : ''}>🤖 御史大夫</option>
             </select>
           </div>
           <div class="form-group" style="margin-bottom:0">
@@ -5964,6 +6350,7 @@ TP18,新北 TP18,2026"></textarea>
       document.getElementById('qm-f-book').addEventListener('change', (e) => { qmFilters.bookId = e.target.value; renderQuestionsPage(); });
       document.getElementById('qm-f-dim').addEventListener('change', (e) => { qmFilters.dimension = e.target.value; renderQuestionsPage(); });
       document.getElementById('qm-f-vis').addEventListener('change', (e) => { qmFilters.visibility = e.target.value; renderQuestionsPage(); });
+      document.getElementById('qm-f-origin').addEventListener('change', (e) => { qmFilters.origin = e.target.value; renderQuestionsPage(); });
       document.getElementById('qm-f-date-start').addEventListener('change', (e) => { qmFilters.dateStart = e.target.value; renderQuestionsPage(); });
       document.getElementById('qm-f-date-end').addEventListener('change', (e) => { qmFilters.dateEnd = e.target.value; renderQuestionsPage(); });
       document.getElementById('qm-f-class').addEventListener('change', (e) => { qmFilters.classId = e.target.value; qmFilters.studentName = ''; renderQuestionsPage(); });
