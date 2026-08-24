@@ -500,7 +500,10 @@
             <span>🤖 御史大夫 · AI 題目審核　<span style="font-size:12px;color:#64748b;font-weight:400">AI 出的題必須審過才會進題庫</span>
               <span id="airev-badge" style="display:none;background:#7c3aed;color:#fff;border-radius:10px;padding:2px 9px;font-size:12px;margin-left:6px"></span>
             </span>
-            <span id="airev-caret" style="font-size:14px;color:#94a3b8">▶ 展開</span>
+            <span style="display:flex;align-items:center;gap:12px">
+              <button class="btn btn-ghost" id="airev-gear" title="出題設定：頻率、每次幾題、難中易、章節、出題原則" style="padding:4px 10px;font-size:15px;line-height:1.4">⚙️</button>
+              <span id="airev-caret" style="font-size:14px;color:#94a3b8">▶ 展開</span>
+            </span>
           </h2>
           <div id="airev-wrap" style="display:none">
             <p style="color:#94a3b8;font-size:13px;margin:10px 0 12px">💡 <strong>批准</strong>＝直接進題庫（取當日題號、掛「🤖 AI 題庫」來源，該班水龍頭有勾才抽得到）。<strong>修改後重送</strong>＝退回給御史大夫重寫再送審。<strong>退件</strong>＝這題不要了（畫面上消失，底層留著給御史大夫學）。</p>
@@ -650,7 +653,7 @@
           </div>
         </div>
 
-        <div class="card">
+        <div class="card" id="yushi-card">
           <h2><span>&#127963; 御史大夫 &mdash; AI 出題設定</span>
             <button class="btn btn-ghost" id="btn-yushi-reload">&#128260; 重新載入</button>
           </h2>
@@ -3046,6 +3049,21 @@ TP18,新北 TP18,2026"></textarea>
       }
     });
 
+    // 審核卡標題列那顆 ⚙️：跳到「系統設定」的御史大夫卡並閃一下
+    function openYushiSettings() {
+      const tabBtn = document.querySelector('.tab-button[data-tab="settings"]');
+      if (tabBtn) tabBtn.click();
+      setTimeout(() => {
+        const card = document.getElementById('yushi-card');
+        if (!card) return;
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const old = card.style.boxShadow;
+        card.style.transition = 'box-shadow .3s';
+        card.style.boxShadow = '0 0 0 3px #7c3aed';
+        setTimeout(() => { card.style.boxShadow = old || ''; }, 1600);
+      }, 120);
+    }
+
     // ===== 御史大夫 AI 出題設定（ai_director_config/main）=====
     // 只有 vault 裡有教科書電子檔的書才能勾。補齊電子檔後把 bookId 加進這個陣列即可開放。
     const YUSHI_READY_BOOKS = ['EMT-P'];
@@ -3163,6 +3181,9 @@ TP18,新北 TP18,2026"></textarea>
       const el = document.getElementById(id);
       if (el) el.addEventListener('input', renderYushiPreview);
     });
+
+    const airevGear = document.getElementById('airev-gear');
+    if (airevGear) airevGear.addEventListener('click', (ev) => { ev.stopPropagation(); openYushiSettings(); });
 
     document.getElementById('btn-yushi-reload').addEventListener('click', loadYushiConfig);
     document.getElementById('btn-yushi-seed').addEventListener('click', () => {
