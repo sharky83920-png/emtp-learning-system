@@ -520,3 +520,186 @@ exports.syncArchivedAuth = functions
     console.log("[syncArchivedAuth]", JSON.stringify(out));
     return out;
   });
+
+
+/* ─────────────────────────────────────────────────────────────
+ * 📊 milestoneBoard — 教官用 Milestone 總覽的守門員（2026-09-29）
+ *
+ * 為什麼要有這一支：milestone.html 是「知道網址就能看」的頁面（皇上指定），
+ * 但 Firestore 規則沒辦法依 token 限制查詢範圍。如果為了讓免登入頁讀到資料
+ * 而放寬 milestone_evaluations 的讀取權，等於全部 388 人的評核對外開放。
+ * 所以改成：網頁完全不碰資料庫，只拿 token 來問這支 function，
+ * 由 admin SDK 驗證 token → 只回傳該 token 綁定那一班的資料。
+ *
+ * 🔴 三道保護：
+ *   1. token 錯／停用／過期 → 一律 403，不透露任何內容
+ *   2. 只回傳 token 綁定的 classId，別班一個字都不給
+ *   3. 回傳的學員欄位只有 座號 + 姓名，**身分證與其他個資不出網**
+ *
+ * token 存 milestone_view_tokens/{token}：
+ *   { classId, label, active:true, createdAt, expiresAt?(Timestamp), useCount, lastUsedAt }
+ *   這個集合沒列在 firestore.rules 裡 → 依「其餘一律拒絕」原則，前端讀不到，只有本支讀得到。
+ * ───────────────────────────────────────────────────────────── */
+exports.milestoneBoard = functions
+  .region("asia-east1")
+  .runWith({ memory: "256MB" })
+  .https.onRequest(async (req, res) => {
+    // 這頁掛在 GitHub Pages，跟 function 不同網域 → 需要 CORS
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Cache-Control", "no-store");
+    if (req.method === "OPTIONS") return res.status(204).send("");
+
+    const token = String(req.query.t || "").trim();
+    // 先擋明顯不合法的，避免拿奇怪字串去查資料庫
+    if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) {
+      return res.status(403).json({ error: "forbidden" });
+    }
+
+    try {
+      const tkDoc = await db.collection("milestone_view_tokens").doc(token).get();
+      if (!tkDoc.exists) return res.status(403).json({ error: "forbidden" });
+      const tk = tkDoc.data() || {};
+      if (tk.active === false) return res.status(403).json({ error: "revoked" });
+      if (tk.expiresAt && tk.expiresAt.toMillis && tk.expiresAt.toMillis() < Date.now()) {
+        return res.status(403).json({ error: "expired" });
+      }
+      const classId = String(tk.classId || "");
+      if (!classId) return res.status(403).json({ error: "forbidden" });
+
+      const [clsDoc, stuSnap, msSnap, grpSnap, evSnap, sysDoc] = await Promise.all([
+        db.collection("classes").doc(classId).get(),
+        db.collection("students").where("classId", "==", classId).get(),
+        db.collection("milestones").get(),
+        db.collection("milestone_groups").get(),
+        db.collection("milestone_evaluations").where("classId", "==", classId).get(),
+        db.collection("system_settings").doc("global").get(),
+      ]);
+
+      // 🔴 算分規則必須與 student.html 完全一致，否則教官看到的分數跟學員自己看到的對不起來：
+      //    ① 該班的排除設定 classes/{id}.settings.epaScoring（排除某些身分／單位／評核者／項目）
+      //    ② 每項取「最近 N 次」平均，N＝system_settings/global.milestoneRecentN（預設 3）
+      const epaScoring = (clsDoc.exists && clsDoc.data().settings && clsDoc.data().settings.epaScoring) || {};
+      const recentN = (sysDoc.exists && Number(sysDoc.data().milestoneRecentN)) || 3;
+
+      // 🔴 只挑要用的欄位出網：座號與姓名。身分證、電話等一律不送。
+      const students = stuSnap.docs
+        .filter((d) => (d.data() || {}).isActive !== false && (d.data() || {}).archived !== true)
+        .map((d) => {
+          const v = d.data() || {};
+          // 🔴 只取這兩個欄位。學員文件裡還有 idNumber（身分證）、email、authUid，一律不出網。
+          return { id: d.id, no: v.studentNo || "", name: v.name || "" };
+        })
+        .sort((a, b) => String(a.no).localeCompare(String(b.no), "zh-Hant", { numeric: true }));
+
+      const groups = grpSnap.docs
+        .map((d) => { const v = d.data() || {}; return { id: d.id, name: v.name || d.id, order: Number(v.displayOrder || 99), active: v.isActive !== false }; })
+        .filter((g) => g.active)
+        .sort((a, b) => a.order - b.order);
+
+      const milestones = msSnap.docs
+        .map((d) => {
+          const v = d.data() || {};
+          return { id: d.id, name: v.name || d.id, step: v.step || "", groupId: v.groupId || "",
+                   order: Number(v.displayOrder || 99),
+                   visible: v.isVisible !== false && v.isActive !== false,
+                   inRadar: v.countInRadar !== false };
+        })
+        .filter((m) => m.visible)
+        .sort((a, b) => a.order - b.order);
+
+      const stuIds = new Set(students.map((s) => s.id));
+      const evals = evSnap.docs
+        .map((d) => {
+          const v = d.data() || {};
+          // 🔴 寫入端用的是 evaluatedAt（不是 createdAt）——eval.html 第 718 行
+          const t = v.evaluatedAt && v.evaluatedAt.toMillis ? v.evaluatedAt.toMillis() : null;
+          return { studentId: String(v.studentId || ""), milestoneId: String(v.milestoneId || ""),
+                   level: Number(v.level || 0),
+                   evaluator: String(v.evaluatorName || ""),
+                   role: String(v.evaluatorRole || ""),
+                   unit: String(v.evaluatorUnit || ""),
+                   feedback: String(v.qualitativeFeedback || ""),
+                   at: t };
+        })
+        .filter((e) => e.studentId && e.milestoneId && e.level > 0 && stuIds.has(e.studentId));
+
+      // 用過一次就記一筆，方便日後查這條連結被用了幾次
+      tkDoc.ref.update({
+        useCount: admin.firestore.FieldValue.increment(1),
+        lastUsedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }).catch(() => {});
+
+      return res.status(200).json({
+        className: (clsDoc.exists && (clsDoc.data().displayName || clsDoc.data().name)) || classId,
+        classId, label: tk.label || "",
+        groups, milestones, students, evals,
+        epaScoring, recentN,
+        generatedAt: Date.now(),
+      });
+    } catch (e) {
+      console.error("[milestoneBoard]", e);
+      return res.status(500).json({ error: "server" });
+    }
+  });
+
+
+/* ─────────────────────────────────────────────────────────────
+ * 🔑 milestoneBoardToken — 產生／撤銷 Milestone 總覽的觀看連結（2026-09-29）
+ *
+ * 只有 Master（皇上）能呼叫。網址外流時，來這裡按「撤銷」，舊連結立刻失效。
+ * action: "list" | "create" | "revoke"
+ * ───────────────────────────────────────────────────────────── */
+exports.milestoneBoardToken = functions
+  .region("asia-east1")
+  .runWith({ memory: "256MB" })
+  .https.onCall(async (data, context) => {
+    if (!context.auth || context.auth.token.email !== MASTER_EMAIL) {
+      throw new functions.https.HttpsError("permission-denied", "只有系統管理者可以管理觀看連結");
+    }
+    const action = String((data && data.action) || "list");
+    const col = db.collection("milestone_view_tokens");
+
+    if (action === "create") {
+      const classId = String((data && data.classId) || "").trim();
+      if (!classId) throw new functions.https.HttpsError("invalid-argument", "缺少 classId");
+      // 32 碼：A-Z a-z 0-9 - _，與 milestoneBoard 的格式檢查一致
+      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+      const buf = require("crypto").randomBytes(32);
+      let token = "";
+      for (let i = 0; i < 32; i++) token += chars[buf[i] % chars.length];
+      await col.doc(token).set({
+        classId,
+        label: String((data && data.label) || ""),
+        active: true,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdBy: context.auth.token.email,
+        useCount: 0,
+      });
+      return { token, url: APP_BASE + "/milestone.html?t=" + token };
+    }
+
+    if (action === "revoke") {
+      const token = String((data && data.token) || "");
+      if (!token) throw new functions.https.HttpsError("invalid-argument", "缺少 token");
+      await col.doc(token).update({
+        active: false,
+        revokedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return { ok: true };
+    }
+
+    const snap = await col.orderBy("createdAt", "desc").limit(50).get();
+    return {
+      tokens: snap.docs.map((d) => {
+        const v = d.data() || {};
+        return {
+          token: d.id, classId: v.classId || "", label: v.label || "",
+          active: v.active !== false, useCount: v.useCount || 0,
+          createdAt: v.createdAt && v.createdAt.toMillis ? v.createdAt.toMillis() : null,
+          lastUsedAt: v.lastUsedAt && v.lastUsedAt.toMillis ? v.lastUsedAt.toMillis() : null,
+          url: APP_BASE + "/milestone.html?t=" + d.id,
+        };
+      }),
+    };
+  });
