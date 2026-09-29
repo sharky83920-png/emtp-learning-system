@@ -314,6 +314,23 @@
           </div>
           <div id="mev-result"><div class="placeholder" style="padding:20px"><div class="icon">🔎</div><p>選班級後查詢</p></div></div>
         </div>
+
+        <div class="card">
+          <h2><span>🔗 Milestone 總覽・觀看連結</span>
+            <button class="btn btn-ghost" id="btn-refresh-mvt">🔄 重新整理</button>
+          </h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:14px">
+            💡 給教官看的 <strong>Milestone 總覽</strong>（個人雷達／全班雷達／逐項熱力圖／曲線與質性回饋）。
+            拿到連結就能看，<strong>不必登入</strong>，但<strong>只看得到該連結綁定的那一班</strong>。<br>
+            🔴 連結外流時按「撤銷」，舊網址<strong>立刻失效</strong>；再產生一條新的即可。頁面只顯示座號與姓名，<strong>身分證不會出網</strong>。
+          </p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:12px">
+            <div class="form-group" style="margin-bottom:0;min-width:160px"><label>班級</label><select id="mvt-class"><option value="">請選班級...</option></select></div>
+            <div class="form-group" style="margin-bottom:0;min-width:200px"><label>備註（選填）</label><input id="mvt-label" placeholder="例如：TP17 教官群"></div>
+            <button class="btn btn-green" id="btn-mvt-create">➕ 產生連結</button>
+          </div>
+          <div id="mvt-result"><div class="loading">⏳ 載入中...</div></div>
+        </div>
       </section>
 
       <section class="tab-content" id="tab-skills">
@@ -1338,7 +1355,7 @@ TP18,新北 TP18,2026"></textarea>
         if (btn.dataset.tab === 'classes') loadClasses();
         if (btn.dataset.tab === 'students') loadClassDropdown();
         if (btn.dataset.tab === 'instructors') loadInstructors();
-        if (btn.dataset.tab === 'milestones') { loadMilestonesPage(); loadMilestoneEvalPage(); }
+        if (btn.dataset.tab === 'milestones') { loadMilestonesPage(); loadMilestoneEvalPage(); loadMvtPage(); }
         if (btn.dataset.tab === 'skills') { loadSkillsPage(); loadQrPage(); loadSignoffRecordsPage(); }
         if (btn.dataset.tab === 'books') loadBooksPage();
         if (btn.dataset.tab === 'exams') loadExamsPage();
@@ -3917,6 +3934,68 @@ TP18,新北 TP18,2026"></textarea>
       } catch (err) { stuSel.innerHTML = '<option value="">❌ 載入失敗</option>'; }
     });
     document.getElementById('btn-mev-query')?.addEventListener('click', loadMilestoneEval);
+
+    /* ── 🔗 Milestone 總覽・觀看連結（2026-09-29）────────────────────────
+       走 milestoneBoardToken（限 master）。token 集合沒列在 firestore.rules 裡，
+       所以前端讀不到、也寫不進去，一切都經過 function。 */
+    async function loadMvtPage() {
+      try {
+        const cSnap = await getDocs(collection(db, 'classes'));
+        const classes = []; cSnap.forEach(d => { const x = d.data(); if (x.isActive !== false) classes.push({ id: d.id, ...x }); });
+        classes.sort((a, b) => (b.year || 0) - (a.year || 0));
+        const sel = document.getElementById('mvt-class');
+        if (sel) sel.innerHTML = '<option value="">請選班級...</option>' + classes.map(c => `<option value="${c.id}">${c.displayName || c.id}</option>`).join('');
+      } catch (e) { console.error('loadMvtPage', e); }
+      await listMvt();
+    }
+    async function listMvt() {
+      const box = document.getElementById('mvt-result'); if (!box) return;
+      box.innerHTML = '<div class="loading">⏳ 載入中...</div>';
+      try {
+        const res = await httpsCallable(fns, 'milestoneBoardToken')({ action: 'list' });
+        const ts = (res.data && res.data.tokens) || [];
+        if (!ts.length) { box.innerHTML = '<div class="placeholder" style="padding:20px"><div class="icon">🔗</div><p>還沒有任何觀看連結</p></div>'; return; }
+        box.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="background:#f8fafc">
+            <th style="padding:6px;text-align:left">班級</th><th style="padding:6px;text-align:left">備註</th>
+            <th style="padding:6px;text-align:center">狀態</th><th style="padding:6px;text-align:center">被開啟</th>
+            <th style="padding:6px;text-align:left">最近使用</th><th style="padding:6px"></th></tr></thead>
+          <tbody>${ts.map(t => `<tr style="border-top:1px solid #e2e8f0">
+            <td style="padding:6px"><b>${t.classId}</b></td>
+            <td style="padding:6px;color:#64748b">${(t.label || '—').replace(/[<>&]/g, '')}</td>
+            <td style="padding:6px;text-align:center">${t.active ? '<span style="color:#059669">✅ 有效</span>' : '<span style="color:#94a3b8">⏹ 已撤銷</span>'}</td>
+            <td style="padding:6px;text-align:center">${t.useCount || 0} 次</td>
+            <td style="padding:6px;color:#64748b">${t.lastUsedAt ? new Date(t.lastUsedAt).toLocaleString('zh-TW') : '—'}</td>
+            <td style="padding:6px;text-align:right;white-space:nowrap">
+              ${t.active ? `<button class="btn btn-ghost btn-sm" data-copy="${t.url}">📋 複製網址</button>
+                            <button class="btn btn-ghost btn-sm" data-revoke="${t.token}" style="color:#dc2626">撤銷</button>` : ''}
+            </td></tr>`).join('')}</tbody></table>`;
+        box.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
+          try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = '✅ 已複製'; setTimeout(() => b.textContent = '📋 複製網址', 1600); }
+          catch (e) { prompt('複製這段網址：', b.dataset.copy); }
+        });
+        box.querySelectorAll('[data-revoke]').forEach(b => b.onclick = async () => {
+          if (!confirm('撤銷後這條連結會立刻失效、無法復原。確定嗎？')) return;
+          b.disabled = true; b.textContent = '撤銷中...';
+          try { await httpsCallable(fns, 'milestoneBoardToken')({ action: 'revoke', token: b.dataset.revoke }); await listMvt(); }
+          catch (e) { alert('撤銷失敗：' + (e.message || e)); b.disabled = false; b.textContent = '撤銷'; }
+        });
+      } catch (e) { box.innerHTML = `<div class="placeholder" style="padding:20px;color:#dc2626">❌ 讀取失敗：${e.message || e}</div>`; }
+    }
+    document.getElementById('btn-mvt-create')?.addEventListener('click', async () => {
+      const classId = document.getElementById('mvt-class').value;
+      if (!classId) { alert('請先選班級'); return; }
+      const label = document.getElementById('mvt-label').value.trim();
+      const btn = document.getElementById('btn-mvt-create'); btn.disabled = true; btn.textContent = '產生中...';
+      try {
+        const res = await httpsCallable(fns, 'milestoneBoardToken')({ action: 'create', classId, label });
+        document.getElementById('mvt-label').value = '';
+        await listMvt();
+        prompt('✅ 已產生，這是網址（Ctrl+C 複製）：', res.data.url);
+      } catch (e) { alert('產生失敗：' + (e.message || e)); }
+      btn.disabled = false; btn.textContent = '➕ 產生連結';
+    });
+    document.getElementById('btn-refresh-mvt')?.addEventListener('click', listMvt);
 
     async function loadMilestoneEval() {
       const cid = document.getElementById('mev-class').value;

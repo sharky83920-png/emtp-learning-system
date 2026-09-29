@@ -470,17 +470,50 @@ function render(){
   ({ one:viewOne, all:viewAll, heat:viewHeat })[VIEW]();
 }
 
+/* 觀看碼記在這台電腦的瀏覽器裡。
+   🔴 為什麼要這樣做：太和殿（court.html）是**公開網址、沒有登入保護**，
+      若把帶 token 的完整網址寫進它的原始碼，等於把觀看碼公開。
+      改成太和殿只連到本頁（不帶 token），第一次貼一次碼、之後這台電腦自動記住。 */
+const LS_KEY = "milestoneViewToken";
+function saveToken(t){ try{ localStorage.setItem(LS_KEY, t); }catch(e){} }
+function loadToken(){ try{ return localStorage.getItem(LS_KEY) || ""; }catch(e){ return ""; } }
+function askToken(msg){
+  document.getElementById("meta").textContent = "";
+  document.getElementById("main").innerHTML = `
+    <div class="card" style="max-width:560px;margin:60px auto">
+      <h2>🔑 請輸入觀看碼</h2>
+      ${msg ? `<div class="warn">${msg}</div>` : ""}
+      <p class="hint">向系統管理者索取。輸入一次之後，<b>這台電腦會記住</b>，下次從太和殿點進來就不用再輸入。</p>
+      <div style="display:flex;gap:8px">
+        <input id="tk" placeholder="貼上觀看碼或完整網址" style="flex:1" autofocus>
+        <button id="go" style="background:var(--teal);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-family:inherit;font-size:14px;cursor:pointer">進入</button>
+      </div>
+    </div>`;
+  const run = () => {
+    let v = document.getElementById("tk").value.trim();
+    const m = v.match(/[?&]t=([^&\s]+)/);          // 整段網址也接受
+    if (m) v = decodeURIComponent(m[1]);
+    if (!v) return;
+    saveToken(v);
+    location.href = location.pathname + "?t=" + encodeURIComponent(v);
+  };
+  document.getElementById("go").onclick = run;
+  document.getElementById("tk").onkeydown = e => { if (e.key === "Enter") run(); };
+}
+
 (async function(){
-  const t = new URLSearchParams(location.search).get("t") || "";
+  let t = new URLSearchParams(location.search).get("t") || "";
   const main = document.getElementById("main");
-  if (!t){ main.innerHTML = `<div class="err">缺少觀看連結的識別碼。請使用完整網址（結尾要有 <code>?t=…</code>）。</div>`; return; }
+  if (t) saveToken(t); else t = loadToken();      // 網址沒帶就用這台電腦記住的
+  if (!t){ askToken(""); return; }
   try{
     const r = await fetch(API + "?t=" + encodeURIComponent(t));
     if (r.status === 403){
       const j = await r.json().catch(()=>({}));
-      main.innerHTML = `<div class="err"><b>這條連結無法使用。</b><br>${
+      try{ localStorage.removeItem(LS_KEY); }catch(e){}   // 失效的就別再記著
+      askToken("<b>這個觀看碼無法使用</b>——" + (
         j.error==="revoked" ? "它已經被撤銷了。" : j.error==="expired" ? "它已經過期了。" : "識別碼不正確。"
-      }<br><span style="color:#64748b;font-size:13px">請向系統管理者索取新的連結。</span></div>`;
+      ) + "請向系統管理者索取新的。");
       return;
     }
     if (!r.ok) throw new Error("HTTP " + r.status);
