@@ -204,9 +204,17 @@ function evalsOf(stuId, msId){
 /* 趨勢箭頭：只有 2 次以上才標。兩個點畫折線不如一個箭頭清楚。 */
 function trendMark(es){
   if (es.length < 2) return "";
-  const diff = es[0].level - es[es.length-1].level;   // 最新 − 最早
-  if (diff > 0) return `<span class="trend up" title="最早 ${es[es.length-1].level} → 最新 ${es[0].level}">↑</span>`;
-  if (diff < 0) return `<span class="trend down" title="最早 ${es[es.length-1].level} → 最新 ${es[0].level}">↓</span>`;
+  const oldest = es[es.length-1], newest = es[0];
+  // 🔴 同一天評的不算趨勢——那是評核者之間的落差，標成「進步／退步」會誤導
+  if (((newest.at||0) - (oldest.at||0)) < 86400000){
+    const lv = [...new Set(es.map(e=>e.level))];
+    return lv.length > 1
+      ? `<span class="trend flat" title="同一天由 ${es.length} 位評核者評核，等級 ${es.map(e=>e.level).join("／")}——是評核者落差，不是趨勢">⇅</span>`
+      : "";
+  }
+  const diff = newest.level - oldest.level;
+  if (diff > 0) return `<span class="trend up" title="最早 ${oldest.level} → 最新 ${newest.level}">↑</span>`;
+  if (diff < 0) return `<span class="trend down" title="最早 ${oldest.level} → 最新 ${newest.level}">↓</span>`;
   return `<span class="trend flat" title="持平">→</span>`;
 }
 /* 點開某一項：單項曲線（≥2 次才畫）＋ 歷次評核 ＋ 質性回饋 */
@@ -227,8 +235,14 @@ function toggleMs(msId){
     row.dataset.done = "1"; return;
   }
   const asc = es.slice().reverse();                        // 舊→新，畫圖用
+  // 🔴 同一天評的不畫時間線：實測有「同一天兩位教官各評一次」的情形，
+  //    畫成時間軸會是一條平的橫線、X 軸重複印同一個日期，沒有意義。
+  //    這種情況要回答的是另一個問題：不同評核者給分差多少 → 改用長條比較。
+  const span = (asc[asc.length-1].at||0) - (asc[0].at||0);
+  const sameDay = es.length >= 2 && span < 86400000;
   const canvasHtml = es.length >= 2
-    ? `<div class="mini-chart"><canvas></canvas></div>`
+    ? `<div class="mini-chart"><canvas></canvas></div>` +
+      (sameDay ? `<p class="note" style="margin:-6px 0 8px">同一天由 ${es.length} 位評核者評核，這裡比較的是<b>評核者之間的落差</b>，不是時間趨勢。</p>` : "")
     : `<p class="note" style="margin-top:0">只有一次評核，還畫不出趨勢線——<b>再評一次就會自動出現</b>。</p>`;
   cell.innerHTML = canvasHtml + `<ul class="tl">` + es.map(e=>`
       <li><span class="lv lv${e.level}">${e.level}</span>
@@ -239,11 +253,27 @@ function toggleMs(msId){
       </li>`).join("") + `</ul>`;
 
   if (es.length >= 2){
-    timeLine(cell.querySelector("canvas"), [{
-      label: m.name, borderColor: groupColor(m.groupId), backgroundColor: groupColor(m.groupId),
-      borderWidth:2, pointRadius:5, tension:0,
-      data: asc.map(e=>({ x: e.at||0, y: e.level, by: e.evaluator, fb: e.feedback, label: m.name }))
-    }], { yMin:0.5 });
+    const cv = cell.querySelector("canvas"), col = groupColor(m.groupId);
+    if (sameDay){
+      const c = new Chart(cv, {
+        type:"bar",
+        data:{ labels: asc.map(e=>e.evaluator||"—"),
+               datasets:[{ label:"等級", data: asc.map(e=>e.level), backgroundColor: col, borderWidth:0,
+                           barPercentage:.5 }] },
+        options:{ responsive:true, maintainAspectRatio:false, animation:false, indexAxis:"y",
+          plugins:{ legend:{display:false},
+            tooltip:{ callbacks:{ afterLabel: it => asc[it.dataIndex].feedback ? "「"+asc[it.dataIndex].feedback+"」" : "" } } },
+          scales:{ x:{ min:0, max:5.5, ticks:{ stepSize:1, callback:v=>(v>=1&&v<=5&&v%1===0)?v:"", font:{size:11} } },
+                   y:{ ticks:{ font:{size:11} }, grid:{display:false} } } }
+      });
+      charts.push(c);
+    } else {
+      timeLine(cv, [{
+        label: m.name, borderColor: col, backgroundColor: col,
+        borderWidth:2, pointRadius:5, tension:0,
+        data: asc.map(e=>({ x: e.at||0, y: e.level, by: e.evaluator, fb: e.feedback, label: m.name }))
+      }], { yMin:0.5 });
+    }
   }
   row.dataset.done = "1";
 }
