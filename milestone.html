@@ -69,6 +69,23 @@
   .legend i{display:inline-block;width:16px;height:16px;border-radius:3px;margin-right:4px;vertical-align:-3px}
   .pill{background:#ecfeff;border:1px solid #a5f3fc;color:#0e7490;border-radius:999px;padding:2px 10px;font-size:12px}
   .warn{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+  /* 展開列：單項曲線＋歷次評核＋質性回饋 */
+  tr.ms-row{cursor:pointer}
+  tr.ms-row:hover{background:#f8fafc}
+  tr.ms-row .caret{color:#94a3b8;font-size:11px;margin-right:4px}
+  tr.exp>td{background:#f8fafc;padding:12px 16px}
+  .tl{list-style:none;margin:0;padding:0}
+  .tl li{padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px}
+  .tl li:last-child{border-bottom:none}
+  .tl .d{color:var(--sub);margin-right:10px}
+  .tl .lv{display:inline-block;min-width:22px;text-align:center;border-radius:5px;padding:1px 6px;font-weight:700;margin-right:8px}
+  .fb{display:block;margin-top:3px;color:#0f766e;background:#f0fdfa;border-left:3px solid #5eead4;padding:5px 10px;border-radius:0 6px 6px 0}
+  .nofb{color:#cbd5e1}
+  .trend{font-weight:700;margin-left:6px}
+  .up{color:#059669} .flat{color:#94a3b8} .down{color:#dc2626}
+  .mini-chart{height:130px;margin-bottom:10px}
+  .big-chart{height:290px}
+  .note{color:var(--sub);font-size:12px;margin-top:8px;line-height:1.6}
 </style>
 </head>
 <body>
@@ -117,6 +134,53 @@ function groupScores(stuId){
 function doneCount(stuId){
   return D.milestones.filter(m => msScore(stuId,m.id)!==null).length;
 }
+/* 共用：時間折線圖。
+   🔴 三個刻意的決定（避免圖說謊）：
+     ① Y 軸固定 1~5，不自動縮放——否則 4.0→4.5 會被畫成從谷底衝到山頂
+     ② X 軸用真實時間戳，看得出「中間空了 40 天沒人評」
+     ③ 每個點的 tooltip 標出評核者——這個班有 36 位評核者，
+        曲線往下很可能只是換人評，不是學員退步
+   用 x 為數值時間戳＋自訂刻度，不必另外載 date adapter。 */
+function timeLine(canvas, datasets, opts){
+  opts = opts || {};
+  const c = new Chart(canvas, {
+    type: "line",
+    data: { datasets },
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:false,
+      parsing:false, interaction:{ mode:"nearest", intersect:true },
+      plugins:{
+        legend:{ display: !!opts.legend, labels:{ boxWidth:10, font:{size:11} } },
+        tooltip:{ callbacks:{
+          title: it => new Date(it[0].parsed.x).toLocaleDateString("zh-TW"),
+          label: it => {
+            const p = it.raw;
+            let s = (p.label ? p.label + "　" : "") + "等級 " + p.y;
+            if (p.by) s += "　評核者：" + p.by;
+            return s;
+          },
+          afterLabel: it => it.raw.fb ? "「" + it.raw.fb + "」" : ""
+        }}
+      },
+      scales:{
+        x:{ type:"linear", ticks:{ callback: v => {
+              const d = new Date(v); return (d.getMonth()+1) + "/" + d.getDate();
+            }, maxTicksLimit:8, font:{size:11} }, grid:{color:"#f1f5f9"} },
+        y:{ min: opts.yMin != null ? opts.yMin : 0.5, max:5.5,
+            ticks:{ stepSize:1, callback: v => (v>=1 && v<=5 && v%1===0) ? v : "", font:{size:11} },
+            grid:{color:"#e2e8f0"} }
+      }
+    }
+  });
+  charts.push(c); return c;
+}
+
+const GCOLOR = ["#0d9488","#3b82f6","#f59e0b","#a855f7","#ec4899"];
+function groupColor(gid){
+  const i = D.groups.findIndex(g => g.id === gid);
+  return GCOLOR[(i < 0 ? 0 : i) % GCOLOR.length];
+}
+
 function radar(canvas, scores, label, small){
   const c = new Chart(canvas, {
     type:"radar",
@@ -132,6 +196,58 @@ function radar(canvas, scores, label, small){
   charts.push(c); return c;
 }
 
+/* 某人某項的歷次評核（新→舊） */
+function evalsOf(stuId, msId){
+  return D.evals.filter(e => e.studentId===stuId && e.milestoneId===msId)
+                .sort((a,b)=>(b.at||0)-(a.at||0));
+}
+/* 趨勢箭頭：只有 2 次以上才標。兩個點畫折線不如一個箭頭清楚。 */
+function trendMark(es){
+  if (es.length < 2) return "";
+  const diff = es[0].level - es[es.length-1].level;   // 最新 − 最早
+  if (diff > 0) return `<span class="trend up" title="最早 ${es[es.length-1].level} → 最新 ${es[0].level}">↑</span>`;
+  if (diff < 0) return `<span class="trend down" title="最早 ${es[es.length-1].level} → 最新 ${es[0].level}">↓</span>`;
+  return `<span class="trend flat" title="持平">→</span>`;
+}
+/* 點開某一項：單項曲線（≥2 次才畫）＋ 歷次評核 ＋ 質性回饋 */
+function toggleMs(msId){
+  const row = document.querySelector(`tr.exp[data-exp="${CSS.escape(msId)}"]`);
+  const head = document.querySelector(`tr.ms-row[data-ms="${CSS.escape(msId)}"]`);
+  if (!row) return;
+  const open = row.style.display !== "none";
+  row.style.display = open ? "none" : "table-row";
+  head.querySelector(".caret").textContent = open ? "▸" : "▾";
+  if (open || row.dataset.done) return;
+
+  const m = D.milestones.find(x=>x.id===msId) || {};
+  const es = evalsOf(curStu, msId);
+  const cell = row.querySelector("td");
+  if (!es.length){
+    cell.innerHTML = `<span style="color:#94a3b8">這一項還沒有人評核過。</span>`;
+    row.dataset.done = "1"; return;
+  }
+  const asc = es.slice().reverse();                        // 舊→新，畫圖用
+  const canvasHtml = es.length >= 2
+    ? `<div class="mini-chart"><canvas></canvas></div>`
+    : `<p class="note" style="margin-top:0">只有一次評核，還畫不出趨勢線——<b>再評一次就會自動出現</b>。</p>`;
+  cell.innerHTML = canvasHtml + `<ul class="tl">` + es.map(e=>`
+      <li><span class="lv lv${e.level}">${e.level}</span>
+        <span class="d">${e.at?new Date(e.at).toLocaleDateString("zh-TW"):"日期不明"}</span>
+        ${esc(e.evaluator||"—")}${e.role?`（${esc(e.role)}${e.unit?"／"+esc(e.unit):""}）`:""}
+        ${e.fb!==undefined&&e.feedback?"":""}
+        ${e.feedback?`<span class="fb">${esc(e.feedback)}</span>`:`<span class="fb nofb">（沒有留下文字回饋）</span>`}
+      </li>`).join("") + `</ul>`;
+
+  if (es.length >= 2){
+    timeLine(cell.querySelector("canvas"), [{
+      label: m.name, borderColor: groupColor(m.groupId), backgroundColor: groupColor(m.groupId),
+      borderWidth:2, pointRadius:5, tension:0,
+      data: asc.map(e=>({ x: e.at||0, y: e.level, by: e.evaluator, fb: e.feedback, label: m.name }))
+    }], { yMin:0.5 });
+  }
+  row.dataset.done = "1";
+}
+
 /* ───── ① 個人 ───── */
 function viewOne(){
   const opts = D.students.map(s=>`<option value="${esc(s.id)}">${esc(s.no)} ${esc(s.name)}（已評 ${doneCount(s.id)}/${D.milestones.length}）</option>`).join("");
@@ -142,14 +258,15 @@ function viewOne(){
     return `<tr><td colspan="4" style="background:#f1f5f9;font-weight:700">${esc(g.name)}</td></tr>` +
       inG.map(m=>{
         const sc = msScore(curStu,m.id);
-        const es = D.evals.filter(e=>e.studentId===curStu && e.milestoneId===m.id).sort((a,b)=>(b.at||0)-(a.at||0));
+        const es = evalsOf(curStu, m.id);
         const last = es[0];
-        return `<tr>
-          <td>${esc(m.name)}${m.step?`<span class="sub" style="color:#94a3b8"> ・${esc(m.step)}</span>`:""}</td>
-          <td style="text-align:center" class="${sc===null?"lv0":"lv"+Math.round(sc)}">${sc===null?"—":sc.toFixed(1)}</td>
+        return `<tr class="ms-row" data-ms="${esc(m.id)}">
+          <td><span class="caret">▸</span>${esc(m.name)}${m.step?`<span class="sub" style="color:#94a3b8"> ・${esc(m.step)}</span>`:""}</td>
+          <td style="text-align:center" class="${sc===null?"lv0":"lv"+Math.round(sc)}">${sc===null?"—":sc.toFixed(1)}${trendMark(es)}</td>
           <td style="text-align:center">${es.length||"—"}</td>
           <td style="color:#64748b">${last?esc(last.evaluator)+(last.at?"　"+new Date(last.at).toLocaleDateString("zh-TW"):""):"<span style='color:#f59e0b'>尚未評核</span>"}</td>
-        </tr>`;
+        </tr>
+        <tr class="exp" data-exp="${esc(m.id)}" style="display:none"><td colspan="4"></td></tr>`;
       }).join("");
   }).join("");
   document.getElementById("main").innerHTML = `
@@ -161,13 +278,42 @@ function viewOne(){
         <div><canvas id="r1"></canvas>
           <p class="hint" style="margin-top:10px">每一軸＝該群組底下各項最近 ${D.recentN} 次評核的平均。與學員自己看到的是同一張圖。</p>
         </div>
-        <div><table><thead><tr><th>里程碑</th><th style="width:70px">分數</th><th style="width:60px">評核次數</th><th style="width:210px">最近一次</th></tr></thead>
-          <tbody>${rows}</tbody></table></div>
+        <div><table><thead><tr><th>里程碑</th><th style="width:78px">分數</th><th style="width:60px">評核次數</th><th style="width:210px">最近一次</th></tr></thead>
+          <tbody>${rows}</tbody></table>
+          <p class="note">💡 <b>點任何一列</b>可展開該項的歷次評核、質性回饋與趨勢線。</p>
+        </div>
       </div>
+    </div>
+
+    <div class="card">
+      <h2>📈 整體進展（這位學員的每一筆評核）</h2>
+      <div class="big-chart"><canvas id="t1"></canvas></div>
+      <p class="note">
+        每個點是一次評核，顏色代表五大群組；橫軸是真實日期，<b>中間的空白就是那段時間沒有人評他</b>。<br>
+        🔴 <b>線往下不一定是退步。</b>這個班有 ${new Set(D.evals.map(e=>e.evaluator)).size} 位評核者，標準本來就不同——
+        同一個學生在甲教官手上 5 分、乙教官手上 3 分，畫出來就像大退步。<b>滑過任一點可以看是誰評的。</b>
+      </p>
     </div>`;
   document.getElementById("pick").value = curStu;
   document.getElementById("pick").onchange = e => { curStu = e.target.value; render(); };
+  document.querySelectorAll("tr.ms-row").forEach(tr => tr.onclick = () => toggleMs(tr.dataset.ms));
   radar(document.getElementById("r1"), groupScores(curStu), stu.name, false);
+
+  // 個人整體曲線：每個群組一條，點＝一次評核
+  const mine = D.evals.filter(e=>e.studentId===curStu && e.at);
+  const ds = D.groups.map(g=>{
+    const ids = new Set(D.milestones.filter(m=>m.groupId===g.id).map(m=>m.id));
+    const pts = mine.filter(e=>ids.has(e.milestoneId)).sort((a,b)=>a.at-b.at)
+      .map(e=>{
+        const m = D.milestones.find(x=>x.id===e.milestoneId) || {};
+        return { x:e.at, y:e.level, by:e.evaluator, fb:e.feedback, label:m.name||"" };
+      });
+    return { label:g.name, data:pts, borderColor:groupColor(g.id), backgroundColor:groupColor(g.id),
+             borderWidth:1.5, pointRadius:4, tension:0, showLine:pts.length>1 };
+  }).filter(d=>d.data.length);
+  if (ds.length) timeLine(document.getElementById("t1"), ds, { legend:true });
+  else document.getElementById("t1").parentElement.innerHTML =
+    `<div class="center">這位學員還沒有任何帶日期的評核紀錄。</div>`;
 }
 
 /* ───── ② 全班小雷達 ───── */
@@ -179,6 +325,16 @@ function viewAll(){
       ${zero?`<div class="warn">⚠️ 有 <b>${zero}</b> 位學員<b>一項都還沒被評核</b>（底色標橘）。</div>`:""}
       <p class="hint">同樣的軸、同樣的比例，形狀不一樣的人一眼就看得出來。點任一張可跳到他的個人頁。</p>
       <div class="grid" id="grid"></div>
+    </div>
+
+    <div class="card">
+      <h2>📈 全班推進（每週）</h2>
+      <div class="big-chart"><canvas id="t2"></canvas></div>
+      <p class="note">
+        <b>綠線＝該週評核的平均等級</b>（左軸）；<b>灰柱＝該週的評核筆數</b>。<br>
+        平均等級只看那一週被評到的人，所以<b>筆數少的那幾週波動會很大</b>，別過度解讀。
+        筆數本身反而更實用——看得出哪幾週大家有在跑實習、哪幾週整班停擺。
+      </p>
     </div>`;
   const g = document.getElementById("grid");
   D.students.forEach(s=>{
@@ -191,6 +347,43 @@ function viewAll(){
     g.appendChild(d);
     radar(d.querySelector("canvas"), groupScores(s.id), s.name, true);
   });
+
+  // 全班推進：以「週」為單位（週一為起點）
+  const wk = {};
+  D.evals.filter(e=>e.at).forEach(e=>{
+    const d0 = new Date(e.at); d0.setHours(0,0,0,0);
+    d0.setDate(d0.getDate() - ((d0.getDay()+6) % 7));      // 退到該週週一
+    const k = d0.getTime();
+    (wk[k] = wk[k] || []).push(e.level);
+  });
+  const keys = Object.keys(wk).map(Number).sort((a,b)=>a-b);
+  if (!keys.length){ document.getElementById("t2").parentElement.innerHTML = `<div class="center">尚無帶日期的評核。</div>`; return; }
+  const maxN = Math.max(...keys.map(k=>wk[k].length));
+  const c = new Chart(document.getElementById("t2"), {
+    data:{ datasets:[
+      { type:"bar", label:"該週評核筆數", yAxisID:"y2", order:2,
+        backgroundColor:"rgba(148,163,184,.35)", borderWidth:0,
+        data: keys.map(k=>({ x:k, y:wk[k].length })) },
+      { type:"line", label:"該週平均等級", yAxisID:"y", order:1,
+        borderColor:"#0d9488", backgroundColor:"#0d9488", borderWidth:2, pointRadius:4, tension:0,
+        data: keys.map(k=>({ x:k, y: wk[k].reduce((a,b)=>a+b,0)/wk[k].length })) },
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, animation:false, parsing:false,
+      plugins:{ legend:{ labels:{ boxWidth:10, font:{size:11} } },
+        tooltip:{ callbacks:{
+          title: it => { const d0=new Date(it[0].parsed.x);
+            return (d0.getMonth()+1)+"/"+d0.getDate()+" 那一週"; },
+          label: it => it.dataset.label + "：" +
+            (it.dataset.type==="bar" ? it.parsed.y + " 筆" : it.parsed.y.toFixed(2)) } } },
+      scales:{
+        x:{ type:"linear", ticks:{ callback: v => { const d0=new Date(v); return (d0.getMonth()+1)+"/"+d0.getDate(); },
+            maxTicksLimit:10, font:{size:11} }, grid:{color:"#f1f5f9"} },
+        y:{ position:"left", min:0.5, max:5.5, title:{display:true,text:"平均等級",font:{size:11}},
+            ticks:{ stepSize:1, callback:v=>(v>=1&&v<=5&&v%1===0)?v:"", font:{size:11} } },
+        y2:{ position:"right", min:0, max: Math.ceil(maxN*1.3), title:{display:true,text:"評核筆數",font:{size:11}},
+             grid:{display:false}, ticks:{ font:{size:11} } } } }
+  });
+  charts.push(c);
 }
 
 /* ───── ③ 逐項對照（熱力圖）───── */
