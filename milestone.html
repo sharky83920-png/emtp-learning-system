@@ -163,8 +163,13 @@ function timeLine(canvas, datasets, opts){
         }}
       },
       scales:{
+        // 🔴 刻度格式依資料跨度自動切換：同一天內評好幾次（實際資料的常態，中位跨度 4 小時）
+        //    若還印日期會變成重複的「9/22 9/22 9/22」，要印時:分才看得出先後。
         x:{ type:"linear", ticks:{ callback: v => {
-              const d = new Date(v); return (d.getMonth()+1) + "/" + d.getDate();
+              const d = new Date(v);
+              return opts.intraday
+                ? String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0")
+                : (d.getMonth()+1) + "/" + d.getDate();
             }, maxTicksLimit:8, font:{size:11} }, grid:{color:"#f1f5f9"} },
         y:{ min: opts.yMin != null ? opts.yMin : 0.5, max:5.5,
             ticks:{ stepSize:1, callback: v => (v>=1 && v<=5 && v%1===0) ? v : "", font:{size:11} },
@@ -205,17 +210,13 @@ function evalsOf(stuId, msId){
 function trendMark(es){
   if (es.length < 2) return "";
   const oldest = es[es.length-1], newest = es[0];
-  // 🔴 同一天評的不算趨勢——那是評核者之間的落差，標成「進步／退步」會誤導
-  if (((newest.at||0) - (oldest.at||0)) < 86400000){
-    const lv = [...new Set(es.map(e=>e.level))];
-    return lv.length > 1
-      ? `<span class="trend flat" title="同一天由 ${es.length} 位評核者評核，等級 ${es.map(e=>e.level).join("／")}——是評核者落差，不是趨勢">⇅</span>`
-      : "";
-  }
+  const multiEv = new Set(es.map(e=>e.evaluator)).size > 1;
+  const tip = `${es.slice().reverse().map(e=>e.level).join(" → ")}` +
+              (multiEv ? "（由不同評核者評，起伏可能是標準差異）" : "（同一位評核者）");
   const diff = newest.level - oldest.level;
-  if (diff > 0) return `<span class="trend up" title="最早 ${oldest.level} → 最新 ${newest.level}">↑</span>`;
-  if (diff < 0) return `<span class="trend down" title="最早 ${oldest.level} → 最新 ${newest.level}">↓</span>`;
-  return `<span class="trend flat" title="持平">→</span>`;
+  if (diff > 0) return `<span class="trend up" title="${tip}">↑</span>`;
+  if (diff < 0) return `<span class="trend down" title="${tip}">↓</span>`;
+  return `<span class="trend flat" title="${tip}">→</span>`;
 }
 /* 點開某一項：單項曲線（≥2 次才畫）＋ 歷次評核 ＋ 質性回饋 */
 function toggleMs(msId){
@@ -235,15 +236,20 @@ function toggleMs(msId){
     row.dataset.done = "1"; return;
   }
   const asc = es.slice().reverse();                        // 舊→新，畫圖用
-  // 🔴 同一天評的不畫時間線：實測有「同一天兩位教官各評一次」的情形，
-  //    畫成時間軸會是一條平的橫線、X 軸重複印同一個日期，沒有意義。
-  //    這種情況要回答的是另一個問題：不同評核者給分差多少 → 改用長條比較。
+  // 實測：49 組多次評核，時間戳全部有先後（中位跨度 4 小時、多為同一天不同時段）
+  // → 一律畫時間曲線；只有跨度不到一天時，X 軸改印時:分才看得出先後。
   const span = (asc[asc.length-1].at||0) - (asc[0].at||0);
-  const sameDay = es.length >= 2 && span < 86400000;
+  const intraday = span < 86400000;
+  const evs = [...new Set(es.map(e=>e.evaluator))];
   const canvasHtml = es.length >= 2
     ? `<div class="mini-chart"><canvas></canvas></div>` +
-      (sameDay ? `<p class="note" style="margin:-6px 0 8px">同一天由 ${es.length} 位評核者評核，這裡比較的是<b>評核者之間的落差</b>，不是時間趨勢。</p>` : "")
-    : `<p class="note" style="margin-top:0">只有一次評核，還畫不出趨勢線——<b>再評一次就會自動出現</b>。</p>`;
+      `<p class="note" style="margin:-6px 0 8px">` +
+      (intraday ? `同一天內評了 ${es.length} 次（橫軸為時間）。` : `橫跨 ${Math.round(span/86400000)} 天、共 ${es.length} 次。`) +
+      (evs.length > 1
+        ? `　🔴 由 <b>${evs.length} 位不同評核者</b>評核（${evs.map(esc).join("、")}），<b>分數起伏可能來自標準不同，不一定是學員的變化</b>。`
+        : `　評核者都是 ${esc(evs[0]||"—")}，所以這條線可以當作<b>同一把尺下的變化</b>。`) +
+      `</p>`
+    : `<p class="note" style="margin-top:0">只有一次評核，還畫不出曲線——<b>再評一次就會自動出現</b>。</p>`;
   cell.innerHTML = canvasHtml + `<ul class="tl">` + es.map(e=>`
       <li><span class="lv lv${e.level}">${e.level}</span>
         <span class="d">${e.at?new Date(e.at).toLocaleDateString("zh-TW"):"日期不明"}</span>
@@ -254,26 +260,15 @@ function toggleMs(msId){
 
   if (es.length >= 2){
     const cv = cell.querySelector("canvas"), col = groupColor(m.groupId);
-    if (sameDay){
-      const c = new Chart(cv, {
-        type:"bar",
-        data:{ labels: asc.map(e=>e.evaluator||"—"),
-               datasets:[{ label:"等級", data: asc.map(e=>e.level), backgroundColor: col, borderWidth:0,
-                           barPercentage:.5 }] },
-        options:{ responsive:true, maintainAspectRatio:false, animation:false, indexAxis:"y",
-          plugins:{ legend:{display:false},
-            tooltip:{ callbacks:{ afterLabel: it => asc[it.dataIndex].feedback ? "「"+asc[it.dataIndex].feedback+"」" : "" } } },
-          scales:{ x:{ min:0, max:5.5, ticks:{ stepSize:1, callback:v=>(v>=1&&v<=5&&v%1===0)?v:"", font:{size:11} } },
-                   y:{ ticks:{ font:{size:11} }, grid:{display:false} } } }
-      });
-      charts.push(c);
-    } else {
-      timeLine(cv, [{
-        label: m.name, borderColor: col, backgroundColor: col,
-        borderWidth:2, pointRadius:5, tension:0,
-        data: asc.map(e=>({ x: e.at||0, y: e.level, by: e.evaluator, fb: e.feedback, label: m.name }))
-      }], { yMin:0.5 });
-    }
+    // 河流感：曲線下方漸層填色（與學員端成績河流圖同一種視覺語言）
+    const g = cv.getContext("2d").createLinearGradient(0, 0, 0, 130);
+    g.addColorStop(0, col + "55"); g.addColorStop(1, col + "08");
+    timeLine(cv, [{
+      label: m.name, borderColor: col, backgroundColor: g, fill: true,
+      borderWidth: 2.5, pointRadius: 5, pointBackgroundColor: "#fff", pointBorderColor: col,
+      pointBorderWidth: 2, tension: 0.35,
+      data: asc.map(e=>({ x: e.at||0, y: e.level, by: e.evaluator, fb: e.feedback, label: m.name }))
+    }], { yMin:0.5, intraday });
   }
   row.dataset.done = "1";
 }
@@ -338,10 +333,14 @@ function viewOne(){
         const m = D.milestones.find(x=>x.id===e.milestoneId) || {};
         return { x:e.at, y:e.level, by:e.evaluator, fb:e.feedback, label:m.name||"" };
       });
-    return { label:g.name, data:pts, borderColor:groupColor(g.id), backgroundColor:groupColor(g.id),
-             borderWidth:1.5, pointRadius:4, tension:0, showLine:pts.length>1 };
+    const col = groupColor(g.id);
+    return { label:g.name, data:pts, borderColor:col, backgroundColor:col,
+             borderWidth:2, pointRadius:4, pointBackgroundColor:"#fff", pointBorderColor:col,
+             pointBorderWidth:1.5, tension:0.35, showLine:pts.length>1 };
   }).filter(d=>d.data.length);
-  if (ds.length) timeLine(document.getElementById("t1"), ds, { legend:true });
+  const allAt = mine.map(e=>e.at);
+  const oneDay = allAt.length>1 && (Math.max(...allAt)-Math.min(...allAt)) < 86400000;
+  if (ds.length) timeLine(document.getElementById("t1"), ds, { legend:true, intraday:oneDay });
   else document.getElementById("t1").parentElement.innerHTML =
     `<div class="center">這位學員還沒有任何帶日期的評核紀錄。</div>`;
 }
