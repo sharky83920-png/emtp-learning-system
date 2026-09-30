@@ -3190,6 +3190,32 @@
         if (seq !== _mbLoadSeq) return;          // 已有更新的載入在跑 → 丟棄本次結果，別覆蓋畫面
         const items = [];
         snap.forEach(d => items.push({ id: d.id, ...d.data() }));
+
+        /* 🔴 2026-09-30：錯題本一律「現查」，不再相信收藏當下的副本。
+           起因：題目經勘誤修正後（例如正解 A 改成 B），錯題本還停在收藏那天的版本，
+           學員照著複習會背到錯的答案。實查有 222 筆與現行題庫對不上（其中 80 筆正解不同）。
+           做法：只認 questionId，題幹／選項／正解／出處一律當場回 questions 取。
+           寫入端仍保留副本欄位（向後相容，舊頁面不會空白），但顯示永遠以題庫為準。 */
+        const ids = [...new Set(items.map(i => i.questionId).filter(Boolean))];
+        const snaps = await Promise.all(ids.map(id => getDoc(doc(db, 'questions', id)).catch(() => null)));
+        if (seq !== _mbLoadSeq) return;
+        const live = {};
+        snaps.forEach((s, i) => { if (s && s.exists()) live[ids[i]] = s.data(); });
+        items.forEach(it => {
+          const q = live[it.questionId];
+          if (!q) { it._gone = true; return; }                       // 題目已被刪除
+          // 收藏當下與現在不同 → 標給學員看，他才知道自己記的是舊版
+          it._fixed = (it.correctAnswer && it.correctAnswer !== (q.correctAnswer || '')) ||
+                      ((it.questionText || '').trim() !== (q.questionText || '').trim());
+          it.questionText  = q.questionText || '';
+          it.options       = q.options || {};
+          it.correctAnswer = q.correctAnswer || '';
+          it.source        = q.source || {};
+          it.dimension     = q.derivedDimension || it.dimension;
+          if (q.questionImageUrl !== undefined) it.questionImageUrl = q.questionImageUrl;
+          it._retired = (q.isActive === false || q.isVisible === false);
+        });
+
         mistakeItems = items;
         mistakeSet = new Set(items.map(i => i.questionId));
         renderMistakeBook();
@@ -3238,7 +3264,14 @@
           html += `
             <div class="mb-card" data-qid="${it.questionId}" style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:10px">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-                <div style="flex:1;color:#1e293b;font-size:14px;line-height:1.6;white-space:pre-wrap">${it.questionText || '(題目內容已不可用)'}</div>
+                <div style="flex:1;color:#1e293b;font-size:14px;line-height:1.6;white-space:pre-wrap">${
+                  it._gone ? '<span style="color:#94a3b8">（這一題已從題庫移除）</span>'
+                           : (it.questionText || '(題目內容已不可用)')
+                }${
+                  it._fixed ? '<div style="display:inline-block;margin-top:8px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:8px;padding:3px 10px;font-size:12px;font-weight:600">✏️ 這一題後來被更正過，以下是<u>最新</u>內容</div>' : ''
+                }${
+                  it._retired ? '<div style="display:inline-block;margin-top:8px;background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;border-radius:8px;padding:3px 10px;font-size:12px">⏹ 此題已停用</div>' : ''
+                }</div>
                 <button class="mb-remove-btn" data-qid="${it.questionId}" data-docid="${it.id}" title="從錯題本移除" style="background:none;border:none;cursor:pointer;font-size:20px;line-height:1">⭐</button>
               </div>
               <details style="margin-top:10px">
