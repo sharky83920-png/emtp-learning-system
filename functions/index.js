@@ -287,7 +287,8 @@ const AI_SOURCE_ID = "_AI";
 // 水龍頭過濾（與 student.html faucetAllows 同邏輯）
 // 🔴 AI 題的防呆：「沒設定水龍頭 / 一個來源都沒開」時，一般題視為全開，但 AI 題一律不放行
 //    —— 否則沒設定過水龍頭的班（含未來新開的班）會自動吃到 AI 題，那是使用者沒同意過的。
-function faucetAllows(q, fc) {
+// use＝{scoring,practice}：這個來源進綜合測驗／專項練習。沒設＝兩邊都開（舊設定照舊）。
+function faucetAllows(q, fc, mode) {
   const isAI = q.createdByClassId === AI_SOURCE_ID;
   if (!fc || !fc.sources) return !isAI;
   const sources = fc.sources;
@@ -295,6 +296,7 @@ function faucetAllows(q, fc) {
   if (enabledIds.length === 0) return !isAI;
   const cfg = q.createdByClassId && sources[q.createdByClassId];
   if (!cfg || !cfg.enabled) return false;
+  if (mode && cfg.use && cfg.use[mode] === false) return false;
   if (cfg.allMode) return true;
   const bookId = q.source && q.source.bookId;
   const chNum = q.source && q.source.chapterNumber;
@@ -302,6 +304,39 @@ function faucetAllows(q, fc) {
   if (bookId && list.includes(bookId + "|*")) return true;
   if (bookId && chNum != null && chNum !== "" && list.includes(bookId + "|" + chNum)) return true;
   return false;
+}
+// 專項練習的書本與章節：「EMTP第三版」與「EMT-P」是同一本書；章號不是 1～99 的題不列入章節（綜合測驗照常抽得到）
+const BOOK_ALIAS = { "EMTP第三版": "EMT-P" };
+const BOOK_ORDER = ["EMT-P", "ACLS", "APLS", "2025AHA指引"];
+function bookKey(q) {
+  const b = q.source && q.source.bookId;
+  return b ? (BOOK_ALIAS[b] || b) : "";
+}
+function chapterKey(q) {
+  const c = String((q.source && q.source.chapterNumber) ?? "").trim();
+  return /^0*[1-9]\d?$/.test(c) ? String(Number(c)) : "";
+}
+let _chNames = null, _chNamesAt = 0;
+async function getChapterNames() {
+  if (!_chNames || Date.now() - _chNamesAt > 6 * 60 * 60 * 1000) {
+    const snap = await db.collection("chapters").get();
+    const m = {};
+    snap.forEach((d) => { const x = d.data(); if (x.isActive !== false) m[`${x.bookId}|${Number(x.chapterNumber)}`] = x.chapterName || ""; });
+    _chNames = m; _chNamesAt = Date.now();
+  }
+  return _chNames;
+}
+// 施工開關：system_settings/global.maintenance.on。快取 15 秒；讀失敗沿用上一次的值。
+let _maintOn = false, _maintAt = 0;
+async function maintenanceOn() {
+  if (Date.now() - _maintAt > 15 * 1000) {
+    try {
+      const d = await db.collection("system_settings").doc("global").get();
+      _maintOn = !!(d.exists && d.data().maintenance && d.data().maintenance.on);
+    } catch (e) { /* 沿用上一次 */ }
+    _maintAt = Date.now();
+  }
+  return _maintOn;
 }
 // 輪次排序：先洗牌(同層隨機) → 依刷次升冪(刷少的優先)
 function orderByRound(arr, counts) {
@@ -326,6 +361,34 @@ exports.drawQuiz = functions
     const exclude = Array.isArray(data && data.exclude) ? data.exclude.map(String) : [];   // 排除清單（prefetch 傳當前這輪題 id → 下一輪不重複）
     if (!studentId || !classId) throw new functions.https.HttpsError("invalid-argument", "缺少 studentId/classId");
 
+    // 施工中：只放行測試帳號（姓名含「測試」），舊畫面的學員也抽不到題
+    if (await maintenanceOn()) {
+      const s = await db.collection("students").doc(studentId).get();
+      if (!(s.exists && /測試/.test(s.data().name || ""))) {
+        throw new functions.https.HttpsError("failed-precondition", "系統施工中，請稍後再試");
+      }
+    }
+
+    // 專項練習面板：列出這班抽得到的書本、章節與題數（用記憶體題庫，不多讀 Firestore）
+    if (data && data.action === "catalog") {
+      const [allQ, cls, names] = await Promise.all([getQuestionBank(), db.collection("classes").doc(classId).get(), getChapterNames()]);
+      const fcc = (cls.exists && cls.data().settings && cls.data().settings.questionFaucet) || null;
+      const tree = {};
+      allQ.forEach((q) => {
+        if (!faucetAllows(q, fcc, "practice")) return;
+        const b = bookKey(q), c = chapterKey(q);
+        if (!b || !c) return;
+        tree[b] = tree[b] || {};
+        tree[b][c] = (tree[b][c] || 0) + 1;
+      });
+      const rank = (b) => { const i = BOOK_ORDER.indexOf(b); return i < 0 ? 99 : i; };
+      const books = Object.keys(tree).sort((a, b) => rank(a) - rank(b)).map((b) => ({
+        bookId: b,
+        chapters: Object.keys(tree[b]).sort((x, y) => x - y).map((c) => ({ num: c, name: names[`${b}|${c}`] || "", count: tree[b][c] })),
+      }));
+      return { books };
+    }
+
     const [bank, clsDoc, progDoc] = await Promise.all([
       getQuestionBank(),
       db.collection("classes").doc(classId).get(),
@@ -334,9 +397,21 @@ exports.drawQuiz = functions
     const fc = (clsDoc.exists && clsDoc.data().settings && clsDoc.data().settings.questionFaucet) || null;
     const counts = (progDoc.exists && progDoc.data().counts) || {};
 
-    let pool = bank.filter((q) => faucetAllows(q, fc));
-    if (mode === "practice" && dim) pool = pool.filter((q) => q.derivedDimension === dim);
-    if (exclude.length) { const ex = new Set(exclude); pool = pool.filter((q) => !ex.has(q.id)); }   // 排除當前輪 → 整輪抽完才重複
+    const bookId = String((data && data.bookId) || "");
+    const chapters = new Set(Array.isArray(data && data.chapters) ? data.chapters.map(String) : []);
+    let pool = bank.filter((q) => faucetAllows(q, fc, mode));
+    if (mode === "practice" && bookId) pool = pool.filter((q) => bookKey(q) === bookId && chapters.has(chapterKey(q)));
+    else if (mode === "practice" && dim) pool = pool.filter((q) => q.derivedDimension === dim);   // 舊版畫面還開著時用
+    if (exclude.length) {
+      const ex = new Set(exclude);
+      const rest = pool.filter((q) => !ex.has(q.id));   // 排除當前輪 → 整輪抽完才重複
+      // 選的章節題數少於一輪：不足的用剛做過的補滿，下一輪才不會變短
+      if (bookId && rest.length < count) {
+        const merged = orderByRound(rest, counts).concat(orderByRound(pool.filter((q) => ex.has(q.id)), counts));
+        return { questions: merged.slice(0, count), poolSize: merged.length };
+      }
+      pool = rest;
+    }
     if (pool.length === 0) return { questions: [], poolSize: 0 };
 
     orderByRound(pool, counts);
