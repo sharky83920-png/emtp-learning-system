@@ -2874,10 +2874,12 @@
     }
     function renderPracticeChapters() {
       const book = _practiceBook();
-      document.getElementById('practice-chapters').innerHTML = (book ? book.chapters : []).map(c => `<label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px;color:#334155;cursor:pointer">
-          <input type="checkbox" class="practice-ch" value="${c.num}" ${_practiceSel.has(c.num) ? 'checked' : ''} style="width:18px;height:18px;flex:none">
+      const chapters = book ? book.chapters : [];
+      document.getElementById('practice-chapters').innerHTML = chapters.length ? chapters.map(c => `<label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px;color:${c.empty ? '#94a3b8' : '#334155'};cursor:${c.empty ? 'not-allowed' : 'pointer'}">
+          <input type="checkbox" class="practice-ch" value="${c.num}" ${_practiceSel.has(c.num) ? 'checked' : ''} ${c.empty ? 'disabled' : ''} style="width:18px;height:18px;flex:none">
           <span style="flex:1">第 ${c.num} 章${c.name && !/^第\s*\d+\s*章$/.test(c.name) ? ' ' + c.name : ''}</span>
-        </label>`).join('');
+          ${c.empty ? '<span style="font-size:12px;flex:none">尚無題目</span>' : ''}
+        </label>`).join('') : '<div style="color:#94a3b8;font-size:13px;padding:10px 0">尚無題目</div>';
       document.querySelectorAll('.practice-ch').forEach(el => el.addEventListener('change', () => {
         if (el.checked) _practiceSel.add(el.value); else _practiceSel.delete(el.value);
         renderPracticeButton();
@@ -2890,7 +2892,10 @@
         const res = await _drawQuizFn({ action: 'catalog', studentId: currentStudent.id, classId: currentStudent.classId });
         _practiceBooks = (res.data && res.data.books) || [];
         if (!_practiceBooks.length) { panel.style.display = 'none'; msg.style.display = 'block'; msg.textContent = '目前沒有可練習的章節。'; return; }
-        document.getElementById('practice-book').innerHTML = _practiceBooks.map(b => `<option value="${b.bookId}">📘 ${b.name}</option>`).join('');
+        const bookSel = document.getElementById('practice-book');
+        bookSel.innerHTML = _practiceBooks.map(b => `<option value="${b.bookId}">📘 ${b.name}${b.chapters.some(c => !c.empty) ? '' : '（尚無題目）'}</option>`).join('');
+        const firstBook = _practiceBooks.find(b => b.chapters.some(c => !c.empty));
+        if (firstBook) bookSel.value = firstBook.bookId;
         _practiceSel = new Set();
         renderPracticeChapters();
         panel.style.display = 'block'; msg.style.display = 'none';
@@ -2901,7 +2906,7 @@
       }
     }
     document.getElementById('practice-book').addEventListener('change', () => { _practiceSel = new Set(); renderPracticeChapters(); });
-    document.getElementById('practice-all').addEventListener('click', () => { const b = _practiceBook(); _practiceSel = new Set(b ? b.chapters.map(c => c.num) : []); renderPracticeChapters(); });
+    document.getElementById('practice-all').addEventListener('click', () => { const b = _practiceBook(); _practiceSel = new Set(b ? b.chapters.filter(c => !c.empty).map(c => c.num) : []); renderPracticeChapters(); });
     document.getElementById('practice-none').addEventListener('click', () => { _practiceSel = new Set(); renderPracticeChapters(); });
     document.getElementById('btn-start-practice').addEventListener('click', () => {
       const book = _practiceBook();

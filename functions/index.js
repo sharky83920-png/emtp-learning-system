@@ -376,15 +376,16 @@ exports.drawQuiz = functions
       }
     }
 
-    // 專項練習面板：後台有、且這班抽得到題目的書本與章節（用記憶體題庫，不多讀 Firestore）
+    // 專項練習面板：後台有的書本與章節全部列出，這班抽不到題目的標 empty（用記憶體題庫，不多讀 Firestore）
     if (data && data.action === "catalog") {
       const [allQ, cls, cat] = await Promise.all([getQuestionBank(), db.collection("classes").doc(classId).get(), getBookCatalog()]);
       const fcc = (cls.exists && cls.data().settings && cls.data().settings.questionFaucet) || null;
       const have = new Set();
       allQ.forEach((q) => { if (faucetAllows(q, fcc, "practice")) have.add(bookKey(q) + "|" + chapterKey(q)); });
-      const books = cat.books
-        .map((b) => ({ bookId: b.id, name: b.name, chapters: (cat.chapters[b.id] || []).filter((c) => have.has(b.id + "|" + c.num)) }))
-        .filter((b) => b.chapters.length);
+      const books = cat.books.map((b) => ({
+        bookId: b.id, name: b.name,
+        chapters: (cat.chapters[b.id] || []).map((c) => ({ ...c, empty: !have.has(b.id + "|" + c.num) })),
+      }));
       return { books };
     }
 
