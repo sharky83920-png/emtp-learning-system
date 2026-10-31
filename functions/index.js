@@ -306,8 +306,7 @@ function faucetAllows(q, fc, mode) {
   return false;
 }
 // 專項練習的書本與章節：「EMTP第三版」與「EMT-P」是同一本書；章號不是 1～99 的題不列入章節（綜合測驗照常抽得到）
-const BOOK_ALIAS = { "EMTP第三版": "EMT-P" };
-const BOOK_ORDER = ["EMT-P", "ACLS", "APLS", "2025AHA指引"];
+const BOOK_ALIAS = { "EMTP第三版": "EMT-P", "ACLS第七版": "ACLS", "APLS第三版": "APLS" };
 function bookKey(q) {
   const b = q.source && q.source.bookId;
   return b ? (BOOK_ALIAS[b] || b) : "";
@@ -316,15 +315,23 @@ function chapterKey(q) {
   const c = String((q.source && q.source.chapterNumber) ?? "").trim();
   return /^0*[1-9]\d?$/.test(c) ? String(Number(c)) : "";
 }
-let _chNames = null, _chNamesAt = 0;
-async function getChapterNames() {
-  if (!_chNames || Date.now() - _chNamesAt > 6 * 60 * 60 * 1000) {
-    const snap = await db.collection("chapters").get();
-    const m = {};
-    snap.forEach((d) => { const x = d.data(); if (x.isActive !== false) m[`${x.bookId}|${Number(x.chapterNumber)}`] = x.chapterName || ""; });
-    _chNames = m; _chNamesAt = Date.now();
+// 專項練習的書名、章名、順序都照後台 books／chapters。快取 10 分鐘，後台改了很快生效。
+let _catalog = null, _catalogAt = 0;
+async function getBookCatalog() {
+  if (!_catalog || Date.now() - _catalogAt > 10 * 60 * 1000) {
+    const [bs, cs] = await Promise.all([db.collection("books").get(), db.collection("chapters").get()]);
+    const books = bs.docs.filter((d) => d.data().isActive !== false)
+      .map((d) => ({ id: d.id, name: d.data().fullName || d.id, order: d.data().displayOrder || 0 }))
+      .sort((a, b) => a.order - b.order);
+    const chapters = {};
+    cs.forEach((d) => {
+      const x = d.data(), num = chapterKey({ source: { chapterNumber: x.chapterNumber } });
+      if (x.isActive !== false && num) (chapters[x.bookId] = chapters[x.bookId] || []).push({ num, name: x.chapterName || "" });
+    });
+    Object.values(chapters).forEach((list) => list.sort((a, b) => a.num - b.num));
+    _catalog = { books, chapters }; _catalogAt = Date.now();
   }
-  return _chNames;
+  return _catalog;
 }
 // 施工開關：system_settings/global.maintenance.on。快取 15 秒；讀失敗沿用上一次的值。
 let _maintOn = false, _maintAt = 0;
@@ -369,23 +376,15 @@ exports.drawQuiz = functions
       }
     }
 
-    // 專項練習面板：列出這班抽得到的書本、章節與題數（用記憶體題庫，不多讀 Firestore）
+    // 專項練習面板：後台有、且這班抽得到題目的書本與章節（用記憶體題庫，不多讀 Firestore）
     if (data && data.action === "catalog") {
-      const [allQ, cls, names] = await Promise.all([getQuestionBank(), db.collection("classes").doc(classId).get(), getChapterNames()]);
+      const [allQ, cls, cat] = await Promise.all([getQuestionBank(), db.collection("classes").doc(classId).get(), getBookCatalog()]);
       const fcc = (cls.exists && cls.data().settings && cls.data().settings.questionFaucet) || null;
-      const tree = {};
-      allQ.forEach((q) => {
-        if (!faucetAllows(q, fcc, "practice")) return;
-        const b = bookKey(q), c = chapterKey(q);
-        if (!b || !c) return;
-        tree[b] = tree[b] || {};
-        tree[b][c] = (tree[b][c] || 0) + 1;
-      });
-      const rank = (b) => { const i = BOOK_ORDER.indexOf(b); return i < 0 ? 99 : i; };
-      const books = Object.keys(tree).sort((a, b) => rank(a) - rank(b)).map((b) => ({
-        bookId: b,
-        chapters: Object.keys(tree[b]).sort((x, y) => x - y).map((c) => ({ num: c, name: names[`${b}|${c}`] || "", count: tree[b][c] })),
-      }));
+      const have = new Set();
+      allQ.forEach((q) => { if (faucetAllows(q, fcc, "practice")) have.add(bookKey(q) + "|" + chapterKey(q)); });
+      const books = cat.books
+        .map((b) => ({ bookId: b.id, name: b.name, chapters: (cat.chapters[b.id] || []).filter((c) => have.has(b.id + "|" + c.num)) }))
+        .filter((b) => b.chapters.length);
       return { books };
     }
 
@@ -417,6 +416,36 @@ exports.drawQuiz = functions
     orderByRound(pool, counts);
     return { questions: pool.slice(0, count), poolSize: pool.length };
   });
+
+// 全班首刷平均：把各班學員的 student_first_radar 加總進 class_radar（封存學員與測試帳號不列入）。
+// 每天清晨全部重算，不累加，算錯隔天自己回正。
+async function rebuildClassRadar() {
+  const [ss, fs] = await Promise.all([db.collection("students").get(), db.collection("student_first_radar").get()]);
+  const classOf = {};
+  ss.forEach((d) => {
+    const x = d.data();
+    if (x.classId && !isArchivedDoc(x) && !String(x.name || "").includes("測試")) classOf[d.id] = x.classId;
+  });
+  const sum = {};
+  fs.forEach((d) => {
+    const cid = classOf[d.id], first = d.data().first;
+    if (!cid || !first) return;
+    const c = (sum[cid] = sum[cid] || {});
+    Object.keys(first).forEach((dm) => {
+      const o = (c[dm] = c[dm] || { c: 0, t: 0 });
+      o.c += first[dm].c || 0; o.t += first[dm].t || 0;
+    });
+  });
+  const batch = db.batch();
+  Object.keys(sum).forEach((cid) => batch.set(db.collection("class_radar").doc(cid),
+    { first: sum[cid], updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true }));
+  await batch.commit();
+  return Object.keys(sum).length;
+}
+exports.refreshClassRadar = functions
+  .region("asia-east1")
+  .pubsub.schedule("0 4 * * *").timeZone("Asia/Taipei")
+  .onRun(async () => { console.log("class_radar 更新班數", await rebuildClassRadar()); });
 
 // ═══════════════════════════════════════════════════════════
 // 5) 封存＝真的斷線（Auth 帳號停用 + 撤銷憑證 + archived 標記）

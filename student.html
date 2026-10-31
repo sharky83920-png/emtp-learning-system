@@ -2865,22 +2865,18 @@
     }
 
     // 專項練習（一本書＋章節複選、不計分）：可選範圍由雲端依本班水龍頭算好回傳
-    const BOOK_NAMES = { 'EMT-P': 'EMT-P 第三版', '2025AHA指引': '2025 AHA 指引' };
     let _practiceBooks = [], _practiceSel = new Set();
     const _practiceBook = () => _practiceBooks.find(b => b.bookId === document.getElementById('practice-book').value);
     function renderPracticeButton() {
       const btn = document.getElementById('btn-start-practice');
-      const book = _practiceBook();
-      const total = (book ? book.chapters : []).filter(c => _practiceSel.has(c.num)).reduce((n, c) => n + c.count, 0);
       btn.disabled = _practiceSel.size === 0;
-      btn.textContent = _practiceSel.size ? `開始練習（${_practiceSel.size} 章，共 ${total} 題）` : '請先勾選章節';
+      btn.textContent = _practiceSel.size ? `開始練習（${_practiceSel.size} 章）` : '請先勾選章節';
     }
     function renderPracticeChapters() {
       const book = _practiceBook();
       document.getElementById('practice-chapters').innerHTML = (book ? book.chapters : []).map(c => `<label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px;color:#334155;cursor:pointer">
           <input type="checkbox" class="practice-ch" value="${c.num}" ${_practiceSel.has(c.num) ? 'checked' : ''} style="width:18px;height:18px;flex:none">
           <span style="flex:1">第 ${c.num} 章${c.name && !/^第\s*\d+\s*章$/.test(c.name) ? ' ' + c.name : ''}</span>
-          <span style="color:#94a3b8;font-size:12px;flex:none">${c.count} 題</span>
         </label>`).join('');
       document.querySelectorAll('.practice-ch').forEach(el => el.addEventListener('change', () => {
         if (el.checked) _practiceSel.add(el.value); else _practiceSel.delete(el.value);
@@ -2894,7 +2890,7 @@
         const res = await _drawQuizFn({ action: 'catalog', studentId: currentStudent.id, classId: currentStudent.classId });
         _practiceBooks = (res.data && res.data.books) || [];
         if (!_practiceBooks.length) { panel.style.display = 'none'; msg.style.display = 'block'; msg.textContent = '目前沒有可練習的章節。'; return; }
-        document.getElementById('practice-book').innerHTML = _practiceBooks.map(b => `<option value="${b.bookId}">📘 ${BOOK_NAMES[b.bookId] || b.bookId}</option>`).join('');
+        document.getElementById('practice-book').innerHTML = _practiceBooks.map(b => `<option value="${b.bookId}">📘 ${b.name}</option>`).join('');
         _practiceSel = new Set();
         renderPracticeChapters();
         panel.style.display = 'block'; msg.style.display = 'none';
@@ -2917,8 +2913,7 @@
       try {
         const filtered = await getQuizQuestions('practice', scope);
         if (!filtered || filtered.length === 0) { alert('⚠️ 選的章節目前沒有題目'); return; }
-        const name = BOOK_NAMES[scope.bookId] || scope.bookId;
-        beginQuiz(filtered, 'practice', `🎯 專項練習 · ${name} ${scope.chapters.length} 章（不計分）`, scope);
+        beginQuiz(filtered, 'practice', `🎯 專項練習 · ${_practiceBook()?.name || scope.bookId} ${scope.chapters.length} 章（不計分）`, scope);
         prefetchNext('practice', scope, filtered.map(q => q.id));   // 背景預抽下一輪、排除這輪
       } catch (e) { alert('❌ 抽題失敗，請再按一次：' + (e.message || e)); }
       finally { renderPracticeButton(); }
