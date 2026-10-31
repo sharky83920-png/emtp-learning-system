@@ -502,7 +502,7 @@
           <h2><span>🚰 題目來源水龍頭（各班可抽範圍）</span>
             <button class="btn btn-ghost" id="btn-faucet-refresh">🔄 重新整理</button>
           </h2>
-          <p style="color:#94a3b8;font-size:13px;margin-bottom:12px">💡 控制某班學員抽題時能抽到「哪些來源班出的題 ＋ 哪些章節」。<strong>預設全開</strong>，替某班存檔後才開始限制；自己班強制開啟。<strong>每個來源可各自設定章節</strong>（章節清單來自「書籍/章節」主檔）。只影響隨機綜合測驗與專項練習，錯題本不受限。</p>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:12px">💡 控制某班學員抽題時能抽到「哪些來源班出的題 ＋ 哪些章節」。<strong>預設全開</strong>，替某班存檔後才開始限制。每個來源可分開勾<strong>綜合測驗</strong>、<strong>專項練習</strong>。<strong>每個來源可各自設定章節</strong>（章節清單來自「書籍/章節」主檔）。只影響隨機綜合測驗與專項練習，錯題本不受限。</p>
           <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:14px">
             <div class="form-group" style="margin-bottom:0;min-width:200px">
               <label>設定目標班級</label>
@@ -602,6 +602,16 @@
           </p>
           <button class="btn btn-orange" id="btn-sync-archived">🔒 立即同步 — 強制登出所有封存者</button>
           <div id="sync-archived-result" style="margin-top:12px"></div>
+        </div>
+
+        <div class="card">
+          <h2><span>🚧 施工開關（學員端）</span></h2>
+          <p style="color:#94a3b8;font-size:13px;margin-bottom:12px">
+            💡 打開後，學員端幾秒內變成「系統施工中」全畫面，正在作答未交卷的不保留，也抽不到題。教官端、後台、測試帳號（姓名含「測試」）不受影響；測試帳號走 student.html?maintpass 登入。
+          </p>
+          <div class="form-group"><label>顯示給學員的文字</label><input type="text" id="maint-msg" placeholder="系統更新中，請稍後再回來。"></div>
+          <button class="btn btn-orange" id="btn-maint-toggle">⏳ 讀取中...</button>
+          <span id="maint-status" style="font-size:13px;margin-left:10px"></span>
         </div>
 
         <div class="card">
@@ -2739,8 +2749,27 @@ TP18,新北 TP18,2026"></textarea>
         document.getElementById('gs-qr-ttl').value = d.qrTokenTTL ?? 300;
         document.getElementById('gs-eval-ttl').value = d.evaluationTokenTTL ?? 86400;
         document.getElementById('gs-training-url').value = (d.externalLinks && d.externalLinks.trainingSignIn) || '';
+        document.getElementById('maint-msg').value = (d.maintenance && d.maintenance.message) || '';
+        renderMaintenance(!!(d.maintenance && d.maintenance.on));
       } catch (e) { console.error('loadGlobalSettings', e); }
     }
+
+    // ===== 施工開關：寫 system_settings/global.maintenance，學員端與抽題程式都看這一欄 =====
+    let _maintOn = false;
+    function renderMaintenance(on) {
+      _maintOn = on;
+      const btn = document.getElementById('btn-maint-toggle');
+      btn.textContent = on ? '✅ 結束施工，開放學員使用' : '🚧 開始施工，停止學員使用';
+      document.getElementById('maint-status').innerHTML = on ? '<b style="color:#f59e0b">施工中</b>' : '<span style="color:#10b981">正常開放</span>';
+    }
+    document.getElementById('btn-maint-toggle').addEventListener('click', async () => {
+      const next = !_maintOn;
+      if (!confirm(next ? '開始施工？\n學員端會立刻停用，未交卷的作答不保留。' : '結束施工，開放學員使用？')) return;
+      try {
+        await setDoc(doc(db, 'system_settings', 'global'), { maintenance: { on: next, message: document.getElementById('maint-msg').value.trim(), updatedAt: serverTimestamp(), updatedBy: currentUser.email } }, { merge: true });
+        renderMaintenance(next);
+      } catch (e) { alert('❌ ' + e.message); }
+    });
 
     document.getElementById('btn-save-global').addEventListener('click', async () => {
       const btn = document.getElementById('btn-save-global');
@@ -5616,14 +5645,12 @@ TP18,新北 TP18,2026"></textarea>
         const cDoc = await getDoc(doc(db, 'classes', cid));
         const fc = (cDoc.exists() && cDoc.data().settings && cDoc.data().settings.questionFaucet) || null;
         _fcConfig = fc && fc.sources ? { sources: { ...fc.sources } } : { sources: {} };
-        // 自己班強制開啟（沒設過 → 預設無視章節）
-        if (!_fcConfig.sources[cid]) _fcConfig.sources[cid] = { enabled: true, allMode: true, chapters: [] };
-        _fcConfig.sources[cid].enabled = true;
         renderFaucet();
       } catch (e) { body.innerHTML = `<div class="err-msg">載入失敗：${e.message}</div>`; }
     }
 
     function _fcSrc(cid) { return _fcConfig.sources[cid] || { enabled: false, allMode: false, chapters: [] }; }
+    function _fcUse(cfg) { return { scoring: !(cfg.use && cfg.use.scoring === false), practice: !(cfg.use && cfg.use.practice === false) }; }   // 沒設＝兩邊都開
 
     function renderFaucet() {
       const body = document.getElementById('faucet-body');
@@ -5658,8 +5685,10 @@ TP18,新北 TP18,2026"></textarea>
         }
         return `<div class="fc-src" data-cid="${c.id}">
           <div class="fc-src-head">
-            <label><input type="checkbox" class="fc-en" data-cid="${c.id}" ${cfg.enabled ? 'checked' : ''} ${isSelf ? 'disabled' : ''}> ${c.displayName}</label>
-            ${isSelf ? '<span class="fc-self-tag">自己班 · 強制開啟</span>' : ''}
+            <label><input type="checkbox" class="fc-en" data-cid="${c.id}" ${cfg.enabled ? 'checked' : ''}> ${c.displayName}</label>
+            ${isSelf ? '<span class="fc-self-tag">自己班</span>' : ''}
+            ${cfg.enabled ? `<label style="font-size:12px;color:#cbd5e1"><input type="checkbox" class="fc-use" data-cid="${c.id}" data-use="scoring" ${_fcUse(cfg).scoring ? 'checked' : ''}> 綜合測驗</label>
+            <label style="font-size:12px;color:#cbd5e1"><input type="checkbox" class="fc-use" data-cid="${c.id}" data-use="practice" ${_fcUse(cfg).practice ? 'checked' : ''}> 專項練習</label>` : ''}
             ${c.isAI ? '<span class="fc-self-tag" style="background:#4c1d95;color:#ddd6fe">AI 題 · 需明確勾選</span>' : ''}
           </div>
           ${inner}
@@ -5669,9 +5698,14 @@ TP18,新北 TP18,2026"></textarea>
       // 綁定
       body.querySelectorAll('.fc-en').forEach(el => el.addEventListener('change', (e) => {
         const cid = e.target.dataset.cid;
-        if (!_fcConfig.sources[cid]) _fcConfig.sources[cid] = { enabled: false, allMode: false, chapters: [] };
+        // AI 題第一次勾選：預設只進專項、不限章節，要進綜合測驗得再勾一次
+        if (!_fcConfig.sources[cid]) _fcConfig.sources[cid] = cid === AI_SOURCE_ID ? { enabled: false, allMode: true, chapters: [], use: { scoring: false, practice: true } } : { enabled: false, allMode: false, chapters: [] };
         _fcConfig.sources[cid].enabled = e.target.checked;
         renderFaucet();
+      }));
+      body.querySelectorAll('.fc-use').forEach(el => el.addEventListener('change', (e) => {
+        const cfg = _fcConfig.sources[e.target.dataset.cid];
+        cfg.use = { ..._fcUse(cfg), [e.target.dataset.use]: e.target.checked };
       }));
       body.querySelectorAll('.fc-all').forEach(el => el.addEventListener('change', (e) => {
         const cid = e.target.dataset.cid;
@@ -5700,10 +5734,13 @@ TP18,新北 TP18,2026"></textarea>
       const btn = document.getElementById('btn-faucet-save'); const msg = document.getElementById('faucet-save-msg');
       btn.disabled = true; btn.textContent = '⏳ 儲存中...';
       try {
-        // 整理：只留已開放來源；自己班強制開啟
+        // 整理：只留已開放來源。全部不勾會被抽題程式當成「沒設定」而全開，所以不准存
         const out = {};
-        Object.keys(_fcConfig.sources).forEach(cid => { const s = _fcConfig.sources[cid]; if (s && s.enabled) out[cid] = { enabled: true, allMode: !!s.allMode, chapters: s.allMode ? [] : (s.chapters || []) }; });
-        if (!out[_fcTarget]) out[_fcTarget] = { enabled: true, allMode: true, chapters: [] };
+        Object.keys(_fcConfig.sources).forEach(cid => { const s = _fcConfig.sources[cid]; if (s && s.enabled) { out[cid] = { enabled: true, allMode: !!s.allMode, chapters: s.allMode ? [] : (s.chapters || []) }; if (s.use) out[cid].use = _fcUse(s); } });
+        const list = Object.values(out);
+        if (!list.length) { alert('至少要開放一個來源。'); return; }
+        const emptyFor = ['scoring', 'practice'].filter(m => !list.some(s => _fcUse(s)[m])).map(m => m === 'scoring' ? '綜合測驗' : '專項練習');
+        if (emptyFor.length && !confirm(`這班的「${emptyFor.join('、')}」一個來源都沒開，學員會抽不到題。仍要儲存？`)) return;
         await updateDoc(doc(db, 'classes', _fcTarget), { 'settings.questionFaucet': { sources: out }, settingsUpdatedAt: serverTimestamp(), settingsUpdatedBy: currentUser.email });
         msg.innerHTML = '<span style="color:#10b981">✅ 已儲存</span>';
         setTimeout(() => { msg.innerHTML = ''; }, 3000);
