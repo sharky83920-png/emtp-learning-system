@@ -581,7 +581,17 @@
     // 修「返回快取(bfcache)」還原舊畫面造成的狀態錯亂：從快取還原時強制重載
     window.addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });
 
+    // 2026-11-05 名冊上鎖：登入頁的指導員清單與登入驗證改走後台 publicRoster（身分證不出後台）
+    const ROSTER_URL = 'https://asia-east1-emtp-learning-system.cloudfunctions.net/publicRoster';
+    async function rosterCall(data) {
+      const r = await fetch(ROSTER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) });
+      const j = await r.json().catch(() => ({}));
+      if (!j.result) throw new Error((j.error && j.error.message) || '連線失敗，請再試一次');
+      return j.result;
+    }
+
     async function loadLoginClasses() {
+      rosterCall({ action: 'warm' }).catch(() => {});   // 先叫醒後台
       const sel = document.getElementById('login-class');
       sel.disabled = true;
       sel.innerHTML = '<option value="">⏳ 載入中...</option>';
@@ -614,15 +624,12 @@
       sel.innerHTML = '<option value="">⏳ 載入指導員...</option>';
       sel.disabled = true;
       try {
-        const q = query(collection(db, 'instructors'), where('managedClassIds', 'array-contains', classId));
-        const snap = await getDocs(q);
-        const list = [];
-        snap.forEach(d => { const data = d.data(); if (data.isActive !== false && data.hasAuthAccount) list.push({ id: d.id, ...data }); });
-        list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        // 2026-11-05 名冊上鎖（太和殿甲23）：以前選單的值就是「身分證@emtp.local」，右鍵檢查就看得到。
+        //   現在只向後台拿「代號＋姓名」；登入時把代號＋密碼送後台驗證，對了才拿得到帳號（見 doLogin）。
+        const list = (await rosterCall({ action: 'instructors', classId })).list;
         if (list.length === 0) { sel.innerHTML = '<option value="">⚠️ 此班沒有可登入的指導員</option>'; return; }
         let html = '<option value="">請選姓名...</option>';
-        // 登入 email 優先用「身分證推導」(免信箱帳號約定)、避免舊資料 email 欄位過期；沒身分證才退回 email 欄位
-        list.forEach(i => { const loginEmail = i.idNumber ? `${i.idNumber.toLowerCase()}@emtp.local` : (i.email || ''); html += `<option value="${loginEmail}">${i.name}</option>`; });
+        list.forEach(i => { html += `<option value="${i.key}">${i.name}</option>`; });
         sel.innerHTML = html;
         sel.disabled = false;
       } catch (e) {
@@ -634,17 +641,19 @@
     document.getElementById('login-pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 
     async function doLogin() {
-      const email = document.getElementById('login-name').value;
+      const key = document.getElementById('login-name').value;
       const pw = document.getElementById('login-pw').value.trim().toUpperCase();
       const errEl = document.getElementById('login-error');
       errEl.innerHTML = '';
       if (!document.getElementById('login-class').value) { errEl.innerHTML = '<div class="err-msg">❌ 請選班級</div>'; return; }
-      if (!email) { errEl.innerHTML = '<div class="err-msg">❌ 請選姓名</div>'; return; }
+      if (!key) { errEl.innerHTML = '<div class="err-msg">❌ 請選姓名</div>'; return; }
       if (!pw) { errEl.innerHTML = '<div class="err-msg">❌ 請輸入密碼</div>'; return; }
       const btn = document.getElementById('btn-login');
       btn.disabled = true; btn.textContent = '⏳ 登入中...';
       try {
         await authReady;   // 確保 persistence 設定完成後再登入
+        // 2026-11-05：代號＋密碼先送後台驗證，對了才拿到登入帳號，再照原方式登入（登入後身分與以前完全相同）
+        const { email } = await rosterCall({ action: 'instructorLogin', key, password: pw });
         await signInWithEmailAndPassword(auth, email, pw);
         // onAuthStateChanged 接手
       } catch (e) {

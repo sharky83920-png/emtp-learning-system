@@ -351,28 +351,17 @@
         const expiresAt = tokenData.expiresAt?.seconds ? tokenData.expiresAt.seconds * 1000 : 0;
         if (expiresAt && Date.now() > expiresAt) { showError('連結已過期（24 小時時效）。'); return; }
 
-        // 載入 token 對應學員（預選）
-        const studentDoc = await getDoc(doc(db, 'students', tokenData.studentId));
-        if (!studentDoc.exists()) { showError('找不到學員資料。'); return; }
-        studentData = { id: studentDoc.id, ...studentDoc.data() };
-
-        // 載入班級顯示名
-        let classDisplay = studentData.classId;
-        try {
-          const classDoc = await getDoc(doc(db, 'classes', studentData.classId));
-          if (classDoc.exists()) classDisplay = classDoc.data().displayName || studentData.classId;
-        } catch (e) {}
-        window._classDisplay = classDisplay;
-
-        // 載入同班所有學員（供下拉切換）
-        const classmateQuery = query(collection(db, 'students'), where('classId', '==', studentData.classId));
-        const classmateSnap = await getDocs(classmateQuery);
-        classmates = [];
-        classmateSnap.forEach(d => {
-          const data = d.data();
-          if (data.isActive !== false && data.hasAuthAccount) classmates.push({ id: d.id, ...data });
+        // 2026-11-05 名冊上鎖（太和殿甲23）：評核者不登入，不再直接讀 students（含身分證）。
+        //   改問後台：確認這個評核連結有效、未過期，才回「被評學員＋同班座號姓名」（含班級顯示名）。
+        const rr = await fetch('https://asia-east1-emtp-learning-system.cloudfunctions.net/publicRoster', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: { action: 'evalRoster', token: tokenId } }),
         });
-        classmates.sort((a, b) => (a.studentNo || 0) - (b.studentNo || 0));
+        const rj = await rr.json().catch(() => ({}));
+        if (!rj.result) { showError((rj.error && rj.error.message) || '找不到學員資料。'); return; }
+        studentData = rj.result.student;
+        window._classDisplay = rj.result.classDisplay || studentData.classId;
+        classmates = rj.result.classmates || [];
 
         // 填學員下拉、預選 token 學員
         const stSel = document.getElementById('student-select');

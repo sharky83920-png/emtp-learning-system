@@ -683,7 +683,17 @@
       loadClasses();
     }
 
+    // 2026-11-05 名冊上鎖：登入頁的姓名清單改由後台 publicRoster 提供（只有座號＋姓名，身分證不出後台）
+    const ROSTER_URL = 'https://asia-east1-emtp-learning-system.cloudfunctions.net/publicRoster';
+    async function rosterCall(data) {
+      const r = await fetch(ROSTER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) });
+      const j = await r.json().catch(() => ({}));
+      if (!j.result) throw new Error((j.error && j.error.message) || '名單載入失敗');
+      return j.result;
+    }
+
     async function loadClasses() {
+      rosterCall({ action: 'warm' }).catch(() => {});   // 先叫醒後台，選完班級就不用等
       const sel = document.getElementById('login-class');
       sel.disabled = true;
       sel.innerHTML = '<option value="">⏳ 載入中...</option>';
@@ -730,11 +740,8 @@
       sel.disabled = true;
       try {
         console.log('[Init] Loading students for', classId);
-        const q = query(collection(db, 'students'), where('classId', '==', classId));
-        const snap = await getDocs(q);
-        const students = [];
-        snap.forEach(d => { const data = d.data(); if (data.isActive !== false && data.hasAuthAccount) students.push(data); });
-        students.sort((a, b) => (a.studentNo || 0) - (b.studentNo || 0));
+        // 2026-11-05 名冊上鎖（太和殿甲23）：不再向資料庫要整班名冊（含身分證），改問後台只回「座號＋姓名」
+        const students = (await rosterCall({ action: 'students', classId })).list.map(s => ({ studentNo: s.no, name: s.name }));
         console.log('[Init] Loaded', students.length, 'students');
         if (students.length === 0) {
           sel.innerHTML = '<option value="">⚠️ 該班沒有學員（請聯絡管理員）</option>';

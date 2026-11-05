@@ -887,3 +887,124 @@ exports.jungleToken = functions
     console.log("[jungleToken]", studentId, tier, { read: T1 - T0, sign: Date.now() - T1 });
     return { token, tier, classId, classDisplay: c.displayName || classId, studentNo: claims.sno, name: claims.nm };
   });
+
+
+/* ─────────────────────────────────────────────────────────────
+ * 🔒 publicRoster — 登入頁與評核頁的名冊（2026-11-05 太和殿甲23、皇上旨「學員登打資料到後台，要求登入才放行」）
+ *
+ * 以前：登入頁為了列姓名，未登入就向資料庫要整班 students／instructors（含身分證），F12 看得到；
+ *       指導員選單還把「身分證@emtp.local」直接放進網頁。
+ * 現在：網頁只問這支，這支只回「座號／代號＋姓名」，身分證永遠不出後台；名冊本身改成登入且有權限才能讀。
+ *   action:
+ *     warm                     暖機（登入頁一打開就叫，免得第一次等）
+ *     students    {classId}    → [{no, name}]（在學、有帳號）
+ *     instructors {classId}    → [{key, name}]（key＝指導員文件代號，不是身分證）
+ *     instructorLogin {key, password} → 後台向登入伺服器驗證密碼，對了才回登入帳號 {email}
+ *                              （帳號＝身分證@emtp.local，只有知道密碼的本人拿得到；網頁再用它照原方式登入）
+ *     evalRoster {token}       → 評核連結有效、未過期才回 {student, classmates, classDisplay}（座號＋姓名）
+ * ───────────────────────────────────────────────────────────── */
+const EMTP_WEB_KEY = "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE";   // 網頁公開金鑰（非密碼），用來呼叫登入伺服器驗證密碼
+let _rosterWarmAt = 0;
+exports.publicRoster = functions
+  .region("asia-east1")
+  .runWith({ memory: "512MB" })
+  .https.onCall(async (data, context) => {
+    const E = (code, msg) => new functions.https.HttpsError(code, msg);
+    const action = String((data && data.action) || "");
+    const db2 = jtDb();
+    const alive = (d) => d.isActive !== false && !d.archivedAt;
+
+    if (action === "warm") {
+      if (Date.now() - _rosterWarmAt > 60000) { _rosterWarmAt = Date.now(); await db2.collection("classes").limit(1).get(); }
+      return { ok: true };
+    }
+    if (action === "students") {
+      const classId = String((data && data.classId) || "");
+      if (!classId) throw E("invalid-argument", "缺少班級");
+      const snap = await db2.collection("students").where("classId", "==", classId).get();
+      const list = [];
+      snap.forEach((d) => { const s = d.data(); if (alive(s) && s.hasAuthAccount) list.push({ no: s.studentNo, name: s.name || "" }); });
+      list.sort((a, b) => (a.no || 0) - (b.no || 0));
+      return { list };
+    }
+    if (action === "instructors") {
+      const classId = String((data && data.classId) || "");
+      if (!classId) throw E("invalid-argument", "缺少班級");
+      const snap = await db2.collection("instructors").where("managedClassIds", "array-contains", classId).get();
+      const list = [];
+      snap.forEach((d) => { const i = d.data(); if (alive(i) && i.hasAuthAccount) list.push({ key: d.id, name: i.name || "" }); });
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      return { list };
+    }
+    if (action === "instructorLogin") {
+      const key = String((data && data.key) || ""), password = String((data && data.password) || "");
+      if (!key || !password) throw E("invalid-argument", "請選姓名並輸入密碼");
+      const doc = await db2.collection("instructors").doc(key).get();
+      const bad = () => E("permission-denied", "帳號或密碼錯誤");
+      if (!doc.exists) throw bad();
+      const i = doc.data() || {};
+      if (!alive(i)) throw E("permission-denied", "此指導員帳號已停用");
+      // 跟原本登入頁同一套：帳號優先用身分證推導，沒身分證才退回 email 欄位
+      const email = i.idNumber ? `${String(i.idNumber).toLowerCase()}@emtp.local` : String(i.email || "");
+      if (!email) throw bad();
+      const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${EMTP_WEB_KEY}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, returnSecureToken: false }),
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        const m = (j.error && j.error.message) || "";
+        if (/TOO_MANY_ATTEMPTS/.test(m)) throw E("resource-exhausted", "嘗試太多次，請稍後再試");
+        if (/USER_DISABLED/.test(m)) throw E("permission-denied", "此指導員帳號已停用");
+        throw bad();
+      }
+      return { email };
+    }
+    if (action === "evalRoster") {
+      const token = String((data && data.token) || "");
+      if (!/^[A-Za-z0-9_-]{6,80}$/.test(token)) throw E("invalid-argument", "連結缺少 token、請學員重新分享。");
+      const t = await db2.collection("evaluation_tokens").doc(token).get();
+      if (!t.exists) throw E("not-found", "連結無效或已被撤銷。");
+      const td = t.data() || {};
+      const exp = td.expiresAt && td.expiresAt.toMillis ? td.expiresAt.toMillis() : 0;
+      if (exp && Date.now() > exp) throw E("failed-precondition", "連結已過期（24 小時時效）。");
+      const sDoc = await db2.collection("students").doc(String(td.studentId || "")).get();
+      if (!sDoc.exists) throw E("not-found", "找不到學員資料。");
+      const s = sDoc.data() || {};
+      const [cDoc, mates] = await Promise.all([
+        db2.collection("classes").doc(String(s.classId || "")).get(),
+        db2.collection("students").where("classId", "==", String(s.classId || "")).get(),
+      ]);
+      const classmates = [];
+      mates.forEach((d) => { const x = d.data(); if (x.isActive !== false && x.hasAuthAccount) classmates.push({ id: d.id, studentNo: x.studentNo, name: x.name || "", classId: x.classId }); });
+      classmates.sort((a, b) => (a.studentNo || 0) - (b.studentNo || 0));
+      return {
+        student: { id: sDoc.id, studentNo: s.studentNo, name: s.name || "", classId: s.classId },
+        classDisplay: (cDoc.exists && cDoc.data().displayName) || s.classId,
+        classmates,
+      };
+    }
+    throw E("invalid-argument", "不明的動作");
+  });
+
+
+/* ─────────────────────────────────────────────────────────────
+ * 🔒 onInstructorStaffIndex — 教職人員名單（2026-11-05，配合名冊上鎖）
+ *
+ * 為什麼：本專案的登入伺服器允許網頁自行註冊（後台建帳號靠這個），所以任何人都能註冊一個
+ *   「xxx@emtp.local」冒充指導員。資料庫規則不能只看信箱長相判斷是不是指導員。
+ * 做法：指導員資料有變動就同步 staff_uids/{authUid}（只放代號與時間，不放身分證）；
+ *   規則以「staff_uids 裡有你的 uid」認定指導員。這個集合規則上任何人都讀寫不到，只有本函式能寫。
+ * ───────────────────────────────────────────────────────────── */
+exports.onInstructorStaffIndex = functions
+  .region("us-central1")
+  .firestore.document("instructors/{id}")
+  .onWrite(async (change, context) => {
+    const before = change.before.exists ? change.before.data() : null;
+    const after = change.after.exists ? change.after.data() : null;
+    const oldUid = before && before.authUid, newUid = after && after.authUid;
+    const col = db.collection("staff_uids");
+    if (oldUid && oldUid !== newUid) await col.doc(oldUid).delete().catch(() => {});
+    if (newUid) await col.doc(newUid).set({ instructorId: context.params.id, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    console.log("[staffIndex]", context.params.id, oldUid || "-", "→", newUid || "-");
+  });
