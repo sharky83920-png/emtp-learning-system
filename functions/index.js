@@ -829,7 +829,10 @@ exports.milestoneBoardToken = functions
 const JD_SA = "firebase-adminsdk-fbsvc@jungle-drill.iam.gserviceaccount.com";
 let _jdApp = null;
 function jdAuth() {
-  if (!_jdApp) _jdApp = admin.initializeApp({ projectId: "jungle-drill", serviceAccountId: JD_SA }, "jungle-drill");
+  // 🔴 不要填 projectId：firebase-admin 會把它塞進 x-goog-user-project 標頭，簽名請求就變成「用 jungle-drill 專案的額度」，
+  //    需要額外的 serviceUsageConsumer 權限（2026-11-05 實測 INTERNAL）。不填＝用本專案額度（IAM Credentials API 本專案已啟用）。
+  //    custom token 本身不帶專案 ID，叢林戰只認簽名的服務帳號，所以不影響。
+  if (!_jdApp) _jdApp = admin.initializeApp({ serviceAccountId: JD_SA }, "jungle-drill");
   return _jdApp.auth();
 }
 exports.jungleToken = functions
