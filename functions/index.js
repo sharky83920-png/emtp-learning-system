@@ -828,6 +828,18 @@ exports.milestoneBoardToken = functions
  * ───────────────────────────────────────────────────────────── */
 const JD_SA = "firebase-adminsdk-fbsvc@jungle-drill.iam.gserviceaccount.com";
 let _jdApp = null;
+let _jdWarmAt = 0;
+// 這支自己的資料庫連線：走 REST（preferRest）——新開的執行個體第一次讀 Firestore，gRPC 建連線要 5 秒（11-05 實測），
+//   REST 不用等。另開一個 app 是為了不影響本檔其他函式共用的 db（它們照舊走 gRPC）。
+let _jtDb = null;
+function jtDb() {
+  if (!_jtDb) {
+    const { getFirestore } = require("firebase-admin/firestore");
+    _jtDb = getFirestore(admin.initializeApp(undefined, "jungleToken-db"));
+    _jtDb.settings({ preferRest: true });
+  }
+  return _jtDb;
+}
 function jdAuth() {
   // 🔴 不要填 projectId：firebase-admin 會把它塞進 x-goog-user-project 標頭，簽名請求就變成「用 jungle-drill 專案的額度」，
   //    需要額外的 serviceUsageConsumer 權限（2026-11-05 實測 INTERNAL）。不填＝用本專案額度（IAM Credentials API 本專案已啟用）。
@@ -837,25 +849,41 @@ function jdAuth() {
 }
 exports.jungleToken = functions
   .region("asia-east1")
-  .runWith({ memory: "256MB" })
+  .runWith({ memory: "512MB" })
   .https.onCall(async (data, context) => {
     const E = (code, msg) => new functions.https.HttpsError(code, msg);
+    // 暖機：叢林戰登入頁一打開就先呼叫一次（不帶身分），學員選班級、打密碼的時候這裡先把連線與簽名熱好，
+    //   真的按登入就不用等。簽的是丟棄用的假身分、不回傳通行證；同一個執行個體 60 秒內只熱一次。
+    if (data && data.warm && !context.auth) {
+      const now = Date.now();
+      if (now - _jdWarmAt < 60000) return { ok: true, skipped: true };
+      _jdWarmAt = now;
+      const t0 = Date.now();
+      await jtDb().collection("classes").limit(1).get();
+      const t1 = Date.now();
+      await jdAuth().createCustomToken("warmup", { jd: "warmup" });
+      const t2 = Date.now();
+      console.log("[jungleToken] warm", { read: t1 - t0, sign: t2 - t1 });
+      return { ok: true, ms: { read: t1 - t0, sign: t2 - t1 } };
+    }
     if (!context.auth) throw E("unauthenticated", "請先登入");
+    const T0 = Date.now();
     const m = String(context.auth.token.email || "").match(/^([^-]+)-(\d+)@emtp\.local$/);
     if (!m) throw E("permission-denied", "只有學員帳號可以這樣登入叢林戰");
     const studentId = `${m[1].toLowerCase()}-${parseInt(m[2], 10)}`;
-    const sDoc = await db.collection("students").doc(studentId).get();
+    const sDoc = await jtDb().collection("students").doc(studentId).get();
     if (!sDoc.exists) throw E("not-found", "找不到學員資料");
     const s = sDoc.data() || {};
     if (s.archivedAt || s.isActive === false) throw E("permission-denied", "帳號已封存，請聯絡管理員");
     const classId = String(s.classId || m[1].toUpperCase());
-    const cDoc = await db.collection("classes").doc(classId).get();
+    const cDoc = await jtDb().collection("classes").doc(classId).get();
     const c = cDoc.exists ? (cDoc.data() || {}) : {};
     if (!cDoc.exists || c.archivedAt || c.isActive === false) throw E("permission-denied", "你的班級已結訓封存");
     const tier = c.jungleAccess;
     if (tier !== "inner" && tier !== "outer") throw E("permission-denied", "你的班級還沒開放叢林戰，請洽教官");
     const claims = { jd: "student", tier, cls: classId, sno: Number(s.studentNo) || 0, nm: String(s.name || "").slice(0, 40) };
+    const T1 = Date.now();
     const token = await jdAuth().createCustomToken("emtp_" + context.auth.uid, claims);
-    console.log("[jungleToken]", studentId, tier);
+    console.log("[jungleToken]", studentId, tier, { read: T1 - T0, sign: Date.now() - T1 });
     return { token, tier, classId, classDisplay: c.displayName || classId, studentNo: claims.sno, name: claims.nm };
   });
