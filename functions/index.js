@@ -808,3 +808,51 @@ exports.milestoneBoardToken = functions
       }),
     };
   });
+
+
+/* ─────────────────────────────────────────────────────────────
+ * 🌴 jungleToken — 學員用學習系統帳號登入叢林戰（2026-11-05 聖旨 20260918-2）
+ *
+ * 叢林戰是另一個 Firebase 專案（jungle-drill），它的資料庫只認自己發的身分。
+ * 這支做的事：
+ *   1. 確認呼叫者是學習系統的學員帳號（{班級}-{學號}@emtp.local）
+ *   2. 本人沒封存、班級沒封存
+ *   3. 讀班級的 jungleAccess（學習系統後台 → 班級管理 → 🌴 叢林戰）：
+ *        'inner'＝關門弟子、'outer'＝外門弟子；其他（含沒設）＝關閉 → 拒絕
+ *   4. 替叢林戰簽一張通行證（custom token），叢林戰的資料庫規則依 tier 決定看得到哪些題
+ *
+ * 🔴 不用下載任何金鑰：用 IAM signBlob、以叢林戰的服務帳號簽名。前提是在 jungle-drill 專案把
+ *    「服務帳戶權杖建立者」(roles/iam.serviceAccountTokenCreator) 授權給本專案函式的執行身分
+ *    emtp-learning-system@appspot.gserviceaccount.com（只授權在這一個服務帳號上）。
+ * 🔴 不回傳、不經手身分證或任何密碼；通行證只帶 班級／學號／姓名／門派。
+ * ───────────────────────────────────────────────────────────── */
+const JD_SA = "firebase-adminsdk-fbsvc@jungle-drill.iam.gserviceaccount.com";
+let _jdApp = null;
+function jdAuth() {
+  if (!_jdApp) _jdApp = admin.initializeApp({ projectId: "jungle-drill", serviceAccountId: JD_SA }, "jungle-drill");
+  return _jdApp.auth();
+}
+exports.jungleToken = functions
+  .region("asia-east1")
+  .runWith({ memory: "256MB" })
+  .https.onCall(async (data, context) => {
+    const E = (code, msg) => new functions.https.HttpsError(code, msg);
+    if (!context.auth) throw E("unauthenticated", "請先登入");
+    const m = String(context.auth.token.email || "").match(/^([^-]+)-(\d+)@emtp\.local$/);
+    if (!m) throw E("permission-denied", "只有學員帳號可以這樣登入叢林戰");
+    const studentId = `${m[1].toLowerCase()}-${parseInt(m[2], 10)}`;
+    const sDoc = await db.collection("students").doc(studentId).get();
+    if (!sDoc.exists) throw E("not-found", "找不到學員資料");
+    const s = sDoc.data() || {};
+    if (s.archivedAt || s.isActive === false) throw E("permission-denied", "帳號已封存，請聯絡管理員");
+    const classId = String(s.classId || m[1].toUpperCase());
+    const cDoc = await db.collection("classes").doc(classId).get();
+    const c = cDoc.exists ? (cDoc.data() || {}) : {};
+    if (!cDoc.exists || c.archivedAt || c.isActive === false) throw E("permission-denied", "你的班級已結訓封存");
+    const tier = c.jungleAccess;
+    if (tier !== "inner" && tier !== "outer") throw E("permission-denied", "你的班級還沒開放叢林戰，請洽教官");
+    const claims = { jd: "student", tier, cls: classId, sno: Number(s.studentNo) || 0, nm: String(s.name || "").slice(0, 40) };
+    const token = await jdAuth().createCustomToken("emtp_" + context.auth.uid, claims);
+    console.log("[jungleToken]", studentId, tier);
+    return { token, tier, classId, classDisplay: c.displayName || classId, studentNo: claims.sno, name: claims.nm };
+  });

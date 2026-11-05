@@ -1546,20 +1546,45 @@ TP18,新北 TP18,2026"></textarea>
           listEl.innerHTML = '<div class="placeholder"><div class="icon">📭</div><h3>還沒有班級</h3><p>點右上「➕ 新增班級」</p></div>';
           return;
         }
-        let html = '<table class="table"><thead><tr><th>代碼</th><th>顯示名稱</th><th>課程</th><th>年度</th><th>狀態</th><th>建立時間</th><th>動作</th></tr></thead><tbody>';
+        let html = '<table class="table"><thead><tr><th>代碼</th><th>顯示名稱</th><th>課程</th><th>年度</th><th>狀態</th><th title="這班學員能不能用學習系統帳號登入叢林戰自學">🌴 叢林戰</th><th>建立時間</th><th>動作</th></tr></thead><tbody>';
         filtered.forEach(c => {
           const isArchived = c.isActive === false;
           const stateTag = isArchived ? '<span class="tag-pill gray">📦 已封存</span>' : '<span class="tag-pill">✅ 啟用中</span>';
           const created = c.createdAt && c.createdAt.toDate ? c.createdAt.toDate().toLocaleDateString('zh-TW') : '—';
-          html += `<tr><td><code>${c.id}</code></td><td>${c.displayName || '—'}</td><td>${c.courseType || '—'}</td><td>${c.year || '—'}</td><td>${stateTag}</td><td style="color:#94a3b8;font-size:12px">${created}</td><td style="white-space:nowrap"><button class="btn btn-ghost" data-edit-class="${c.id}">✏️ 編輯</button>${isArchived ? `<button class="btn btn-ghost" data-unarchive="${c.id}">📂 恢復</button>` : `<button class="btn btn-orange" data-archive="${c.id}">📦 封存</button>`}<button class="btn btn-red" data-del-class="${c.id}" title="刪除">🗑</button></td></tr>`;
+          html += `<tr><td><code>${c.id}</code></td><td>${c.displayName || '—'}</td><td>${c.courseType || '—'}</td><td>${c.year || '—'}</td><td>${stateTag}</td><td>${jungleSelectHtml(c)}</td><td style="color:#94a3b8;font-size:12px">${created}</td><td style="white-space:nowrap"><button class="btn btn-ghost" data-edit-class="${c.id}">✏️ 編輯</button>${isArchived ? `<button class="btn btn-ghost" data-unarchive="${c.id}">📂 恢復</button>` : `<button class="btn btn-orange" data-archive="${c.id}">📦 封存</button>`}<button class="btn btn-red" data-del-class="${c.id}" title="刪除">🗑</button></td></tr>`;
         });
         html += '</tbody></table>';
+        html += '<p style="color:#94a3b8;font-size:12px;margin-top:8px;line-height:1.7">🌴 叢林戰：這班學員能不能用學習系統帳號（班級／姓名／密碼）登入叢林戰自學與互考。<b>關閉</b>＝不能登入（新班預設）；<b>關門弟子</b>＝看得到叢林戰後台設為「限關門弟子」與「全部開放」的題；<b>外門弟子</b>＝只看得到「全部開放」的題。上課輸房號進場不受影響。</p>';
         listEl.innerHTML = html;
+        listEl.querySelectorAll('select[data-jungle]').forEach(sel => sel.addEventListener('change', () => setJungleAccess(sel)));
         listEl.querySelectorAll('button[data-archive]').forEach(b => b.addEventListener('click', () => archiveClass(b.dataset.archive)));
         listEl.querySelectorAll('button[data-unarchive]').forEach(b => b.addEventListener('click', () => unarchiveClass(b.dataset.unarchive)));
         listEl.querySelectorAll('button[data-edit-class]').forEach(b => b.addEventListener('click', () => openClassModal(b.dataset.editClass)));
         listEl.querySelectorAll('button[data-del-class]').forEach(b => b.addEventListener('click', () => deleteClass(b.dataset.delClass)));
       } catch (e) { listEl.innerHTML = `<div class="err-msg">載入失敗: ${e.message}</div>`; }
+    }
+
+    // 🌴 叢林戰開放（2026-11-05 聖旨 20260918-2）：每班一個設定，正本只在這裡（叢林戰不留副本）
+    //   classes.jungleAccess：'off'＝關閉（沒有這個欄位也當關閉）／'inner'＝關門弟子／'outer'＝外門弟子
+    //   學員登入叢林戰時，學習系統的 jungleToken 函式讀這個欄位決定給不給通行證、給哪一級。
+    const JUNGLE_LABEL = { off: '🚫 關閉', inner: '🟡 關門弟子', outer: '🔵 外門弟子' };
+    function jungleSelectHtml(c) {
+      const cur = JUNGLE_LABEL[c.jungleAccess] ? c.jungleAccess : 'off';
+      return `<select data-jungle="${c.id}" style="font-size:13px;padding:4px 6px;border-radius:6px;background:#1e293b;color:#e2e8f0;border:1px solid #334155">${
+        Object.keys(JUNGLE_LABEL).map(v => `<option value="${v}"${v === cur ? ' selected' : ''}>${JUNGLE_LABEL[v]}</option>`).join('')}</select>`;
+    }
+    async function setJungleAccess(sel) {
+      const classId = sel.dataset.jungle, v = sel.value;
+      sel.disabled = true;
+      try {
+        await updateDoc(doc(db, 'classes', classId), { jungleAccess: v, jungleAccessUpdatedAt: serverTimestamp() });
+        sel.style.borderColor = '#22c55e';
+        setTimeout(() => { sel.style.borderColor = '#334155'; }, 1500);
+      } catch (e) {
+        alert('❌ 叢林戰設定失敗：' + e.message);
+        loadClasses();
+      }
+      sel.disabled = false;
     }
 
     let editingClassId = null;
