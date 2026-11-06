@@ -126,6 +126,9 @@ service cloud.firestore {
     // ── 核心技術簽核 / QR ──
     match /core_skill_signoffs/{id} {
       allow read: if isMe(resource.data.studentId) || isStaff();
+      // 學員掃 QR 時先查「這筆簽核是否已存在」（防重複）：還不存在時上一行讀不到（resource 是空的）。
+      // 改看文件代號：「場次__自己學號」那一筆，自己可以讀（不論存在與否）。2026-11-06 補，v3 漏網
+      allow get: if isMe(id.split('__')[id.split('__').size() - 1]);
       allow create: if isMe(request.resource.data.studentId) || isStaff();
       allow update, delete: if isMaster();
     }
