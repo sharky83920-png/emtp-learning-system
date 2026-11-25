@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>📝 Milestone 臨床實習評量</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; background: #f1f5f9; color: #1e293b; min-height: 100vh; line-height: 1.6; }
+    .container { max-width: 640px; margin: 0 auto; padding: 16px; padding-bottom: 80px; }
+    /* F11-H: 嵌入模式（從 student.html iframe 開啟、隱藏外層 header） */
+    body.embed header { display: none; }
+    body.embed { background: white; }
+    body.embed .container { padding: 12px; padding-bottom: 40px; }
+
+    header { background: linear-gradient(135deg, #14b8a6, #0d9488); color: white; padding: 24px; border-radius: 16px; margin-bottom: 16px; text-align: center; box-shadow: 0 10px 30px rgba(20, 184, 166, 0.3); }
+    header h1 { font-size: 22px; margin-bottom: 4px; }
+    header .sub { opacity: 0.9; font-size: 13px; }
+
+    .panel { background: white; border-radius: 12px; margin-bottom: 14px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+    .section-title { padding: 10px 18px; color: white; font-weight: 600; font-size: 15px; }
+    .section-title.blue { background: #3b82f6; }
+    .section-title.green { background: #10b981; }
+    .section-title.orange { background: #f59e0b; }
+    .section-title.teal { background: #14b8a6; }
+    .panel-body { padding: 18px; }
+
+    .loading, .error, .success { text-align: center; padding: 50px 20px; }
+    .loading .icon, .error .icon, .success .icon { font-size: 56px; margin-bottom: 16px; }
+    .error h2, .success h2 { color: #1e293b; margin-bottom: 8px; font-size: 22px; }
+    .error p { color: #64748b; font-size: 14px; line-height: 1.6; }
+    .success h2 { color: #14b8a6; }
+
+    .form-group { margin-bottom: 14px; }
+    .form-group:last-child { margin-bottom: 0; }
+    .form-group label { display: block; color: #1e293b; font-size: 13px; margin-bottom: 6px; font-weight: 600; }
+    .form-group select, .form-group input[type=text], .form-group textarea { width: 100%; padding: 10px 14px; background: #f8fafc; border: 2px solid #e2e8f0; color: #1e293b; border-radius: 8px; font-family: inherit; font-size: 15px; }
+    .form-group select:focus, .form-group input:focus, .form-group textarea:focus { outline: none; border-color: #14b8a6; background: white; }
+    .form-group textarea { resize: vertical; min-height: 60px; }
+    .custom-input { margin-top: 6px; }
+
+    .student-display { background: #f0fdfa; border: 2px solid #14b8a6; border-radius: 10px; padding: 14px 18px; }
+    .student-display .name { color: #134e4a; font-size: 22px; font-weight: 700; }
+    .student-display .meta { color: #64748b; font-size: 13px; margin-top: 2px; }
+
+    .dim-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+    .dim-btn { padding: 16px 8px; border: none; border-radius: 10px; cursor: pointer; font-family: inherit; font-size: 15px; font-weight: 700; color: white; transition: transform 0.1s, box-shadow 0.1s; }
+    .dim-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .dim-btn:active { transform: translateY(0); }
+    .dim-btn.T { background: #8b5cf6; }
+    .dim-btn.N { background: #3b82f6; }
+    .dim-btn.K { background: #f59e0b; }
+    .dim-btn.V { background: #06b6d4; }
+    .dim-btn.I { background: #be123c; }
+    @media (max-width: 580px) {
+      .dim-grid { grid-template-columns: repeat(2, 1fr); }
+      .dim-btn { padding: 14px 8px; font-size: 14px; }
+    }
+
+    .info-box { background: #fefce8; border-left: 4px solid #eab308; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; line-height: 1.7; color: #713f12; }
+    .info-box .pill { background: #fde047; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; display: inline-block; margin: 0 2px; }
+
+    .step-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 4px; }
+    .step-title { font-size: 18px; font-weight: 700; color: #1e293b; }
+    .btn-back { background: white; color: #64748b; border: 2px solid #e2e8f0; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; }
+    .btn-back:hover { background: #f8fafc; }
+
+    .step-accordion .step-group { border-bottom: 1px solid #e2e8f0; }
+    .step-accordion .step-group:last-child { border-bottom: none; }
+    .step-head { padding: 14px 18px; background: #f8fafc; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600; color: #1e293b; }
+    .step-head:hover { background: #f1f5f9; }
+    .step-head .caret { transition: transform 0.2s; }
+    .step-group.open .step-head .caret { transform: rotate(180deg); }
+    .step-body { display: none; padding: 12px 18px; background: white; }
+    .step-group.open .step-body { display: block; }
+
+    .ms-item { padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
+    .ms-item:last-child { border-bottom: none; }
+    .ms-header { display: flex; align-items: center; gap: 10px; }
+    .ms-toggle { width: 44px; height: 24px; background: #e2e8f0; border-radius: 12px; position: relative; cursor: pointer; flex-shrink: 0; transition: background 0.2s; }
+    .ms-toggle.on { background: #14b8a6; }
+    .ms-toggle::after { content: ''; position: absolute; left: 2px; top: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: left 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+    .ms-toggle.on::after { left: 22px; }
+    .ms-info { flex: 1; }
+    .ms-name { color: #1e293b; font-weight: 600; font-size: 15px; }
+    .ms-id { color: #94a3b8; font-size: 11px; font-family: monospace; }
+
+    .ms-detail { display: none; margin-top: 10px; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .ms-item.on .ms-detail { display: block; }
+    .ms-level-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 10px; }
+    .ms-level-grid label { background: white; border: 2px solid #e2e8f0; padding: 12px 0; border-radius: 8px; text-align: center; cursor: pointer; font-weight: 700; font-size: 18px; transition: all 0.15s; position: relative; }
+    .ms-level-grid label.lv1 { color: #ef4444; border-color: #fecaca; }
+    .ms-level-grid label.lv2 { color: #f59e0b; border-color: #fed7aa; }
+    .ms-level-grid label.lv3 { color: #ca8a04; border-color: #fde68a; }
+    .ms-level-grid label.lv4 { color: #3b82f6; border-color: #bfdbfe; }
+    .ms-level-grid label.lv5 { color: #059669; border-color: #bbf7d0; }
+    .ms-level-grid label:hover { transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    .ms-level-grid label.lv1.selected { background: #ef4444; }
+    .ms-level-grid label.lv2.selected { background: #f59e0b; }
+    .ms-level-grid label.lv3.selected { background: #ca8a04; }
+    .ms-level-grid label.lv4.selected { background: #3b82f6; }
+    .ms-level-grid label.lv5.selected { background: #059669; }
+    .ms-level-grid label.selected { color: white !important; border-color: transparent; }
+    .ms-level-grid input[type=radio] { display: none; }
+    .ms-level-hint { padding: 10px 14px; border-radius: 8px; font-size: 13px; line-height: 1.6; background: #f8fafc; color: #64748b; margin-bottom: 10px; border-left: 4px solid #cbd5e1; transition: all 0.2s; }
+    .ms-level-hint.lv1 { background: #fef2f2; color: #b91c1c; border-left-color: #ef4444; }
+    .ms-level-hint.lv2 { background: #fff7ed; color: #9a3412; border-left-color: #f59e0b; }
+    .ms-level-hint.lv3 { background: #fefce8; color: #713f12; border-left-color: #ca8a04; }
+    .ms-level-hint.lv4 { background: #eff6ff; color: #1e40af; border-left-color: #3b82f6; }
+    .ms-level-hint.lv5 { background: #f0fdf4; color: #14532d; border-left-color: #059669; }
+    .ms-level-hint strong { font-size: 15px; }
+    .ms-feedback { width: 100%; padding: 8px 12px; border: 2px solid #e2e8f0; border-radius: 6px; font-family: inherit; font-size: 14px; resize: vertical; min-height: 50px; background: white; }
+    .ms-feedback:focus { outline: none; border-color: #14b8a6; }
+    .scoring-guide { background: #fef3c7; padding: 8px 12px; border-radius: 6px; font-size: 12px; color: #78350f; white-space: pre-wrap; margin-bottom: 8px; }
+    /* F11-G: Level 1-5 評核標準 */
+    .level-criteria { margin: 8px 0 12px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+    .level-criteria summary { cursor: pointer; padding: 10px 14px; background: #fef3c7; font-weight: 600; color: #78350f; font-size: 13px; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .level-criteria summary::-webkit-details-marker { display: none; }
+    .level-criteria summary::after { content: '▼'; transition: transform 0.2s; font-size: 11px; }
+    .level-criteria[open] summary::after { transform: rotate(180deg); }
+    .level-criteria summary:hover { background: #fde68a; }
+    .lc-list { padding: 8px 12px; }
+    .lc-item { padding: 8px 10px; border-radius: 6px; margin-bottom: 4px; background: #f8fafc; border-left: 4px solid transparent; transition: all 0.2s; }
+    .lc-item:last-child { margin-bottom: 0; }
+    .lc-item.lv1 { border-left-color: #ef4444; }
+    .lc-item.lv2 { border-left-color: #dc2626; }
+    .lc-item.lv3 { border-left-color: #f59e0b; }
+    .lc-item.lv4 { border-left-color: #3b82f6; }
+    .lc-item.lv5 { border-left-color: #059669; }
+    .lc-item.highlighted { background: #dbeafe; box-shadow: 0 0 0 2px #3b82f6; transform: scale(1.02); }
+    .lc-label { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 700; color: white; margin-bottom: 4px; }
+    .lc-label.lv1 { background: #ef4444; } .lc-label.lv2 { background: #dc2626; } .lc-label.lv3 { background: #f59e0b; }
+    .lc-label.lv4 { background: #3b82f6; } .lc-label.lv5 { background: #059669; }
+    .lc-desc { color: #334155; font-size: 13px; white-space: pre-wrap; line-height: 1.6; }
+
+    /* 確認頁表格樣式（按 TP 設計） */
+    .review-meta { background: #f8fafc; padding: 12px 14px; border-radius: 8px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 8px; border: 1px solid #e2e8f0; }
+    .review-meta-row { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #334155; flex-wrap: wrap; }
+    .meta-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; color: white; }
+    .meta-tag.blue { background: #3b82f6; }
+    .meta-tag.green { background: #10b981; }
+    .meta-tag.orange { background: #f59e0b; }
+    .review-table { width: 100%; border-collapse: collapse; background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+    .review-table th { background: #f1f5f9; padding: 12px 14px; text-align: left; color: #475569; font-size: 13px; font-weight: 600; border-bottom: 1px solid #e2e8f0; }
+    .review-table td { padding: 14px 14px; border-bottom: 1px solid #f1f5f9; font-size: 14px; color: #1e293b; vertical-align: middle; }
+    .review-table tr:last-child td { border-bottom: none; }
+    .review-table .step-cell { color: #64748b; font-size: 13px; }
+    .review-table .name-cell { font-weight: 600; }
+    .level-badge { display: inline-block; min-width: 36px; height: 36px; border-radius: 8px; color: white; font-weight: 700; text-align: center; line-height: 36px; font-size: 17px; padding: 0 8px; }
+    .level-badge.lv0 { background: #6b7280; }
+    .level-badge.lv1 { background: #ef4444; }
+    .level-badge.lv2 { background: #dc2626; }
+    .level-badge.lv3 { background: #f59e0b; }
+    .level-badge.lv4 { background: #3b82f6; }
+    .level-badge.lv5 { background: #059669; }
+    .empty-fb { color: #94a3b8; font-style: italic; font-size: 13px; }
+
+    .btn-primary { background: linear-gradient(135deg, #14b8a6, #0d9488); color: white; border: none; padding: 14px 24px; border-radius: 10px; cursor: pointer; font-family: inherit; font-size: 16px; font-weight: 700; box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3); }
+    .btn-primary:hover { opacity: 0.95; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background: white; color: #64748b; border: 2px solid #e2e8f0; padding: 12px 24px; border-radius: 10px; cursor: pointer; font-family: inherit; font-size: 15px; font-weight: 600; }
+    .btn-secondary:hover { background: #f8fafc; }
+    .footer-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; padding: 14px 18px; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+    .footer-actions .btn-primary, .footer-actions .btn-secondary { flex: 1; min-width: 140px; }
+
+    .err-msg { background: #fef2f2; color: #b91c1c; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin: 12px 0; border: 1px solid #fecaca; }
+    .meta-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; font-size: 13px; color: #475569; }
+    .meta-pill { background: #e0f2fe; color: #0369a1; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+    .meta-pill.green { background: #dcfce7; color: #166534; }
+    .meta-pill.orange { background: #fed7aa; color: #9a3412; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>📝 Milestone 臨床實習評量</h1>
+      <div class="sub">高級救護員訓練 - 教官評量專用頁</div>
+    </header>
+
+    <!-- 載入 / 錯誤 -->
+    <div class="panel" id="loading">
+      <div class="loading"><div class="icon">⏳</div><h2 style="color:#64748b">驗證連結中...</h2></div>
+    </div>
+    <div class="panel" id="error" style="display:none">
+      <div class="error"><div class="icon">❌</div><h2>無法評量</h2><p id="error-msg">—</p></div>
+    </div>
+
+    <!-- Step 1: 指導員資訊 + 評量對象 + 選擇維度 -->
+    <div id="step1" style="display:none">
+      <div class="panel">
+        <div class="section-title blue">1. 指導員資訊</div>
+        <div class="panel-body">
+          <div class="form-group">
+            <label>身分</label>
+            <select id="role-select"><option value="">請選擇身分...</option></select>
+            <input type="text" class="custom-input" id="role-custom" placeholder="請輸入自訂身分" style="display:none">
+          </div>
+          <div class="form-group">
+            <label>單位</label>
+            <select id="unit-select"><option value="">請選擇單位...</option></select>
+            <input type="text" class="custom-input" id="unit-custom" placeholder="請輸入自訂單位" style="display:none">
+          </div>
+          <div class="form-group">
+            <label>姓名</label>
+            <input type="text" id="evaluator-name" placeholder="請輸入姓名">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="section-title green">2. 評量對象（可改選同班其他學員）</div>
+        <div class="panel-body">
+          <div class="form-group">
+            <label>受評學員</label>
+            <select id="student-select"><option value="">請選擇學員...</option></select>
+          </div>
+          <div class="student-display" style="margin-top:10px">
+            <div class="name" id="student-display">—</div>
+            <div class="meta" id="student-meta">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="section-title orange">3. 選擇評量維度</div>
+        <div class="panel-body">
+          <div class="dim-grid">
+            <button class="dim-btn T" data-group="T">創傷</button>
+            <button class="dim-btn N" data-group="N">非創傷</button>
+            <button class="dim-btn K" data-group="K">兒科</button>
+            <button class="dim-btn V" data-group="V">口試</button>
+            <button class="dim-btn I" data-group="I">插管</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: 選定維度後 → milestone 列表 -->
+    <div id="step2" style="display:none">
+      <div class="panel">
+        <div class="section-title teal">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span id="step2-dim-title">維度 - 評量流程</span>
+            <button class="btn-back" id="btn-back-to-step1">⬅️ 返回重新選擇</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="info-box">
+            <div class="meta-row">📋 <strong>評核者</strong>：<span class="meta-pill" id="info-evaluator">—</span></div>
+            <div class="meta-row">👤 <strong>受評學員</strong>：<span class="meta-pill green" id="info-student">—</span></div>
+            <div class="meta-row">📌 <strong>維度</strong>：<span class="meta-pill orange" id="info-dim">—</span></div>
+          </div>
+          <div id="milestone-accordion" class="step-accordion"></div>
+        </div>
+        <div class="footer-actions">
+          <button class="btn-secondary" id="btn-back-to-step1-bottom">⬅️ 返回</button>
+          <button class="btn-primary" id="btn-review">📋 確認評量內容 <span id="review-count-badge"></span></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: 確認頁 -->
+    <div id="step3" style="display:none">
+      <div class="panel">
+        <div class="section-title orange">📋 請確認評量內容</div>
+        <div class="panel-body">
+          <div id="review-list"></div>
+        </div>
+        <div class="footer-actions">
+          <button class="btn-secondary" id="btn-back-to-step2">⬅️ 返回修改</button>
+          <button class="btn-primary" id="btn-submit">✅ 確認送出 <span id="submit-count-badge"></span></button>
+        </div>
+      </div>
+      <div id="submit-error"></div>
+    </div>
+
+    <!-- 完成 -->
+    <div class="panel" id="success" style="display:none">
+      <div class="success">
+        <div class="icon">✅</div>
+        <h2>評量完成！</h2>
+        <p style="color:#64748b;margin:12px 0 24px">已寫入 <strong id="success-count">—</strong> 筆評量、學員雷達會自動更新。</p>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+          <button class="btn-secondary" id="btn-eval-more">📝 為此學員再評其他維度</button>
+        </div>
+        <div style="color:#94a3b8;font-size:12px;margin-top:16px">本連結 24 小時內可重複使用</div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+    import { getFirestore, collection, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, arrayUnion, increment, query, where, writeBatch } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
+      authDomain: "emtp-learning-system.firebaseapp.com",
+      projectId: "emtp-learning-system",
+      storageBucket: "emtp-learning-system.firebasestorage.app",
+      messagingSenderId: "1057617665185",
+      appId: "1:1057617665185:web:2d1902083fa21af0e7a4e0",
+      measurementId: "G-HQRYX3NJ78"
+    };
+    const app = initializeApp(firebaseConfig, 'eval-app');
+    const db = getFirestore(app);
+
+    // F11-H: 全系統共用 Level 1-5 預設描述（標準 EPA Milestone）
+    const DEFAULT_LEVEL_DESC = {
+      1: '無法執行，需全程指導才能完成',
+      2: '能執行，但需指導員持續從旁協助',
+      3: '能執行，偶爾需要指導員提醒',
+      4: '能獨立執行，能於演練情境中獨立判斷並執行完畢',
+      5: '完全獨立，且能指導他人，無需督導'
+    };
+
+    // 嵌入模式（從 student.html iframe 開啟）
+    const EMBED_MODE = new URLSearchParams(location.search).get('embed') === '1';
+    if (EMBED_MODE) document.body.classList.add('embed');
+
+    let tokenData = null;
+    let studentData = null;        // 當前選定的學員（可變、從下拉選）
+    let classmates = [];           // 同班學員清單
+    let groups = [];
+    let milestones = [];
+    let roles = [];
+    let units = [];
+    let currentGroupId = null;
+    // 當前評核中的 milestone：milestoneId -> { enabled, level, feedback }
+    const evalDraft = {};
+
+    function showStep(s) {
+      ['loading', 'error', 'step1', 'step2', 'step3', 'success'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = (id === s) ? 'block' : 'none';
+      });
+    }
+    function showError(msg) {
+      document.getElementById('error-msg').textContent = msg;
+      showStep('error');
+    }
+
+    async function init() {
+      const params = new URLSearchParams(location.search);
+      const tokenId = params.get('token');
+      if (!tokenId) { showError('連結缺少 token、請學員重新分享。'); return; }
+      try {
+        const tokenDoc = await getDoc(doc(db, 'evaluation_tokens', tokenId));
+        if (!tokenDoc.exists()) { showError('連結無效或已被撤銷。'); return; }
+        tokenData = { id: tokenDoc.id, ...tokenDoc.data() };
+        const expiresAt = tokenData.expiresAt?.seconds ? tokenData.expiresAt.seconds * 1000 : 0;
+        if (expiresAt && Date.now() > expiresAt) { showError('連結已過期（24 小時時效）。'); return; }
+
+        // 2026-11-05 名冊上鎖（太和殿甲23）：評核者不登入，不再直接讀 students（含身分證）。
+        //   改問後台：確認這個評核連結有效、未過期，才回「被評學員＋同班座號姓名」（含班級顯示名）。
+        const rr = await fetch('https://asia-east1-emtp-learning-system.cloudfunctions.net/publicRoster', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: { action: 'evalRoster', token: tokenId } }),
+        });
+        const rj = await rr.json().catch(() => ({}));
+        if (!rj.result) { showError((rj.error && rj.error.message) || '找不到學員資料。'); return; }
+        studentData = rj.result.student;
+        window._classDisplay = rj.result.classDisplay || studentData.classId;
+        classmates = rj.result.classmates || [];
+
+        // 填學員下拉、預選 token 學員
+        const stSel = document.getElementById('student-select');
+        let stHtml = '';
+        classmates.forEach(s => {
+          stHtml += `<option value="${s.id}"${s.id === studentData.id ? ' selected' : ''}>${s.studentNo}. ${s.name}</option>`;
+        });
+        stSel.innerHTML = stHtml;
+        updateStudentDisplay();
+
+        await Promise.all([loadAllData()]);
+        showStep('step1');
+      } catch (e) {
+        console.error(e);
+        showError('系統錯誤：' + e.message);
+      }
+    }
+
+    async function loadAllData() {
+      // groups
+      const gSnap = await getDocs(collection(db, 'milestone_groups'));
+      groups = [];
+      gSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) groups.push({ id: d.id, ...data }); });
+      groups.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+      // milestones
+      const mSnap = await getDocs(collection(db, 'milestones'));
+      milestones = [];
+      mSnap.forEach(d => { const data = d.data(); if (data.isActive !== false && data.isVisible !== false) milestones.push({ id: d.id, ...data }); });
+      milestones.sort((a, b) => {
+        if (a.groupId !== b.groupId) return (a.groupId || '').localeCompare(b.groupId || '');
+        if (a.step !== b.step) return (a.step || '').localeCompare(b.step || '');
+        return (a.displayOrder || 0) - (b.displayOrder || 0);
+      });
+      // roles
+      const rSnap = await getDocs(collection(db, 'evaluator_roles'));
+      roles = [];
+      rSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) roles.push({ id: d.id, ...data }); });
+      roles.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+      // units
+      const uSnap = await getDocs(collection(db, 'units'));
+      units = [];
+      uSnap.forEach(d => { const data = d.data(); if (data.isActive !== false) units.push({ id: d.id, ...data }); });
+      units.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+
+      // 填下拉
+      const roleSel = document.getElementById('role-select');
+      let rh = '<option value="">請選擇身分...</option>';
+      roles.forEach(r => { rh += `<option value="${r.name}">${r.name}</option>`; });
+      rh += '<option value="__custom__">📝 其他（自訂）</option>';
+      roleSel.innerHTML = rh;
+
+      const unitSel = document.getElementById('unit-select');
+      let uh = '<option value="">請選擇單位...</option>';
+      const pre = units.filter(u => u.type === 'prehospital');
+      const hos = units.filter(u => u.type === 'hospital');
+      const oth = units.filter(u => u.type !== 'prehospital' && u.type !== 'hospital');
+      if (pre.length) { uh += '<optgroup label="🚑 院前">'; pre.forEach(u => { uh += `<option value="${u.name}">${u.name}</option>`; }); uh += '</optgroup>'; }
+      if (hos.length) { uh += '<optgroup label="🏥 醫院">'; hos.forEach(u => { uh += `<option value="${u.name}">${u.name}</option>`; }); uh += '</optgroup>'; }
+      if (oth.length) { uh += '<optgroup label="📍 其他">'; oth.forEach(u => { uh += `<option value="${u.name}">${u.name}</option>`; }); uh += '</optgroup>'; }
+      uh += '<option value="__custom__">📝 其他（自訂）</option>';
+      unitSel.innerHTML = uh;
+    }
+
+    function updateStudentDisplay() {
+      document.getElementById('student-display').textContent = studentData.name;
+      document.getElementById('student-meta').textContent = `${window._classDisplay} ・ 學號 ${studentData.studentNo}`;
+    }
+
+    // 學員下拉切換
+    document.getElementById('student-select').addEventListener('change', () => {
+      const sid = document.getElementById('student-select').value;
+      const found = classmates.find(s => s.id === sid);
+      if (found) {
+        studentData = found;
+        updateStudentDisplay();
+      }
+    });
+
+    // 自訂切換
+    document.getElementById('role-select').addEventListener('change', () => {
+      document.getElementById('role-custom').style.display = document.getElementById('role-select').value === '__custom__' ? 'block' : 'none';
+    });
+    document.getElementById('unit-select').addEventListener('change', () => {
+      document.getElementById('unit-custom').style.display = document.getElementById('unit-select').value === '__custom__' ? 'block' : 'none';
+    });
+
+    // 維度按鈕
+    document.querySelectorAll('.dim-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const role = document.getElementById('role-select').value;
+        const roleCustom = document.getElementById('role-custom').value.trim();
+        const unit = document.getElementById('unit-select').value;
+        const unitCustom = document.getElementById('unit-custom').value.trim();
+        const name = document.getElementById('evaluator-name').value.trim();
+        if (!role) { alert('❌ 請先選擇身分'); return; }
+        if (role === '__custom__' && !roleCustom) { alert('❌ 請填自訂身分'); return; }
+        if (!unit) { alert('❌ 請先選擇單位'); return; }
+        if (unit === '__custom__' && !unitCustom) { alert('❌ 請填自訂單位'); return; }
+        if (!name) { alert('❌ 請填姓名'); return; }
+        currentGroupId = btn.dataset.group;
+        Object.keys(evalDraft).forEach(k => delete evalDraft[k]); // 清空草稿
+        renderStep2();
+      });
+    });
+
+    function getEvaluatorInfo() {
+      const role = document.getElementById('role-select').value;
+      const roleCustom = document.getElementById('role-custom').value.trim();
+      const unit = document.getElementById('unit-select').value;
+      const unitCustom = document.getElementById('unit-custom').value.trim();
+      const name = document.getElementById('evaluator-name').value.trim();
+      return {
+        name,
+        role: role === '__custom__' ? roleCustom : role,
+        roleCustom: role === '__custom__' ? roleCustom : null,
+        unit: unit === '__custom__' ? unitCustom : unit,
+        unitCustom: unit === '__custom__' ? unitCustom : null
+      };
+    }
+
+    function renderStep2() {
+      const g = groups.find(x => x.id === currentGroupId);
+      const ev = getEvaluatorInfo();
+      document.getElementById('step2-dim-title').textContent = `${g?.name || currentGroupId} - 評量流程`;
+      document.getElementById('info-evaluator').textContent = `${ev.name}（${ev.role} / ${ev.unit}）`;
+      document.getElementById('info-student').textContent = studentData.name;
+      document.getElementById('info-dim').textContent = g?.name || currentGroupId;
+
+      // 該維度的 milestones、按 step 分組
+      const groupMs = milestones.filter(m => m.groupId === currentGroupId);
+      const stepOrder = ['初步評估', '處置', '二度評估', '交班', '新生兒', '小兒', '核生化災難', '大量傷病患', '緊急救護系統', '氣管插管'];
+      const byStep = {};
+      groupMs.forEach(m => {
+        const s = m.step || '其他';
+        if (!byStep[s]) byStep[s] = [];
+        byStep[s].push(m);
+      });
+      const orderedSteps = [...new Set([...stepOrder, ...Object.keys(byStep)])].filter(s => byStep[s]);
+
+      let html = '';
+      orderedSteps.forEach((step, idx) => {
+        const items = byStep[step];
+        html += `<div class="step-group${idx === 0 ? ' open' : ''}">
+          <div class="step-head" data-step-toggle="${idx}">
+            <span>${step} <span style="color:#94a3b8;font-size:13px">(${items.length})</span></span>
+            <span class="caret">▼</span>
+          </div>
+          <div class="step-body">`;
+        items.forEach(m => {
+          const draft = evalDraft[m.id] || {};
+          const isOn = !!draft.enabled;
+          // F11-H: Level 1-5 hint（點 Level 後即時顯示對應描述、優先用 milestone 自訂、否則用全系統預設）
+          const lds = m.levelDescriptions || {};
+          function getLevelDesc(lv) {
+            return lds[lv] || lds[String(lv)] || DEFAULT_LEVEL_DESC[lv] || '';
+          }
+          const initialHint = draft.level
+            ? `<strong>Level ${draft.level}</strong> ｜ ${getLevelDesc(draft.level)}`
+            : '👇 點下方任一 Level 看評核標準';
+          const initialHintClass = draft.level ? `ms-level-hint lv${draft.level}` : 'ms-level-hint';
+
+          html += `<div class="ms-item${isOn ? ' on' : ''}" data-msid="${m.id}">
+            <div class="ms-header">
+              <div class="ms-toggle${isOn ? ' on' : ''}" data-ms-toggle="${m.id}"></div>
+              <div class="ms-info">
+                <div class="ms-name">${m.name}</div>
+                <div class="ms-id">${m.id}</div>
+              </div>
+            </div>
+            <div class="ms-detail">
+              ${m.scoringGuide ? `<div class="scoring-guide">💡 ${m.scoringGuide}</div>` : ''}
+              <div class="ms-level-grid">
+                ${[1,2,3,4,5].map(lv => `<label class="lv${lv}${draft.level === lv ? ' selected' : ''}" data-ms-level="${m.id}" data-lv="${lv}"><input type="radio" name="ms-level-${m.id}" value="${lv}"${draft.level === lv ? ' checked' : ''}>${lv}</label>`).join('')}
+              </div>
+              <div class="${initialHintClass}" id="hint-${m.id}" data-default-desc='${JSON.stringify({1:getLevelDesc(1),2:getLevelDesc(2),3:getLevelDesc(3),4:getLevelDesc(4),5:getLevelDesc(5)}).replace(/'/g, "&apos;")}'>${initialHint}</div>
+              <textarea class="ms-feedback" placeholder="質性回饋（選填）" data-ms-fb="${m.id}">${draft.feedback || ''}</textarea>
+            </div>
+          </div>`;
+        });
+        html += '</div></div>';
+      });
+
+      document.getElementById('milestone-accordion').innerHTML = html;
+
+      // 事件綁定
+      document.querySelectorAll('[data-step-toggle]').forEach(el => {
+        el.addEventListener('click', () => el.closest('.step-group').classList.toggle('open'));
+      });
+      document.querySelectorAll('[data-ms-toggle]').forEach(el => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const msid = el.dataset.msToggle;
+          const item = el.closest('.ms-item');
+          const isOn = !el.classList.contains('on');
+          el.classList.toggle('on');
+          item.classList.toggle('on');
+          if (!evalDraft[msid]) evalDraft[msid] = {};
+          evalDraft[msid].enabled = isOn;
+          if (!isOn) { delete evalDraft[msid].level; }
+          updateReviewCount();
+        });
+      });
+      document.querySelectorAll('[data-ms-level]').forEach(el => {
+        el.addEventListener('click', (e) => {
+          e.preventDefault();
+          const msid = el.dataset.msLevel;
+          const lv = parseInt(el.dataset.lv);
+          if (!evalDraft[msid]) evalDraft[msid] = {};
+          evalDraft[msid].level = lv;
+          // 更新視覺
+          el.closest('.ms-level-grid').querySelectorAll('label').forEach(l => l.classList.remove('selected'));
+          el.classList.add('selected');
+          // 確保 toggle 是 on
+          const toggle = document.querySelector(`[data-ms-toggle="${msid}"]`);
+          if (!toggle.classList.contains('on')) {
+            toggle.classList.add('on');
+            toggle.closest('.ms-item').classList.add('on');
+            evalDraft[msid].enabled = true;
+          }
+          // F11-H: 顯示對應 Level 的描述（即時提示）
+          const hint = document.getElementById(`hint-${msid}`);
+          if (hint) {
+            const descs = JSON.parse(hint.dataset.defaultDesc);
+            const desc = descs[lv] || DEFAULT_LEVEL_DESC[lv] || '';
+            hint.innerHTML = `<strong>Level ${lv}</strong> ｜ ${desc}`;
+            hint.className = `ms-level-hint lv${lv}`;
+          }
+          updateReviewCount();
+        });
+      });
+      document.querySelectorAll('[data-ms-fb]').forEach(el => {
+        el.addEventListener('input', () => {
+          const msid = el.dataset.msFb;
+          if (!evalDraft[msid]) evalDraft[msid] = {};
+          evalDraft[msid].feedback = el.value;
+        });
+      });
+
+      updateReviewCount();
+      showStep('step2');
+    }
+
+    function updateReviewCount() {
+      const count = Object.values(evalDraft).filter(d => d.enabled && d.level !== undefined).length;
+      const badge = document.getElementById('review-count-badge');
+      if (count > 0) {
+        badge.textContent = `（${count} 筆）`;
+        document.getElementById('btn-review').disabled = false;
+      } else {
+        badge.textContent = '';
+        document.getElementById('btn-review').disabled = true;
+      }
+    }
+
+    document.getElementById('btn-back-to-step1').addEventListener('click', () => showStep('step1'));
+    document.getElementById('btn-back-to-step1-bottom').addEventListener('click', () => showStep('step1'));
+
+    document.getElementById('btn-review').addEventListener('click', () => {
+      const toEval = Object.entries(evalDraft).filter(([id, d]) => d.enabled && d.level !== undefined);
+      if (toEval.length === 0) { alert('❌ 至少要評量一項 Milestone'); return; }
+      renderReview(toEval);
+      showStep('step3');
+    });
+
+    function renderReview(items) {
+      // F11-H bug fix: 重置 submit 按鈕（避免上次評完後 disabled + 顯示「⏳ 寫入中...」殘留）
+      const sbtn = document.getElementById('btn-submit');
+      sbtn.disabled = false;
+      sbtn.innerHTML = `✅ 確認送出 <span id="submit-count-badge">（${items.length} 筆）</span>`;
+
+      const ev = getEvaluatorInfo();
+      const g = groups.find(x => x.id === currentGroupId);
+
+      // 上方資訊區（TP 樣式 - 三個彩色 tag）
+      let html = `<div class="review-meta">
+        <div class="review-meta-row"><span class="meta-tag blue">📋 評核者</span><span>${ev.name}（${ev.role} / ${ev.unit}）</span></div>
+        <div class="review-meta-row"><span class="meta-tag green">👤 受評學員</span><span><strong>${studentData.name}</strong>（${studentData.classId} 學號 ${studentData.studentNo}）</span></div>
+        <div class="review-meta-row"><span class="meta-tag orange">📌 維度</span><span><strong>${g?.name || currentGroupId}</strong></span></div>
+      </div>`;
+
+      // 表格樣式（TP 設計）
+      html += `<table class="review-table">
+        <thead>
+          <tr>
+            <th style="width:80px">步驟</th>
+            <th>技能項目</th>
+            <th style="width:80px;text-align:center">等級</th>
+            <th>回饋</th>
+          </tr>
+        </thead>
+        <tbody>`;
+      items.forEach(([msid, d]) => {
+        const m = milestones.find(x => x.id === msid);
+        if (!m) return;
+        const fb = (d.feedback || '').trim();
+        html += `<tr>
+          <td class="step-cell">${m.step || '—'}</td>
+          <td class="name-cell">${m.name}</td>
+          <td style="text-align:center"><span class="level-badge lv${d.level}">${d.level}</span></td>
+          <td>${fb || '<span class="empty-fb">—</span>'}</td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+
+      document.getElementById('review-list').innerHTML = html;
+      document.getElementById('submit-count-badge').textContent = `（${items.length} 筆）`;
+    }
+
+    document.getElementById('btn-back-to-step2').addEventListener('click', () => showStep('step2'));
+
+    document.getElementById('btn-submit').addEventListener('click', async () => {
+      const items = Object.entries(evalDraft).filter(([id, d]) => d.enabled && d.level !== undefined);
+      if (items.length === 0) return;
+      const ev = getEvaluatorInfo();
+      const btn = document.getElementById('btn-submit');
+      btn.disabled = true; btn.textContent = '⏳ 寫入中...';
+      document.getElementById('submit-error').innerHTML = '';
+      try {
+        // 用 batch 寫入提高效率
+        const batch = writeBatch(db);
+        const evalIds = [];
+        for (const [msid, d] of items) {
+          const m = milestones.find(x => x.id === msid);
+          if (!m) continue;
+          const ref = doc(collection(db, 'milestone_evaluations'));
+          evalIds.push(ref.id);
+          batch.set(ref, {
+            studentId: studentData.id,
+            studentName: studentData.name,
+            classId: studentData.classId,
+            milestoneId: msid,
+            milestoneName: m.name,
+            groupId: m.groupId,
+            step: m.step || null,
+            evaluatorName: ev.name,
+            evaluatorRole: ev.role,
+            evaluatorRoleCustom: ev.roleCustom,
+            evaluatorUnit: ev.unit,
+            evaluatorUnitCustom: ev.unitCustom,
+            level: d.level,
+            qualitativeFeedback: (d.feedback || '').trim(),
+            tokenId: tokenData.id,
+            evaluatedAt: serverTimestamp()
+          });
+        }
+        await batch.commit();
+        // 更新 token 統計
+        try {
+          await updateDoc(doc(db, 'evaluation_tokens', tokenData.id), {
+            usedCount: increment(items.length),
+            evaluationIds: arrayUnion(...evalIds),
+            lastUsedAt: serverTimestamp()
+          });
+        } catch (e) { console.warn('token 更新失敗:', e); }
+
+        document.getElementById('success-count').textContent = items.length;
+        showStep('success');
+      } catch (e) {
+        console.error(e);
+        document.getElementById('submit-error').innerHTML = `<div class="err-msg">❌ 送出失敗：${e.message}</div>`;
+        btn.disabled = false;
+        btn.textContent = '✅ 確認送出';
+      }
+    });
+
+    document.getElementById('btn-eval-more').addEventListener('click', () => {
+      Object.keys(evalDraft).forEach(k => delete evalDraft[k]);
+      currentGroupId = null;
+      // F11-H bug fix: 重置兩個按鈕的狀態（避免上次成功後殘留 disabled）
+      const sbtn = document.getElementById('btn-submit');
+      sbtn.disabled = false;
+      sbtn.innerHTML = '✅ 確認送出 <span id="submit-count-badge"></span>';
+      const rbtn = document.getElementById('btn-review');
+      if (rbtn) {
+        rbtn.disabled = true; // 因為 evalDraft 已清空
+        rbtn.innerHTML = '📋 確認評量內容 <span id="review-count-badge"></span>';
+      }
+      showStep('step1');
+    });
+
+    init();
+  </script>
+  <!-- 2026-11-25 著作權／專利標記 -->
+  <div class="cr-note" style="text-align:center;font-size:11px;line-height:1.6;color:#94a3b8;padding:14px 12px;word-break:break-word;">© 2026 宋威儀 版權所有｜本系統專利申請中：發明申請號 115143952、新型申請號 115210290｜未經授權，禁止重製、改作、轉載或用於商業用途</div>
+</body>
+</html>

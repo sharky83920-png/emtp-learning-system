@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Milestone 總覽</title>
+<!--
+  📊 Milestone 總覽（教官端・電腦版）　2026-09-29
+  ─────────────────────────────────────────────────────────
+  🔴 這一頁不直接連 Firestore。所有資料都經由 Cloud Function `milestoneBoard`
+     以網址上的 token 驗證後取得，token 只綁定一個班級。
+     好處：不必為了免登入而放寬 Firestore 規則（那會讓全部 388 人的評核外露）。
+  🔴 算分規則與 student.html 完全一致（每項取最近 N 次平均、套用該班 epaScoring 排除設定），
+     否則教官看到的分數會跟學員自己看到的對不起來。
+-->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#f1f5f9; --card:#fff; --line:#e2e8f0; --ink:#1e293b; --sub:#64748b;
+    --teal:#0d9488; --amber:#f59e0b; --red:#dc2626; --blue:#3b82f6;
+    /* 等級 1~5 的顏色（淺→深，色盲也分得出明度差） */
+    --l1:#fecaca; --l2:#fed7aa; --l3:#fde68a; --l4:#bbf7d0; --l5:#5eead4;
+    --none:#f8fafc;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:"Microsoft JhengHei","微軟正黑體",system-ui,sans-serif}
+  header{background:#0f766e;color:#fff;padding:14px 22px;display:flex;align-items:center;
+         gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:20;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+  header h1{font-size:19px;margin:0}
+  header .meta{font-size:13px;opacity:.9}
+  .tabs{display:flex;gap:8px;margin-left:auto}
+  .tabs button{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:8px;
+               padding:8px 16px;font-size:14px;font-family:inherit;cursor:pointer}
+  .tabs button.on{background:#fff;color:#0f766e;font-weight:700}
+  main{padding:20px;max-width:1600px;margin:0 auto}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
+  .card h2{font-size:16px;margin:0 0 12px}
+  .hint{color:var(--sub);font-size:13px;margin:0 0 14px}
+  .center{text-align:center;padding:60px 20px;color:var(--sub)}
+  .err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:20px;border-radius:12px}
+  select,input{font-family:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--line);border-radius:8px}
+  /* ① 個人 */
+  .one-wrap{display:grid;grid-template-columns:420px 1fr;gap:20px;align-items:start}
+  .kv{display:flex;gap:8px;font-size:13px;color:var(--sub);margin-bottom:4px}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{border:1px solid var(--line);padding:5px 8px;text-align:left}
+  th{background:#f8fafc;font-weight:600;position:sticky;top:0}
+  /* ② 全班小雷達 */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+  .mini{border:1px solid var(--line);border-radius:10px;padding:8px;background:#fff}
+  .mini h4{margin:0 0 2px;font-size:14px;display:flex;justify-content:space-between;align-items:baseline}
+  .mini .sub{font-size:11px;color:var(--sub)}
+  .mini.zero{background:#fff7ed;border-color:#fed7aa}
+  /* ③ 熱力圖 */
+  .heat-wrap{overflow:auto;max-height:78vh}
+  .heat{border-collapse:separate;border-spacing:0;font-size:12px}
+  .heat th.rowh{position:sticky;left:0;background:#f8fafc;z-index:3;min-width:130px;text-align:left}
+  .heat thead th{position:sticky;top:0;background:#f8fafc;z-index:2;
+                 writing-mode:vertical-rl;text-orientation:mixed;height:130px;padding:6px 3px;font-weight:500}
+  .heat thead th.corner{position:sticky;left:0;z-index:4;writing-mode:horizontal-tb;height:auto}
+  .heat td{width:26px;height:26px;text-align:center;padding:0;border:1px solid #fff;cursor:default}
+  .lv1{background:var(--l1)} .lv2{background:var(--l2)} .lv3{background:var(--l3)}
+  .lv4{background:var(--l4)} .lv5{background:var(--l5)}
+  .lv0{background:var(--none);color:#cbd5e1}
+  .gsep{border-left:3px solid #94a3b8 !important}
+  .legend{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--sub);margin:10px 0}
+  .legend i{display:inline-block;width:16px;height:16px;border-radius:3px;margin-right:4px;vertical-align:-3px}
+  .pill{background:#ecfeff;border:1px solid #a5f3fc;color:#0e7490;border-radius:999px;padding:2px 10px;font-size:12px}
+  .warn{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+  /* 展開列：單項曲線＋歷次評核＋質性回饋 */
+  tr.ms-row{cursor:pointer}
+  tr.ms-row:hover{background:#f8fafc}
+  tr.ms-row .caret{color:#94a3b8;font-size:11px;margin-right:4px}
+  tr.exp>td{background:#f8fafc;padding:12px 16px}
+  .tl{list-style:none;margin:0;padding:0}
+  .tl li{padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px}
+  .tl li:last-child{border-bottom:none}
+  .tl .d{color:var(--sub);margin-right:10px}
+  .tl .lv{display:inline-block;min-width:22px;text-align:center;border-radius:5px;padding:1px 6px;font-weight:700;margin-right:8px}
+  .fb{display:block;margin-top:3px;color:#0f766e;background:#f0fdfa;border-left:3px solid #5eead4;padding:5px 10px;border-radius:0 6px 6px 0}
+  .nofb{color:#cbd5e1}
+  .trend{font-weight:700;margin-left:6px}
+  .up{color:#059669} .flat{color:#94a3b8} .down{color:#dc2626}
+  .mini-chart{height:130px;margin-bottom:10px}
+  .big-chart{height:290px}
+  .note{color:var(--sub);font-size:12px;margin-top:8px;line-height:1.6}
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 Milestone 總覽</h1>
+  <span class="meta" id="meta">載入中…</span>
+  <div class="tabs">
+    <button data-v="one" class="on">① 個人</button>
+    <button data-v="all">② 全班雷達</button>
+    <button data-v="heat">③ 逐項對照</button>
+  </div>
+</header>
+<main id="main"><div class="center">⏳ 載入中…</div></main>
+
+<script>
+const API = "https://asia-east1-emtp-learning-system.cloudfunctions.net/milestoneBoard";
+const LV = [null, "生手", "需指導", "需監督", "可獨立", "可教學"];  // 1~5
+let D = null, VIEW = "one", curStu = null, charts = [];
+
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function destroyCharts(){ charts.forEach(c=>{try{c.destroy()}catch(e){}}); charts=[]; }
+
+/* 🔴 與 student.html 同一套：排除設定 → 最近 N 次平均 */
+function counted(e){
+  const c = D.epaScoring || {};
+  if ((c.excludeRoles||[]).includes(e.role)) return false;
+  if ((c.excludeUnits||[]).includes(e.unit)) return false;
+  if ((c.excludeEvaluators||[]).includes(e.evaluator)) return false;
+  if ((c.excludeMilestones||[]).includes(e.milestoneId)) return false;
+  return true;
+}
+function msScore(stuId, msId){
+  const es = D.evals.filter(e => e.studentId===stuId && e.milestoneId===msId && counted(e))
+                    .sort((a,b)=>(b.at||0)-(a.at||0));
+  if (!es.length) return null;
+  const r = es.slice(0, D.recentN || 3);
+  return r.reduce((a,e)=>a+e.level,0)/r.length;
+}
+function groupScores(stuId){
+  return D.groups.map(g=>{
+    const inG = D.milestones.filter(m=>m.groupId===g.id && m.inRadar);
+    const sc = inG.map(m=>msScore(stuId,m.id)).filter(s=>s!==null);
+    return sc.length ? sc.reduce((a,b)=>a+b,0)/sc.length : 0;
+  });
+}
+function doneCount(stuId){
+  return D.milestones.filter(m => msScore(stuId,m.id)!==null).length;
+}
+/* 共用：時間折線圖。
+   🔴 三個刻意的決定（避免圖說謊）：
+     ① Y 軸固定 1~5，不自動縮放——否則 4.0→4.5 會被畫成從谷底衝到山頂
+     ② X 軸用真實時間戳，看得出「中間空了 40 天沒人評」
+     ③ 每個點的 tooltip 標出評核者——這個班有 36 位評核者，
+        曲線往下很可能只是換人評，不是學員退步
+   用 x 為數值時間戳＋自訂刻度，不必另外載 date adapter。 */
+function timeLine(canvas, datasets, opts){
+  opts = opts || {};
+  const c = new Chart(canvas, {
+    type: "line",
+    data: { datasets },
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:false,
+      parsing:false, interaction:{ mode:"nearest", intersect:true },
+      plugins:{
+        legend:{ display: !!opts.legend, labels:{ boxWidth:10, font:{size:11} } },
+        tooltip:{ callbacks:{
+          title: it => new Date(it[0].parsed.x).toLocaleDateString("zh-TW"),
+          label: it => {
+            const p = it.raw;
+            let s = (p.label ? p.label + "　" : "") + "等級 " + p.y;
+            if (p.by) s += "　評核者：" + p.by;
+            return s;
+          },
+          afterLabel: it => it.raw.fb ? "「" + it.raw.fb + "」" : ""
+        }}
+      },
+      scales:{
+        // 🔴 刻度格式依資料跨度自動切換：同一天內評好幾次（實際資料的常態，中位跨度 4 小時）
+        //    若還印日期會變成重複的「9/22 9/22 9/22」，要印時:分才看得出先後。
+        x:{ type:"linear", ticks:{ callback: v => {
+              const d = new Date(v);
+              return opts.intraday
+                ? String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0")
+                : (d.getMonth()+1) + "/" + d.getDate();
+            }, maxTicksLimit:8, font:{size:11} }, grid:{color:"#f1f5f9"} },
+        y:{ min: opts.yMin != null ? opts.yMin : 0.5, max:5.5,
+            ticks:{ stepSize:1, callback: v => (v>=1 && v<=5 && v%1===0) ? v : "", font:{size:11} },
+            grid:{color:"#e2e8f0"} }
+      }
+    }
+  });
+  charts.push(c); return c;
+}
+
+const GCOLOR = ["#0d9488","#3b82f6","#f59e0b","#a855f7","#ec4899"];
+function groupColor(gid){
+  const i = D.groups.findIndex(g => g.id === gid);
+  return GCOLOR[(i < 0 ? 0 : i) % GCOLOR.length];
+}
+
+function radar(canvas, scores, label, small){
+  const c = new Chart(canvas, {
+    type:"radar",
+    data:{ labels: D.groups.map(g=>g.name),
+           datasets:[{ label: label||"", data: scores, fill:true,
+                       backgroundColor:"rgba(13,148,136,.18)", borderColor:"#0d9488",
+                       borderWidth: small?1.5:2, pointRadius: small?2:3, pointBackgroundColor:"#0d9488" }] },
+    options:{ responsive:true, maintainAspectRatio:true, animation:false,
+      plugins:{ legend:{display:false}, tooltip:{enabled:!small} },
+      scales:{ r:{ min:0, max:5, ticks:{ stepSize:1, display:!small, font:{size:10} },
+                   pointLabels:{ font:{ size: small?10:13 } }, grid:{color:"#e2e8f0"} } } }
+  });
+  charts.push(c); return c;
+}
+
+/* 某人某項的歷次評核（新→舊） */
+function evalsOf(stuId, msId){
+  return D.evals.filter(e => e.studentId===stuId && e.milestoneId===msId)
+                .sort((a,b)=>(b.at||0)-(a.at||0));
+}
+/* 趨勢箭頭：只有 2 次以上才標。兩個點畫折線不如一個箭頭清楚。 */
+function trendMark(es){
+  if (es.length < 2) return "";
+  const oldest = es[es.length-1], newest = es[0];
+  const multiEv = new Set(es.map(e=>e.evaluator)).size > 1;
+  const tip = `${es.slice().reverse().map(e=>e.level).join(" → ")}` +
+              (multiEv ? "（由不同評核者評，起伏可能是標準差異）" : "（同一位評核者）");
+  const diff = newest.level - oldest.level;
+  if (diff > 0) return `<span class="trend up" title="${tip}">↑</span>`;
+  if (diff < 0) return `<span class="trend down" title="${tip}">↓</span>`;
+  return `<span class="trend flat" title="${tip}">→</span>`;
+}
+/* 點開某一項：單項曲線（≥2 次才畫）＋ 歷次評核 ＋ 質性回饋 */
+function toggleMs(msId){
+  const row = document.querySelector(`tr.exp[data-exp="${CSS.escape(msId)}"]`);
+  const head = document.querySelector(`tr.ms-row[data-ms="${CSS.escape(msId)}"]`);
+  if (!row) return;
+  const open = row.style.display !== "none";
+  row.style.display = open ? "none" : "table-row";
+  head.querySelector(".caret").textContent = open ? "▸" : "▾";
+  if (open || row.dataset.done) return;
+
+  const m = D.milestones.find(x=>x.id===msId) || {};
+  const es = evalsOf(curStu, msId);
+  const cell = row.querySelector("td");
+  if (!es.length){
+    cell.innerHTML = `<span style="color:#94a3b8">這一項還沒有人評核過。</span>`;
+    row.dataset.done = "1"; return;
+  }
+  const asc = es.slice().reverse();                        // 舊→新，畫圖用
+  // 實測：49 組多次評核，時間戳全部有先後（中位跨度 4 小時、多為同一天不同時段）
+  // → 一律畫時間曲線；只有跨度不到一天時，X 軸改印時:分才看得出先後。
+  const span = (asc[asc.length-1].at||0) - (asc[0].at||0);
+  const intraday = span < 86400000;
+  const evs = [...new Set(es.map(e=>e.evaluator))];
+  const canvasHtml = es.length >= 2
+    ? `<div class="mini-chart"><canvas></canvas></div>` +
+      `<p class="note" style="margin:-6px 0 8px">` +
+      (intraday ? `同一天內評了 ${es.length} 次（橫軸為時間）。` : `橫跨 ${Math.round(span/86400000)} 天、共 ${es.length} 次。`) +
+      (evs.length > 1
+        ? `　🔴 由 <b>${evs.length} 位不同評核者</b>評核（${evs.map(esc).join("、")}），<b>分數起伏可能來自標準不同，不一定是學員的變化</b>。`
+        : `　評核者都是 ${esc(evs[0]||"—")}，所以這條線可以當作<b>同一把尺下的變化</b>。`) +
+      `</p>`
+    : `<p class="note" style="margin-top:0">只有一次評核，還畫不出曲線——<b>再評一次就會自動出現</b>。</p>`;
+  cell.innerHTML = canvasHtml + `<ul class="tl">` + es.map(e=>`
+      <li><span class="lv lv${e.level}">${e.level}</span>
+        <span class="d">${e.at?new Date(e.at).toLocaleDateString("zh-TW"):"日期不明"}</span>
+        ${esc(e.evaluator||"—")}${e.role?`（${esc(e.role)}${e.unit?"／"+esc(e.unit):""}）`:""}
+        ${e.fb!==undefined&&e.feedback?"":""}
+        ${e.feedback?`<span class="fb">${esc(e.feedback)}</span>`:`<span class="fb nofb">（沒有留下文字回饋）</span>`}
+      </li>`).join("") + `</ul>`;
+
+  if (es.length >= 2){
+    const cv = cell.querySelector("canvas"), col = groupColor(m.groupId);
+    // 河流感：曲線下方漸層填色（與學員端成績河流圖同一種視覺語言）
+    const g = cv.getContext("2d").createLinearGradient(0, 0, 0, 130);
+    g.addColorStop(0, col + "55"); g.addColorStop(1, col + "08");
+    timeLine(cv, [{
+      label: m.name, borderColor: col, backgroundColor: g, fill: true,
+      borderWidth: 2.5, pointRadius: 5, pointBackgroundColor: "#fff", pointBorderColor: col,
+      pointBorderWidth: 2, tension: 0.35,
+      data: asc.map(e=>({ x: e.at||0, y: e.level, by: e.evaluator, fb: e.feedback, label: m.name }))
+    }], { yMin:0.5, intraday });
+  }
+  row.dataset.done = "1";
+}
+
+/* ───── ① 個人 ───── */
+function viewOne(){
+  const opts = D.students.map(s=>`<option value="${esc(s.id)}">${esc(s.no)} ${esc(s.name)}（已評 ${doneCount(s.id)}/${D.milestones.length}）</option>`).join("");
+  if (!curStu && D.students.length) curStu = D.students[0].id;
+  const stu = D.students.find(s=>s.id===curStu) || {};
+  const rows = D.groups.map(g=>{
+    const inG = D.milestones.filter(m=>m.groupId===g.id);
+    return `<tr><td colspan="4" style="background:#f1f5f9;font-weight:700">${esc(g.name)}</td></tr>` +
+      inG.map(m=>{
+        const sc = msScore(curStu,m.id);
+        const es = evalsOf(curStu, m.id);
+        const last = es[0];
+        return `<tr class="ms-row" data-ms="${esc(m.id)}">
+          <td><span class="caret">▸</span>${esc(m.name)}${m.step?`<span class="sub" style="color:#94a3b8"> ・${esc(m.step)}</span>`:""}</td>
+          <td style="text-align:center" class="${sc===null?"lv0":"lv"+Math.round(sc)}">${sc===null?"—":sc.toFixed(1)}${trendMark(es)}</td>
+          <td style="text-align:center">${es.length||"—"}</td>
+          <td style="color:#64748b">${last?esc(last.evaluator)+(last.at?"　"+new Date(last.at).toLocaleDateString("zh-TW"):""):"<span style='color:#f59e0b'>尚未評核</span>"}</td>
+        </tr>
+        <tr class="exp" data-exp="${esc(m.id)}" style="display:none"><td colspan="4"></td></tr>`;
+      }).join("");
+  }).join("");
+  document.getElementById("main").innerHTML = `
+    <div class="card">
+      <h2>① 個人雷達
+        <select id="pick" style="margin-left:12px">${opts}</select>
+      </h2>
+      <div class="one-wrap">
+        <div><canvas id="r1"></canvas>
+          <p class="hint" style="margin-top:10px">每一軸＝該群組底下各項最近 ${D.recentN} 次評核的平均。與學員自己看到的是同一張圖。</p>
+        </div>
+        <div><table><thead><tr><th>里程碑</th><th style="width:78px">分數</th><th style="width:60px">評核次數</th><th style="width:210px">最近一次</th></tr></thead>
+          <tbody>${rows}</tbody></table>
+          <p class="note">💡 <b>點任何一列</b>可展開該項的歷次評核、質性回饋與趨勢線。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📈 整體進展（這位學員的每一筆評核）</h2>
+      <div class="big-chart"><canvas id="t1"></canvas></div>
+      <p class="note">
+        每個點是一次評核，顏色代表五大群組；橫軸是真實日期，<b>中間的空白就是那段時間沒有人評他</b>。<br>
+        🔴 <b>線往下不一定是退步。</b>這個班有 ${new Set(D.evals.map(e=>e.evaluator)).size} 位評核者，標準本來就不同——
+        同一個學生在甲教官手上 5 分、乙教官手上 3 分，畫出來就像大退步。<b>滑過任一點可以看是誰評的。</b>
+      </p>
+    </div>`;
+  document.getElementById("pick").value = curStu;
+  document.getElementById("pick").onchange = e => { curStu = e.target.value; render(); };
+  document.querySelectorAll("tr.ms-row").forEach(tr => tr.onclick = () => toggleMs(tr.dataset.ms));
+  radar(document.getElementById("r1"), groupScores(curStu), stu.name, false);
+
+  // 個人整體曲線：每個群組一條，點＝一次評核
+  const mine = D.evals.filter(e=>e.studentId===curStu && e.at);
+  const ds = D.groups.map(g=>{
+    const ids = new Set(D.milestones.filter(m=>m.groupId===g.id).map(m=>m.id));
+    const pts = mine.filter(e=>ids.has(e.milestoneId)).sort((a,b)=>a.at-b.at)
+      .map(e=>{
+        const m = D.milestones.find(x=>x.id===e.milestoneId) || {};
+        return { x:e.at, y:e.level, by:e.evaluator, fb:e.feedback, label:m.name||"" };
+      });
+    const col = groupColor(g.id);
+    return { label:g.name, data:pts, borderColor:col, backgroundColor:col,
+             borderWidth:2, pointRadius:4, pointBackgroundColor:"#fff", pointBorderColor:col,
+             pointBorderWidth:1.5, tension:0.35, showLine:pts.length>1 };
+  }).filter(d=>d.data.length);
+  const allAt = mine.map(e=>e.at);
+  const oneDay = allAt.length>1 && (Math.max(...allAt)-Math.min(...allAt)) < 86400000;
+  if (ds.length) timeLine(document.getElementById("t1"), ds, { legend:true, intraday:oneDay });
+  else document.getElementById("t1").parentElement.innerHTML =
+    `<div class="center">這位學員還沒有任何帶日期的評核紀錄。</div>`;
+}
+
+/* ───── ② 全班小雷達 ───── */
+function viewAll(){
+  const zero = D.students.filter(s=>doneCount(s.id)===0).length;
+  document.getElementById("main").innerHTML = `
+    <div class="card">
+      <h2>② 全班雷達一次攤開</h2>
+      ${zero?`<div class="warn">⚠️ 有 <b>${zero}</b> 位學員<b>一項都還沒被評核</b>（底色標橘）。</div>`:""}
+      <p class="hint">同樣的軸、同樣的比例，形狀不一樣的人一眼就看得出來。點任一張可跳到他的個人頁。</p>
+      <div class="grid" id="grid"></div>
+    </div>
+
+    <div class="card">
+      <h2>📈 全班推進（每週）</h2>
+      <div class="big-chart"><canvas id="t2"></canvas></div>
+      <p class="note">
+        <b>綠線＝該週評核的平均等級</b>（左軸）；<b>灰柱＝該週的評核筆數</b>。<br>
+        平均等級只看那一週被評到的人，所以<b>筆數少的那幾週波動會很大</b>，別過度解讀。
+        筆數本身反而更實用——看得出哪幾週大家有在跑實習、哪幾週整班停擺。
+      </p>
+    </div>`;
+  const g = document.getElementById("grid");
+  D.students.forEach(s=>{
+    const done = doneCount(s.id);
+    const d = document.createElement("div");
+    d.className = "mini" + (done===0?" zero":"");
+    d.innerHTML = `<h4><span>${esc(s.no)} ${esc(s.name)}</span><span class="sub">${done}/${D.milestones.length}</span></h4><canvas></canvas>`;
+    d.onclick = () => { curStu = s.id; VIEW="one"; render(); };
+    d.style.cursor = "pointer";
+    g.appendChild(d);
+    radar(d.querySelector("canvas"), groupScores(s.id), s.name, true);
+  });
+
+  // 全班推進：以「週」為單位（週一為起點）
+  const wk = {};
+  D.evals.filter(e=>e.at).forEach(e=>{
+    const d0 = new Date(e.at); d0.setHours(0,0,0,0);
+    d0.setDate(d0.getDate() - ((d0.getDay()+6) % 7));      // 退到該週週一
+    const k = d0.getTime();
+    (wk[k] = wk[k] || []).push(e.level);
+  });
+  const keys = Object.keys(wk).map(Number).sort((a,b)=>a-b);
+  if (!keys.length){ document.getElementById("t2").parentElement.innerHTML = `<div class="center">尚無帶日期的評核。</div>`; return; }
+  const maxN = Math.max(...keys.map(k=>wk[k].length));
+  const c = new Chart(document.getElementById("t2"), {
+    data:{ datasets:[
+      { type:"bar", label:"該週評核筆數", yAxisID:"y2", order:2,
+        backgroundColor:"rgba(148,163,184,.35)", borderWidth:0,
+        data: keys.map(k=>({ x:k, y:wk[k].length })) },
+      { type:"line", label:"該週平均等級", yAxisID:"y", order:1,
+        borderColor:"#0d9488", backgroundColor:"#0d9488", borderWidth:2, pointRadius:4, tension:0,
+        data: keys.map(k=>({ x:k, y: wk[k].reduce((a,b)=>a+b,0)/wk[k].length })) },
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, animation:false, parsing:false,
+      plugins:{ legend:{ labels:{ boxWidth:10, font:{size:11} } },
+        tooltip:{ callbacks:{
+          title: it => { const d0=new Date(it[0].parsed.x);
+            return (d0.getMonth()+1)+"/"+d0.getDate()+" 那一週"; },
+          label: it => it.dataset.label + "：" +
+            (it.dataset.type==="bar" ? it.parsed.y + " 筆" : it.parsed.y.toFixed(2)) } } },
+      scales:{
+        x:{ type:"linear", ticks:{ callback: v => { const d0=new Date(v); return (d0.getMonth()+1)+"/"+d0.getDate(); },
+            maxTicksLimit:10, font:{size:11} }, grid:{color:"#f1f5f9"} },
+        y:{ position:"left", min:0.5, max:5.5, title:{display:true,text:"平均等級",font:{size:11}},
+            ticks:{ stepSize:1, callback:v=>(v>=1&&v<=5&&v%1===0)?v:"", font:{size:11} } },
+        y2:{ position:"right", min:0, max: Math.ceil(maxN*1.3), title:{display:true,text:"評核筆數",font:{size:11}},
+             grid:{display:false}, ticks:{ font:{size:11} } } } }
+  });
+  charts.push(c);
+}
+
+/* ───── ③ 逐項對照（熱力圖）───── */
+function viewHeat(){
+  const ms = D.milestones.slice().sort((a,b)=>{
+    const ga = D.groups.findIndex(g=>g.id===a.groupId), gb = D.groups.findIndex(g=>g.id===b.groupId);
+    return ga!==gb ? ga-gb : a.order-b.order;
+  });
+  let firstOfGroup = new Set();
+  let seen = new Set();
+  ms.forEach(m=>{ if(!seen.has(m.groupId)){ firstOfGroup.add(m.id); seen.add(m.groupId); } });
+
+  const head = ms.map(m=>`<th class="${firstOfGroup.has(m.id)?"gsep":""}" title="${esc(m.name)}">${esc(m.name)}</th>`).join("");
+  const body = D.students.map(s=>{
+    const tds = ms.map(m=>{
+      const sc = msScore(s.id,m.id);
+      const cls = sc===null ? "lv0" : "lv"+Math.round(sc);
+      const t = sc===null ? `${s.name}／${m.name}：尚未評核` : `${s.name}／${m.name}：${sc.toFixed(1)}（${LV[Math.round(sc)]}）`;
+      return `<td class="${cls} ${firstOfGroup.has(m.id)?"gsep":""}" title="${esc(t)}">${sc===null?"":sc.toFixed(0)}</td>`;
+    }).join("");
+    const done = doneCount(s.id);
+    return `<tr><th class="rowh">${esc(s.no)} ${esc(s.name)}<span class="sub" style="color:#94a3b8;font-weight:400">　${done}/${ms.length}</span></th>${tds}</tr>`;
+  }).join("");
+
+  // 每一項的全班完成率（找出「全班都卡住」的項目）
+  const foot = ms.map(m=>{
+    const n = D.students.filter(s=>msScore(s.id,m.id)!==null).length;
+    const pct = D.students.length ? Math.round(n/D.students.length*100) : 0;
+    const col = pct===0 ? "#dc2626" : pct<30 ? "#f59e0b" : "#64748b";
+    return `<td style="color:${col};font-weight:700" class="${firstOfGroup.has(m.id)?"gsep":""}" title="${esc(m.name)}：全班 ${n}/${D.students.length} 人已評">${pct}</td>`;
+  }).join("");
+
+  document.getElementById("main").innerHTML = `
+    <div class="card">
+      <h2>③ 單一里程碑・全班對照</h2>
+      <p class="hint">橫軸 ${ms.length} 個里程碑（依群組排列、粗線分隔），縱軸 ${D.students.length} 位學員。
+        <b>空白格＝還沒被評核</b>——這是這張表最該看的地方。最後一列是每一項的全班完成率（%）。</p>
+      <div class="legend">
+        <span><i class="lv0" style="border:1px solid #e2e8f0"></i>尚未評核</span>
+        ${[1,2,3,4,5].map(l=>`<span><i class="lv${l}"></i>${l} ${LV[l]}</span>`).join("")}
+      </div>
+      <div class="heat-wrap">
+        <table class="heat">
+          <thead><tr><th class="corner">學員 ＼ 里程碑</th>${head}</tr></thead>
+          <tbody>${body}</tbody>
+          <tfoot><tr><th class="rowh">全班完成率 %</th>${foot}</tr></tfoot>
+        </table>
+      </div>
+    </div>`;
+}
+
+function render(){
+  destroyCharts();
+  document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("on", b.dataset.v===VIEW));
+  ({ one:viewOne, all:viewAll, heat:viewHeat })[VIEW]();
+}
+
+/* 觀看碼記在這台電腦的瀏覽器裡。
+   🔴 為什麼要這樣做：太和殿（court.html）是**公開網址、沒有登入保護**，
+      若把帶 token 的完整網址寫進它的原始碼，等於把觀看碼公開。
+      改成太和殿只連到本頁（不帶 token），第一次貼一次碼、之後這台電腦自動記住。 */
+const LS_KEY = "milestoneViewToken";
+function saveToken(t){ try{ localStorage.setItem(LS_KEY, t); }catch(e){} }
+function loadToken(){ try{ return localStorage.getItem(LS_KEY) || ""; }catch(e){ return ""; } }
+function askToken(msg){
+  document.getElementById("meta").textContent = "";
+  document.getElementById("main").innerHTML = `
+    <div class="card" style="max-width:560px;margin:60px auto">
+      <h2>🔑 請輸入觀看碼</h2>
+      ${msg ? `<div class="warn">${msg}</div>` : ""}
+      <p class="hint">向系統管理者索取。輸入一次之後，<b>這台電腦會記住</b>，下次從太和殿點進來就不用再輸入。</p>
+      <div style="display:flex;gap:8px">
+        <input id="tk" placeholder="貼上觀看碼或完整網址" style="flex:1" autofocus>
+        <button id="go" style="background:var(--teal);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-family:inherit;font-size:14px;cursor:pointer">進入</button>
+      </div>
+    </div>`;
+  const run = () => {
+    let v = document.getElementById("tk").value.trim();
+    const m = v.match(/[?&]t=([^&\s]+)/);          // 整段網址也接受
+    if (m) v = decodeURIComponent(m[1]);
+    if (!v) return;
+    saveToken(v);
+    location.href = location.pathname + "?t=" + encodeURIComponent(v);
+  };
+  document.getElementById("go").onclick = run;
+  document.getElementById("tk").onkeydown = e => { if (e.key === "Enter") run(); };
+}
+
+(async function(){
+  let t = new URLSearchParams(location.search).get("t") || "";
+  const main = document.getElementById("main");
+  if (t) saveToken(t); else t = loadToken();      // 網址沒帶就用這台電腦記住的
+  if (!t){ askToken(""); return; }
+  try{
+    const r = await fetch(API + "?t=" + encodeURIComponent(t));
+    if (r.status === 403){
+      const j = await r.json().catch(()=>({}));
+      try{ localStorage.removeItem(LS_KEY); }catch(e){}   // 失效的就別再記著
+      askToken("<b>這個觀看碼無法使用</b>——" + (
+        j.error==="revoked" ? "它已經被撤銷了。" : j.error==="expired" ? "它已經過期了。" : "識別碼不正確。"
+      ) + "請向系統管理者索取新的。");
+      return;
+    }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    D = await r.json();
+  }catch(e){
+    main.innerHTML = `<div class="err">載入失敗：${esc(e.message)}<br><span style="font-size:13px">請重新整理；若持續失敗請回報。</span></div>`;
+    return;
+  }
+  const evaluated = D.students.filter(s=>doneCount(s.id)>0).length;
+  document.getElementById("meta").textContent =
+    `${D.className}　學員 ${D.students.length} 人（已有評核 ${evaluated} 人）　里程碑 ${D.milestones.length} 項　評核 ${D.evals.length} 筆　取最近 ${D.recentN} 次平均`;
+  document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{ VIEW=b.dataset.v; render(); });
+  render();
+})();
+</script>
+<!-- 2026-11-25 著作權／專利標記 -->
+<div class="cr-note" style="text-align:center;font-size:11px;line-height:1.6;color:#94a3b8;padding:14px 12px;word-break:break-word;">© 2026 宋威儀 版權所有｜本系統專利申請中：發明申請號 115143952、新型申請號 115210290｜未經授權，禁止重製、改作、轉載或用於商業用途</div>
+</body>
+</html>

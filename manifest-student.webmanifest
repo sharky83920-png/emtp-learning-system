@@ -1,0 +1,17 @@
+{
+  "id": "/emtp-learning-system/student",
+  "name": "EMTP 學員系統",
+  "short_name": "EMTP 學員",
+  "description": "高級救護技術員學習系統 — 學員端",
+  "start_url": "student.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "lang": "zh-TW",
+  "background_color": "#f1f5f9",
+  "theme_color": "#667eea",
+  "icons": [
+    { "src": "icon-student-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-student-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

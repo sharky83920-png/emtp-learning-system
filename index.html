@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EMTP Learning System - Firebase 測試</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Microsoft JhengHei", -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f8f9fa;
+    }
+    h1 { color: #2c3e50; margin-bottom: 8px; }
+    .subtitle { color: #7f8c8d; margin-bottom: 30px; }
+    .btn {
+      padding: 12px 24px;
+      margin: 5px;
+      cursor: pointer;
+      font-size: 15px;
+      border: none;
+      border-radius: 6px;
+      font-family: inherit;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-write { background: #27ae60; color: white; }
+    .btn-read { background: #3498db; color: white; }
+    .output {
+      background: white;
+      padding: 20px;
+      margin-top: 20px;
+      border-radius: 6px;
+      white-space: pre-wrap;
+      font-family: "Consolas", monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+      min-height: 100px;
+    }
+    .success { color: #27ae60; font-weight: bold; }
+    .error { color: #e74c3c; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>🎉 EMTP Learning System</h1>
+  <p class="subtitle">Firebase Firestore 讀寫測試（F3 Hello World）</p>
+
+  <button class="btn btn-write" id="btn-write">📝 寫入一筆測試資料</button>
+  <button class="btn btn-read" id="btn-read">📖 讀取所有測試資料</button>
+
+  <div class="output" id="output">👋 點按鈕測試 Firebase 連線...</div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+    import {
+      getFirestore, collection, addDoc, getDocs, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
+      authDomain: "emtp-learning-system.firebaseapp.com",
+      projectId: "emtp-learning-system",
+      storageBucket: "emtp-learning-system.firebasestorage.app",
+      messagingSenderId: "1057617665185",
+      appId: "1:1057617665185:web:2d1902083fa21af0e7a4e0",
+      measurementId: "G-HQRYX3NJ78"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const output = document.getElementById('output');
+
+    document.getElementById('btn-write').addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      output.innerHTML = '⏳ 寫入中...';
+      try {
+        const docRef = await addDoc(collection(db, 'test_messages'), {
+          message: 'Hello Firebase!',
+          source: 'EMTP Learning System',
+          timestamp: serverTimestamp(),
+          createdAt: new Date().toLocaleString('zh-TW')
+        });
+        output.innerHTML = `<span class="success">✅ 寫入成功！</span>\n\n文件 ID: ${docRef.id}\n時間: ${new Date().toLocaleString('zh-TW')}\n\n💡 去 Firebase Console → Firestore 看、應該出現 test_messages 集合`;
+      } catch (err) {
+        output.innerHTML = `<span class="error">❌ 寫入失敗</span>\n\n${err.message}`;
+      } finally {
+        e.target.disabled = false;
+      }
+    });
+
+    document.getElementById('btn-read').addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      output.innerHTML = '⏳ 讀取中...';
+      try {
+        const snapshot = await getDocs(collection(db, 'test_messages'));
+        if (snapshot.empty) {
+          output.innerHTML = '📭 還沒有任何資料、先按「寫入測試資料」';
+          return;
+        }
+        let html = `<span class="success">✅ 讀到 ${snapshot.size} 筆資料</span>\n\n`;
+        snapshot.forEach((doc) => {
+          const d = doc.data();
+          html += `📄 ${doc.id}\n   訊息: ${d.message}\n   時間: ${d.createdAt}\n\n`;
+        });
+        output.innerHTML = html;
+      } catch (err) {
+        output.innerHTML = `<span class="error">❌ 讀取失敗</span>\n\n${err.message}`;
+      } finally {
+        e.target.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

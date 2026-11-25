@@ -1,0 +1,2668 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="EMTP 指導員">
+  <meta name="theme-color" content="#e11d48">
+  <title>🧑‍🏫 EMTP 指導員後台</title>
+  <link rel="manifest" href="manifest-instructor.webmanifest">
+  <link rel="apple-touch-icon" href="icon-instructor-180.png">
+  <link rel="icon" type="image/png" href="icon-instructor-192.png">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('firebase-messaging-sw.js').catch(() => {}));
+    }
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; background: #eef1f6; color: #1e293b; min-height: 100vh; line-height: 1.6; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
+    /* 登入 */
+    .login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+    .login-screen { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .login-card { background: white; padding: 36px 32px; border-radius: 16px; width: 100%; max-width: 440px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+    .login-logo { text-align: center; font-size: 46px; color: #3b82f6; line-height: 1; margin-bottom: 8px; font-weight: bold; }
+    .login-card h1 { font-size: 23px; margin-bottom: 6px; text-align: center; }
+    .login-card .subtitle { color: #64748b; font-size: 13px; margin-bottom: 24px; text-align: center; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; color: #475569; font-size: 13px; margin-bottom: 6px; font-weight: 600; }
+    .form-group input, .form-group select { width: 100%; padding: 11px 14px; background: #f8fafc; border: 1px solid #cbd5e1; color: #1e293b; border-radius: 8px; font-family: inherit; font-size: 15px; }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: #6366f1; background: white; }
+    .form-group select:disabled { background: #e2e8f0; color: #94a3b8; }
+    .btn-primary { width: 100%; padding: 13px; font-size: 15px; font-weight: 700; background: linear-gradient(135deg,#6366f1,#8b5cf6); color: white; border: none; border-radius: 10px; cursor: pointer; }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .err-msg { background: #fef2f2; color: #991b1b; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 12px; }
+    .ok-msg { background: #f0fdf4; color: #065f46; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 12px; }
+    .info-msg { background: #eff6ff; color: #1e40af; padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-top: 14px; }
+    /* 後台（手機 App 版型）*/
+    .dashboard { display: none; padding-bottom: calc(82px + env(safe-area-inset-bottom)); }
+    /* 開機畫面：裝成 App 後打開、在驗證登入狀態時先蓋住，避免閃過登入表單（App 感） */
+    .boot-splash { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; background: linear-gradient(135deg, #fb7185 0%, #e11d48 100%); color: #fff; }
+    .boot-splash img { width: 84px; height: 84px; filter: drop-shadow(0 4px 12px rgba(0,0,0,.25)); }
+    .boot-splash .spin { width: 34px; height: 34px; border: 3px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: bootspin .8s linear infinite; }
+    @keyframes bootspin { to { transform: rotate(360deg); } }
+    .header { background: linear-gradient(135deg,#e11d48,#be123c); color: white; padding: calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 12px calc(16px + env(safe-area-inset-left)); display: flex; justify-content: space-between; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 50; box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
+    .header h1 { font-size: 17px; font-weight: 700; }
+    .header-right { display: flex; align-items: center; gap: 8px; }
+    .header-right select { background: rgba(255,255,255,0.18); color: white; border: 1px solid rgba(255,255,255,0.4); border-radius: 8px; padding: 6px 10px; font-family: inherit; font-size: 14px; font-weight: 600; max-width: 150px; }
+    .header-right select option { color: #1e293b; }
+    .btn-logout { background: rgba(255,255,255,0.22); color: white; padding: 6px 12px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-family: inherit; white-space: nowrap; }
+    main { padding: 14px 12px calc(20px + env(safe-area-inset-bottom)); max-width: 600px; margin: 0 auto; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    /* 卡片：App 風格、緊湊、柔和陰影 */
+    .card { background: #fff; border: 1px solid #eceff4; border-radius: 16px; padding: 16px; margin-bottom: 13px; box-shadow: 0 1px 2px rgba(15,23,42,0.05), 0 8px 22px -16px rgba(15,23,42,0.16); }
+    .card h2 { font-size: 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .card > p { line-height: 1.7; }
+    .placeholder { text-align: center; padding: 40px 20px; color: #94a3b8; }
+    .placeholder .icon { font-size: 50px; margin-bottom: 12px; }
+    .placeholder h3 { color: #475569; margin-bottom: 6px; font-size: 17px; }
+    .step-tag { display: inline-block; background: #fef2f2; color: #e11d48; padding: 4px 12px; border-radius: 12px; font-size: 12px; margin-top: 12px; font-weight: 600; }
+    .build-box { border: 2px dashed #cbd5e1; border-radius: 14px; padding: 34px 20px; text-align: center; color: #94a3b8; }
+    .build-box .icon { font-size: 42px; margin-bottom: 10px; }
+    .build-box h3 { color: #64748b; font-size: 16px; margin-bottom: 6px; }
+    /* 底部固定 tab（像學員端）*/
+    .bottom-tabs { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,0.9); backdrop-filter: saturate(180%) blur(16px); -webkit-backdrop-filter: saturate(180%) blur(16px); border-top: 1px solid #e8edf3; display: flex; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 20px rgba(0,0,0,0.06); z-index: 90; }
+    .bottom-tabs button { position: relative; flex: 1; background: transparent; border: none; padding: 8px 4px; color: #94a3b8; font-size: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; font-family: inherit; border-radius: 8px; }
+    .bottom-tabs button .bt-icon { font-size: 21px; }
+    .tab-badge { position: absolute; top: 2px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #e11d48; color: #fff; font-size: 10px; font-weight: bold; display: flex; align-items: center; justify-content: center; line-height: 1; box-shadow: 0 0 0 2px #fff; }
+    .bottom-tabs button.active { color: #e11d48; background: #fff1f2; font-weight: 600; }
+    /* QR 簽核 */
+    .qr-active-box { background: #f0fdfa; border: 2px solid #14b8a6; border-radius: 14px; padding: 20px; text-align: center; }
+    .qr-countdown { font-size: 38px; font-weight: 700; color: #14b8a6; font-family: monospace; }
+    .qr-countdown.warning { color: #f59e0b; }
+    .qr-countdown.critical { color: #ef4444; }
+    .qr-scanned-list { background: white; padding: 12px; border-radius: 8px; max-height: 200px; overflow-y: auto; margin-top: 12px; text-align: left; }
+    .qr-student-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 13px; }
+    .qr-student-row:last-child { border-bottom: none; }
+    .pri-select { width: 100%; padding: 11px 14px; border: 2px solid #e2e8f0; border-radius: 10px; font-family: inherit; font-size: 14px; background: #f8fafc; color: #1e293b; }
+    .pri-select:focus { outline: none; border-color: #6366f1; background: #fff; }
+    /* App 感 + 統一所有表單控制項尺寸（含帶 inline style 者）→ 解決「格子大小不一」*/
+    main input:not([type=checkbox]):not([type=radio]):not([type=range]), main select, main textarea {
+      font-size: 16px !important; font-family: inherit !important; color: #1e293b !important;
+      background-color: #f8fafc !important; border: 1px solid #d6dce6 !important; border-radius: 10px !important; padding: 11px 12px !important;
+    }
+    main input:not([type=checkbox]):not([type=radio]):not([type=range]), main select { min-height: 44px; }
+    main select { -webkit-appearance: none !important; appearance: none !important; padding-right: 34px !important; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%2394a3b8' stroke-width='1.6' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E") !important; background-repeat: no-repeat !important; background-position: right 12px center !important; }
+    main input:focus, main select:focus, main textarea:focus { border-color: #6366f1 !important; background-color: #fff !important; outline: none !important; }
+    /* 日期框單獨處理：iOS 原生 date 元件被固定高度壓壞 → 用 flex 垂直置中、左對齊、不加上下內距 */
+    main input[type=date] { -webkit-appearance: none; appearance: none; display: flex; align-items: center; min-height: 44px; padding: 0 12px !important; color: #1e293b; }
+    main input[type=date]::-webkit-date-and-time-value { text-align: left; margin: 0; }
+    .header-right select { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%23ffffff' stroke-width='1.6' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; padding-right: 26px; }
+    button { -webkit-tap-highlight-color: transparent; }
+    /* === RWD 防超框：手機上不再硬塞、不橫向捲動 === */
+    html, body { overflow-x: hidden; max-width: 100%; }
+    main { width: 100%; }
+    .card { overflow: hidden; }
+    .card input, .card select, .card textarea, .pri-select { max-width: 100%; min-width: 0; }
+    .card > * { max-width: 100%; }
+    .card [style*="grid"] > *, .card [style*="flex"] > * { min-width: 0; }   /* grid/flex 子項可縮、不撐爆 */
+    .card [style*="monospace"] { overflow-wrap: anywhere; word-break: break-word; }
+    textarea { resize: vertical; }
+    img, canvas { max-width: 100%; }
+    /* 可收折卡片標題 */
+    details > summary { cursor: pointer; list-style: none; user-select: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    .fold-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 16px; font-weight: 700; color: #1e293b; }
+    .fold-summary .fold-ic { font-size: 13px; color: #94a3b8; font-weight: 500; transition: transform 0.2s; }
+    details[open] > .fold-summary .fold-ic { transform: rotate(180deg); }
+    /* 出題排程：收合灰條 + 膠囊格（依使用者範例樣式）*/
+    .sched-fold-bar { display: block; width: 100%; background: #64748b; color: #fff; text-align: center; padding: 11px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 4px; }
+    .sched-fold .when-open { display: none; }
+    .sched-fold[open] .when-open { display: inline; }
+    .sched-fold[open] .when-closed { display: none; }
+    .sched-pillbox { border: 1px solid #dbe3ee; border-radius: 12px; padding: 14px; margin-top: 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .sched-pill { background: #2563eb; color: #fff; padding: 7px 6px; border-radius: 16px; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .sched-pill button { background: rgba(255,255,255,0.9); border: none; color: #2563eb; width: 18px; height: 18px; border-radius: 50%; cursor: pointer; font-size: 11px; line-height: 1; flex-shrink: 0; }
+    @media (max-width: 480px) { .sched-pillbox { grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px; } }
+    @media (max-width: 480px) {
+      main { padding: 16px 14px 22px; }
+      .card { padding: 18px 16px; border-radius: 14px; margin-bottom: 14px; }
+    }
+    .sv-river-tab { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; padding: 5px 12px; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; }
+    .sv-river-tab.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- ===== 登入 ===== -->
+  <div class="boot-splash" id="boot-splash">
+    <img src="icon-instructor-192.png" alt="EMTP">
+    <div class="spin"></div>
+  </div>
+  <div class="login-screen" id="login-screen">
+    <div class="login-card">
+      <h1>EMTP 學習歷程</h1>
+      <p class="subtitle">請登入您的專屬帳號</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>所屬單位</label>
+          <select id="login-class" disabled><option value="">⏳ 載入中...</option></select>
+        </div>
+        <div class="form-group">
+          <label>身分</label>
+          <select id="login-role">
+            <option value="instructor" selected>🧑‍🏫 指導員/教官</option>
+            <option value="student">🎓 學員</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>姓名</label>
+        <select id="login-name" disabled><option value="">請先選所屬單位</option></select>
+      </div>
+      <div class="form-group">
+        <label>登入密碼</label>
+        <input type="password" id="login-pw" placeholder="請輸入密碼" style="font-family:monospace">
+      </div>
+      <button class="btn-primary" id="btn-login">➜ 登入系統</button>
+      <div id="login-error"></div>
+      <div class="info-msg">💡 初始密碼由管理員設定（預設身分證、可自訂）</div>
+      <div class="cr-note" style="text-align:center;font-size:11px;line-height:1.6;color:#94a3b8;padding:14px 0 0;word-break:break-word;">© 2026 宋威儀 版權所有｜本系統專利申請中：發明申請號 115143952、新型申請號 115210290｜未經授權，禁止重製、改作、轉載或用於商業用途</div>
+    </div>
+  </div>
+
+  <!-- ===== 後台 ===== -->
+  <div class="dashboard" id="dashboard">
+    <header class="header">
+      <h1>🧑‍🏫 指導員儀表板</h1>
+      <div class="header-right">
+        <select id="class-select"><option value="">載入中...</option></select>
+        <button id="push-enable-btn" style="display:none;padding:8px 12px;background:#10b981;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🔔 開啟推播</button>
+        <button class="btn-logout" id="btn-logout">登出</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="tab-content active" id="tab-schedule">
+        <div class="card">
+          <h2>📅 應繳出題日設定</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:12px">設定本班的應繳出題日、學員需在指定日期出題。</p>
+          <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;background:#f8fafc;padding:12px;border-radius:10px;margin-bottom:14px">
+            <div style="flex:1;min-width:140px">
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">日期</label>
+              <input type="date" id="sched-date" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit">
+            </div>
+            <div style="width:90px">
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">每人題數</label>
+              <input type="number" id="sched-per" value="1" min="1" max="10" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit">
+            </div>
+            <button id="sched-add" style="background:#10b981;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600;white-space:nowrap">＋ 新增排程</button>
+          </div>
+          <div id="sched-list"><div class="placeholder" style="padding:20px"><div class="icon">⏳</div></div></div>
+        </div>
+
+        <div class="card">
+          <h2>📋 出題繳交追蹤</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:10px">查特定出題日全班繳交狀況（🟢 已交達標 / 🔴 未交）。可指定學員。</p>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+            <select id="track-date" class="pri-select" style="flex:1;min-width:160px"><option value="">請選出題日...</option></select>
+            <select id="track-student" class="pri-select" style="flex:1;min-width:120px"><option value="">全部學員</option></select>
+          </div>
+          <div id="track-result"><div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">選出題日查看全班繳交狀況</div></div>
+        </div>
+
+        <div class="card" id="energy-card">
+          <h2>⚡ 能量條設定</h2>
+          <div id="energy-body"><div class="placeholder" style="padding:20px"><div class="icon">⏳</div></div></div>
+        </div>
+
+        <div class="card" id="perf-card" style="display:none">
+          <h2>🏆 綜合測驗績效排名（看刷題數，巨耗錢）</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:10px">只計隨機綜合測驗（不含專項練習）。可選日期區間。全班依加權分數排名。⚠️ 會掃大量作答、較耗讀取，僅後台授權者可見。</p>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+            <input type="date" id="perf-start" style="padding:7px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit;font-size:13px">
+            <span style="color:#94a3b8">~</span>
+            <input type="date" id="perf-end" style="padding:7px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit;font-size:13px">
+            <button id="perf-apply" style="background:#3b82f6;color:#fff;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600">🔍 查詢</button>
+            <button id="perf-clear" style="background:none;border:none;color:#3b82f6;cursor:pointer;font-size:13px">全部期間</button>
+          </div>
+          <div id="rank-perf"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
+        </div>
+
+        <style>
+          .cp-tab{flex:1;background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;padding:7px 4px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+          .cp-tab.active{background:#3b82f6;color:#fff;border-color:#3b82f6}
+        </style>
+        <div class="card" id="classpower-card">
+          <h2>📊 各班出題戰力</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:8px">各班該期間出題數，看各班有沒有跟上進度。你的班高亮。</p>
+          <div id="cp-toggle" style="display:flex;gap:6px;margin-bottom:8px">
+            <button class="cp-tab active" data-period="week">本週(一~日)</button>
+            <button class="cp-tab" data-period="lastweek">上週</button>
+            <button class="cp-tab" data-period="all">總累計</button>
+          </div>
+          <div id="cp-total" style="text-align:center;color:#475569;font-size:13px;margin-bottom:10px"></div>
+          <div id="rank-questions"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-signoff">
+        <div class="card">
+          <h2>📱 QR Code 現場簽核</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:12px">選技術項目 → 產生 5 分鐘 QR Code、學員掃碼即自動為該項目 +1 次簽核（同學員不可重複掃同一 QR）。</p>
+          <div id="qr-setup">
+            <div class="form-group" style="margin-bottom:12px">
+              <label style="display:block;font-size:13px;color:#475569;margin-bottom:6px;font-weight:600">技術項目</label>
+              <select id="qr-skill" class="pri-select"><option value="">載入中...</option></select>
+            </div>
+            <button id="btn-start-qr" style="width:100%;background:#10b981;color:white;border:none;padding:13px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700;font-size:15px">📱 產生 QR Code（5 分鐘）</button>
+            <div id="qr-setup-error"></div>
+          </div>
+          <div id="qr-active" style="display:none">
+            <div class="qr-active-box">
+              <div style="color:#64748b;font-size:13px;margin-bottom:4px">⏰ 剩餘時間</div>
+              <div class="qr-countdown" id="qr-countdown">5:00</div>
+              <div style="margin-top:10px;color:#334155;font-size:14px"><strong id="qr-skill-name">—</strong></div>
+              <div style="background:white;padding:14px;border-radius:12px;display:inline-block;margin:12px 0"><img id="qr-img" style="display:block;width:240px;height:240px" alt="QR Code"></div>
+              <div style="color:#334155;font-size:14px">已掃描：<strong style="color:#10b981" id="qr-scanned-count">0</strong> 位</div>
+              <div class="qr-scanned-list" id="qr-scanned-list"><div style="color:#94a3b8;text-align:center">尚未有學員掃描</div></div>
+              <button id="btn-end-qr" style="margin-top:12px;width:100%;background:#ef4444;color:white;border:none;padding:11px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:600">⏹ 結束 Session</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>📊 全班簽核進度</h2>
+          <div class="form-group" style="margin-bottom:12px">
+            <label style="display:block;font-size:13px;color:#475569;margin-bottom:6px;font-weight:600">技術項目</label>
+            <select id="prog-skill" class="pri-select"><option value="">請選項目...</option></select>
+          </div>
+          <div id="prog-list"><div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">選技術項目查看全班達標狀況</div></div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-corrections">
+        <div class="card" id="airev-i-card" style="display:none">
+          <h2><span>🤖 審核 AI 題目</span></h2>
+          <p style="color:#64748b;font-size:13px;margin:6px 0 0">📜 2026-08-31 奉旨統一：AI 題目審核已移駕 <a href="https://longtu-ge.web.app/admin.html" target="_blank" style="color:#7c3aed">龍圖閣 · 御史府辦公大樓 → 過目區</a>。本卡已裁撤。</p>
+        </div>
+        <div class="card" id="corr-audit-card" style="display:none">
+          <h2 style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center;gap:8px" id="corr-audit-toggle"><span>🔍 勘誤回覆稽核 <span style="font-size:12px;color:#94a3b8;font-weight:400">看哪個指導員回覆了哪個學員（唯讀、全系統）</span></span><span id="corr-audit-caret" style="font-size:14px;color:#94a3b8">▶ 展開</span></h2>
+          <div id="corr-audit-wrap" style="display:none">
+            <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:10px 0 14px">
+              <label style="font-size:13px;color:#475569;display:flex;flex-direction:column;gap:4px">指導員<select id="corr-audit-f-reviewer"><option value="">全部指導員</option></select></label>
+              <label style="font-size:13px;color:#475569;display:flex;flex-direction:column;gap:4px">回報學員班級<select id="corr-audit-f-class"><option value="">全部班級</option></select></label>
+              <label style="font-size:13px;color:#475569;display:flex;flex-direction:column;gap:4px">處理結果<select id="corr-audit-f-status"><option value="resolved">已處理（全部）</option><option value="fixed">✅ 已修正</option><option value="rejected">❌ 不成立</option><option value="hidden">🚫 已隱藏</option><option value="all">含未處理</option></select></label>
+              <button id="corr-audit-refresh" class="btn-logout">🔄 重新整理</button>
+            </div>
+            <div id="corr-audit-list"><div class="placeholder"><div class="icon">⏳</div><p>展開後載入…</p></div></div>
+          </div>
+        </div>
+        <div class="card" id="corr-handle-card">
+          <h2>⚠️ 題目勘誤處理</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:14px">💡 處理<strong>全部班級</strong>學員回報的題目勘誤（題目跨班共用、一次結案會關閉所有班的同題回報）。可改標答/選項/頁碼、隱藏題目、回覆學員（結案後學員會收到通知）。</p>
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+            <label style="font-size:13px;color:#475569">狀態</label>
+            <select id="corr-filter" style="padding:7px 12px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit">
+              <option value="pending">待處理</option>
+              <option value="all">全部</option>
+            </select>
+            <button id="corr-refresh" class="btn-logout">🔄 重新整理</button>
+          </div>
+          <div id="corr-list"><div class="placeholder"><div class="icon">⏳</div><p>請選擇班級</p></div></div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-other">
+        <div class="card">
+          <h2>📢 班級公告</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:12px">發布公告給目前班級、學員登入會跳出。到期自動移除。</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">分類</label>
+              <select id="ann-category" class="pri-select">
+                <option value="課程通知">📘 課程通知</option>
+                <option value="重大活動">🎯 重大活動</option>
+                <option value="重要提醒">⚠️ 重要提醒</option>
+                <option value="其他">📌 其他</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">下架日期</label>
+              <input type="date" id="ann-expire" class="pri-select">
+            </div>
+          </div>
+          <input type="text" id="ann-title" class="pri-select" placeholder="標題" style="margin-bottom:10px">
+          <textarea id="ann-content" class="pri-select" rows="3" placeholder="內容（可換行）" style="margin-bottom:10px"></textarea>
+          <button id="ann-publish" style="width:100%;background:#10b981;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700">📢 發布公告</button>
+          <div id="ann-msg"></div>
+          <div id="ann-list" style="margin-top:14px"></div>
+        </div>
+
+        <div class="card" id="troop-card" style="display:none">
+          <h2 style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center;gap:8px" id="troop-toggle"><span>⚡ 全班刷題趟數總覽 <span style="font-size:12px;color:#94a3b8;font-weight:400">一眼看全班誰刷幾趟（讀彙總、超省；點學員看動能）</span></span><span id="troop-caret" style="font-size:14px;color:#94a3b8">▶ 展開</span></h2>
+          <div id="troop-wrap" style="display:none">
+            <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:10px 0 14px">
+              <label style="font-size:13px;color:#475569;display:flex;flex-direction:column;gap:4px">期間<select id="troop-period"><option value="weekly">本週</option><option value="monthly">本月</option><option value="custom">自訂日期</option></select></label>
+              <label class="troop-date" style="font-size:13px;color:#475569;display:none;flex-direction:column;gap:4px">起<input type="date" id="troop-start"></label>
+              <label class="troop-date" style="font-size:13px;color:#475569;display:none;flex-direction:column;gap:4px">迄<input type="date" id="troop-end"></label>
+              <button id="troop-refresh" class="btn-logout">🔄 重新整理</button>
+            </div>
+            <div id="troop-list"><div class="placeholder"><div class="icon">⏳</div><p>展開後載入…</p></div></div>
+          </div>
+        </div>
+
+        <div class="card" id="student-view-card">
+          <h2>👤 個別學員檢視</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:12px">選一位學員，查看他的成績河流圖、學科雷達圖與每日刷題動能。</p>
+          <select id="sv-student" class="pri-select" style="margin-bottom:14px"><option value="">⏳ 載入中...</option></select>
+
+          <div id="sv-river-card" style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <h3 style="font-size:15px;color:#1e293b">📈 成績河流圖</h3>
+              <div style="display:flex;gap:6px">
+                <button id="sv-river-tab-river" class="sv-river-tab active" data-mode="river">河流</button>
+                <button id="sv-river-tab-density" class="sv-river-tab" data-mode="density">密度熱力</button>
+              </div>
+            </div>
+            <div id="sv-river-empty" style="display:none;color:#94a3b8;font-size:13px;text-align:center;padding:24px">這位學員尚無已評分的考試成績</div>
+            <div id="sv-river-scroll" style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;border-radius:10px">
+              <div id="sv-river-wrap" style="position:relative;height:300px;min-width:100%"><canvas id="sv-river-chart"></canvas></div>
+            </div>
+            <div id="sv-river-scroll-hint" style="display:none;text-align:center;color:#94a3b8;font-size:11px;margin-top:6px">← 左右滑動看更多考試 →</div>
+          </div>
+
+          <div id="sv-momentum-card" style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:14px">
+            <h3 style="font-size:15px;color:#1e293b;margin-bottom:4px">🔥 每日刷題熱力 ＆ 累積動能</h3>
+            <div id="sv-momentum-stat" style="font-size:12px;color:#64748b;margin-bottom:10px">—</div>
+            <div id="sv-momentum-empty" style="display:none;color:#94a3b8;font-size:13px;text-align:center;padding:24px">這位學員尚無刷題紀錄</div>
+            <div style="position:relative;height:260px"><canvas id="sv-momentum-chart"></canvas></div>
+          </div>
+
+          <div id="sv-radar-card" style="border:1px solid #e2e8f0;border-radius:12px;padding:14px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <h3 style="font-size:15px;color:#1e293b">🎯 學科雷達圖</h3>
+              <div id="sv-radar-toggle" style="display:flex;gap:6px">
+                <button id="sv-radar-tab-first" class="sv-river-tab active" data-mode="first">✏️ 首刷</button>
+                <button id="sv-radar-tab-exam" class="sv-river-tab" data-mode="exam">📊 考試</button>
+              </div>
+            </div>
+            <div id="sv-radar-note" style="font-size:12px;color:#64748b;margin-bottom:6px"></div>
+            <div id="sv-radar-empty" style="display:none;color:#94a3b8;font-size:13px;text-align:center;padding:24px">這位學員尚無資料</div>
+            <div style="position:relative;max-width:360px;margin:0 auto"><canvas id="sv-radar-chart"></canvas></div>
+          </div>
+
+          <div id="sv-noperm" style="display:none;color:#94a3b8;font-size:13px;text-align:center;padding:20px">🔒 你沒有檢視學員個人資料的權限</div>
+        </div>
+
+        <div class="card" id="mb-card">
+          <h2>📓 錯題本開關</h2>
+          <div id="mb-body"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
+        </div>
+
+        <div class="card" id="score-card">
+          <h2>📊 成績上傳</h2>
+          <div id="score-body"></div>
+        </div>
+
+        <div class="card" id="scoremanage-card">
+          <details>
+            <summary class="fold-summary">📋 成績查詢 / 管理 <span class="fold-ic">▾ 點此展開/收合</span></summary>
+            <p style="color:#64748b;font-size:13px;margin:12px 0 10px">本班所有考試。可查看明細、或整場刪除（清掉錯誤上傳）。</p>
+            <div id="sm-list"><div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div></div>
+          </details>
+        </div>
+
+        <div class="card" id="scoreedit-card">
+          <h2>✏️ 個人成績修正（總分）</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:10px">選考試 → 改個別學員的總分。輸入分數或「請假/缺考/免修」。</p>
+          <select id="se-exam" class="pri-select" style="margin-bottom:10px"><option value="">載入中...</option></select>
+          <div id="se-list"></div>
+        </div>
+
+        <div class="card" id="qdl-card">
+          <h2>📥 題庫下載</h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:10px">下載本班學員出的、目前仍可被抽取的題庫（已含勘誤校正、隱藏題不含）。可篩選後下載 CSV。</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">出題日期（範圍、留空＝全部）</label>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input type="date" id="qdl-date-start" class="pri-select" style="padding:8px">
+                <span style="color:#94a3b8">~</span>
+                <input type="date" id="qdl-date-end" class="pri-select" style="padding:8px">
+              </div>
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">出題學員</label>
+              <select id="qdl-student" class="pri-select"><option value="">全部</option></select>
+            </div>
+          </div>
+          <div style="margin-bottom:10px">
+            <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">書籍</label>
+            <select id="qdl-book" class="pri-select"><option value="">全部書籍</option></select>
+          </div>
+          <div id="qdl-chapter-box" style="margin-bottom:10px;display:none">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <label style="font-size:12px;color:#475569;font-weight:600">章節（可複選）</label>
+              <label style="font-size:13px;font-weight:600;color:#10b981;cursor:pointer;display:flex;align-items:center;gap:5px"><input type="checkbox" id="qdl-ch-all" checked style="width:15px;height:15px"> 全部章節</label>
+            </div>
+            <div id="qdl-chapters" style="display:flex;flex-wrap:wrap;gap:6px;max-height:170px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px"></div>
+          </div>
+          <div id="qdl-count" style="font-size:13px;color:#475569;margin-bottom:10px">—</div>
+          <button id="qdl-download" style="width:100%;background:#10b981;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700">📥 下載 CSV</button>
+          <div id="qdl-msg"></div>
+        </div>
+      </section>
+      <!-- 2026-11-25 著作權／專利標記 -->
+      <div class="cr-note" style="text-align:center;font-size:11px;line-height:1.6;color:#94a3b8;padding:14px 12px;word-break:break-word;">© 2026 宋威儀 版權所有｜本系統專利申請中：發明申請號 115143952、新型申請號 115210290｜未經授權，禁止重製、改作、轉載或用於商業用途</div>
+    </main>
+
+    <nav class="bottom-tabs">
+      <button data-tab="schedule" class="active"><span class="bt-icon">📝</span><span>出題追蹤</span></button>
+      <button data-tab="signoff" id="tabbtn-signoff"><span class="bt-icon">✅</span><span>教官簽核</span></button>
+      <button data-tab="corrections" id="tabbtn-corrections"><span class="bt-icon">⚠️</span><span>題目勘誤</span><span class="tab-badge" id="corr-badge" style="display:none"></span></button>
+      <button data-tab="other"><span class="bt-icon">⚙️</span><span>其他</span></button>
+    </nav>
+  </div>
+
+  <!-- 勘誤處理 modal -->
+
+  <div id="corr-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:1200;justify-content:center;align-items:flex-start;padding:20px;overflow-y:auto">
+    <div style="background:white;border-radius:16px;max-width:620px;width:100%;margin-top:20px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden">
+      <div style="background:#f59e0b;color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center">
+        <h3 style="margin:0;font-size:17px">⚠️ 處理勘誤</h3>
+        <button id="corr-modal-close" style="background:rgba(255,255,255,0.25);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:22px;cursor:pointer;line-height:1">×</button>
+      </div>
+      <div style="padding:18px 20px;max-height:72vh;overflow-y:auto">
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:14px">
+          <div style="font-size:12px;color:#92400e;margin-bottom:4px">學員回報（<span id="corr-reporter">—</span>）</div>
+          <div id="corr-reason" style="font-size:14px;color:#78350f;white-space:pre-wrap">—</div>
+        </div>
+        <div style="font-size:12px;color:#64748b;font-family:monospace;margin-bottom:6px">題號 <span id="corr-qid">—</span></div>
+        <div id="corr-meta" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
+        <div class="form-group"><label>題目</label><textarea id="corr-qtext" class="corr-grow" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px;line-height:1.55;resize:none;overflow:hidden"></textarea></div>
+        <div class="form-group" id="corr-img-wrap" style="display:none"><label>📷 題幹附圖（唯讀，點圖放大）</label><img id="corr-img" alt="題幹附圖" style="display:block;max-width:100%;height:auto;border-radius:8px;border:1px solid #cbd5e1;cursor:zoom-in"></div>
+        <div id="corr-options"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group"><label>書籍 <span style="color:#dc2626">*</span></label>
+            <select id="corr-book" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px"><option value="">—</option></select>
+          </div>
+          <div class="form-group"><label>章節 <span style="color:#dc2626">*</span></label>
+            <select id="corr-chapter" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px"><option value="">先選書籍</option></select>
+          </div>
+        </div>
+        <div id="corr-dim-hint" style="font-size:12px;margin:-2px 0 12px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group"><label>正確答案</label>
+            <select id="corr-answer" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit">
+              <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
+            </select>
+          </div>
+          <div class="form-group"><label>頁碼</label><input id="corr-page" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit"></div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#991b1b;margin:6px 0 14px"><input type="checkbox" id="corr-hide" style="width:18px;height:18px"> 隱藏此題（保留編號、不再出現在題庫）</label>
+        <div class="form-group">
+          <label style="display:block;margin-bottom:5px">👤 <span id="corr-reply-rlabel">給回報者</span> <span style="color:#059669;font-weight:700">〔結案後一定會通知〕</span></label>
+          <textarea id="corr-reply" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px" placeholder="給回報者（選填）：例 感謝回報、標答已更正為 B"></textarea>
+        </div>
+        <div class="form-group" id="corr-author-group">
+          <label style="display:block;margin-bottom:5px">✍️ <span id="corr-reply-alabel">給出題者</span> <span id="corr-author-rule" style="color:#b45309;font-weight:700">〔留空＝不通知〕</span></label>
+          <textarea id="corr-reply-author" rows="2" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-family:inherit;font-size:14px" placeholder="給出題者（選填）：例 你出的這題標答有誤、已更正為 B，下次留意"></textarea>
+        </div>
+        <div id="corr-modal-msg"></div>
+      </div>
+      <div style="padding:14px 20px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">
+        <button id="corr-modal-cancel" style="background:#e2e8f0;color:#475569;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit">取消</button>
+        <button id="corr-resolve-fix" style="background:#10b981;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600">✅ 結案並通知回報者</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+    import { getFirestore, collection, query, where, getDocs, getCountFromServer, doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp, onSnapshot, Timestamp, arrayUnion, runTransaction } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
+    import { getMessaging, getToken, onMessage, isSupported as fcmSupported } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-messaging.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCYRUG97mj3JRz6YNRuN_UdRzgZcC1y9YE",
+      authDomain: "emtp-learning-system.firebaseapp.com",
+      projectId: "emtp-learning-system",
+      storageBucket: "emtp-learning-system.firebasestorage.app",
+      messagingSenderId: "1057617665185",
+      appId: "1:1057617665185:web:2d1902083fa21af0e7a4e0",
+      measurementId: "G-HQRYX3NJ78"
+    };
+    const app = initializeApp(firebaseConfig, 'instructor-app');
+    const auth = getAuth(app);
+    // browserLocalPersistence：登入狀態存裝置 → 裝成 App 後「打開就是我」、不用每次重登（與學員端一致）。
+    // 教室共用電腦可用登出鍵清除。setPersistence 是非同步，先擋住登入流程避免搶在設定前送出。
+    const authReady = setPersistence(auth, browserLocalPersistence).catch(() => {});
+    const db = getFirestore(app);
+    const storage = getStorage(app);   // 🤖 AI 題審核時補圖用
+
+    let currentInstructor = null;   // { id, email, name, managedClassIds }
+    let selectedClassId = null;
+    let classPerms = {};            // 目前所選班級的「指導員權限」（班級共用、隨班切換）
+
+    // 權限標籤對照
+    const PERM_LABELS = {
+      canEditEnergyBar: '修改能量條',
+      canViewClassPower: '查看各班出題戰力',
+      canQRSignoff: '教官簽核（QR + 進度）',
+      canToggleMistakeBook: '開關錯題本',
+      canEditSourceAuth: '設定題庫權限',
+      canEditChapterAuth: '設定章節權限',
+      canHandleCorrections: '處理勘誤',
+      canUploadScores: '上傳成績',
+      canEditScores: '個人成績修正',
+      canViewMistakeBook: '查看錯題本',
+      canViewStudentRadar: '看學員個人雷達圖',
+      canViewStudentMomentum: '看學員刷題動能',
+      canViewStudentRiver: '看學員成績河流圖'
+    };
+
+    // ===== 登入 UI =====
+    function showLogin(errMsg) {
+      const sp = document.getElementById('boot-splash'); if (sp) sp.style.display = 'none';
+      document.getElementById('login-screen').style.display = 'flex';
+      document.getElementById('dashboard').style.display = 'none';
+      // 重設登入按鈕（登出後可能還停在「登入中...」）
+      const lb = document.getElementById('btn-login');
+      if (lb) { lb.disabled = false; lb.textContent = '➜ 登入系統'; }
+      const pwEl = document.getElementById('login-pw');
+      if (pwEl) pwEl.value = '';
+      document.getElementById('login-error').innerHTML = errMsg ? `<div class="err-msg">❌ ${errMsg}</div>` : '';
+      loadLoginClasses();
+    }
+
+    // 身分切換：選學員 → 直接前往學員端（共通入口、不彈窗、帶上已選單位）
+    document.getElementById('login-role').addEventListener('change', (e) => {
+      if (e.target.value === 'student') {
+        const c = document.getElementById('login-class').value;
+        if (c) sessionStorage.setItem('emtp_switch_class', c);   // 帶班級過去、跳頁後自動選回
+        window.location.href = 'student.html';
+      }
+    });
+    // 修「返回快取(bfcache)」還原舊畫面造成的狀態錯亂：從快取還原時強制重載
+    window.addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });
+
+    // 2026-11-05 名冊上鎖：登入頁的指導員清單與登入驗證改走後台 publicRoster（身分證不出後台）
+    const ROSTER_URL = 'https://asia-east1-emtp-learning-system.cloudfunctions.net/publicRoster';
+    async function rosterCall(data) {
+      const r = await fetch(ROSTER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) });
+      const j = await r.json().catch(() => ({}));
+      if (!j.result) throw new Error((j.error && j.error.message) || '連線失敗，請再試一次');
+      return j.result;
+    }
+
+    async function loadLoginClasses() {
+      rosterCall({ action: 'warm' }).catch(() => {});   // 先叫醒後台
+      const sel = document.getElementById('login-class');
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">⏳ 載入中...</option>';
+      try {
+        const snap = await getDocs(collection(db, 'classes'));
+        const classes = [];
+        snap.forEach(d => { const data = d.data(); if (data.isActive !== false) classes.push({ id: d.id, ...data }); });
+        classes.sort((a, b) => (b.year || 0) - (a.year || 0));
+        let html = '<option value="">請選班級...</option>';
+        classes.forEach(c => { html += `<option value="${c.id}">${c.displayName || c.id}</option>`; });
+        sel.innerHTML = html;
+        sel.disabled = false;
+        // （已取消）不再依 URL ?class= 自動帶入班級、一律手動選
+        // 但「切身分跳頁」會用 sessionStorage 帶班級過來 → 自動選回並載入指導員名單（一次性、讀完即清）
+        const pend = sessionStorage.getItem('emtp_switch_class');
+        if (pend) {
+          sessionStorage.removeItem('emtp_switch_class');
+          if ([...sel.options].some(o => o.value === pend)) { sel.value = pend; sel.dispatchEvent(new Event('change')); }
+        }
+      } catch (e) {
+        sel.innerHTML = '<option value="">❌ 載入失敗</option>';
+      }
+    }
+
+    // 選班級 → 載入該班指導員（managedClassIds 含此班、且有登入帳號）
+    document.getElementById('login-class').addEventListener('change', async () => {
+      const classId = document.getElementById('login-class').value;
+      const sel = document.getElementById('login-name');
+      if (!classId) { sel.innerHTML = '<option value="">請先選班級</option>'; sel.disabled = true; return; }
+      sel.innerHTML = '<option value="">⏳ 載入指導員...</option>';
+      sel.disabled = true;
+      try {
+        // 2026-11-05 名冊上鎖（太和殿甲23）：以前選單的值就是「身分證@emtp.local」，右鍵檢查就看得到。
+        //   現在只向後台拿「代號＋姓名」；登入時把代號＋密碼送後台驗證，對了才拿得到帳號（見 doLogin）。
+        const list = (await rosterCall({ action: 'instructors', classId })).list;
+        if (list.length === 0) { sel.innerHTML = '<option value="">⚠️ 此班沒有可登入的指導員</option>'; return; }
+        let html = '<option value="">請選姓名...</option>';
+        list.forEach(i => { html += `<option value="${i.key}">${i.name}</option>`; });
+        sel.innerHTML = html;
+        sel.disabled = false;
+      } catch (e) {
+        sel.innerHTML = `<option value="">❌ ${e.message}</option>`;
+      }
+    });
+
+    document.getElementById('btn-login').addEventListener('click', doLogin);
+    document.getElementById('login-pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+
+    async function doLogin() {
+      const key = document.getElementById('login-name').value;
+      const pw = document.getElementById('login-pw').value.trim().toUpperCase();
+      const errEl = document.getElementById('login-error');
+      errEl.innerHTML = '';
+      if (!document.getElementById('login-class').value) { errEl.innerHTML = '<div class="err-msg">❌ 請選班級</div>'; return; }
+      if (!key) { errEl.innerHTML = '<div class="err-msg">❌ 請選姓名</div>'; return; }
+      if (!pw) { errEl.innerHTML = '<div class="err-msg">❌ 請輸入密碼</div>'; return; }
+      const btn = document.getElementById('btn-login');
+      btn.disabled = true; btn.textContent = '⏳ 登入中...';
+      try {
+        await authReady;   // 確保 persistence 設定完成後再登入
+        // 2026-11-05：代號＋密碼先送後台驗證，對了才拿到登入帳號，再照原方式登入（登入後身分與以前完全相同）
+        const { email } = await rosterCall({ action: 'instructorLogin', key, password: pw });
+        await signInWithEmailAndPassword(auth, email, pw);
+        // onAuthStateChanged 接手
+      } catch (e) {
+        let msg = e.code === 'auth/invalid-credential' ? '帳號或密碼錯誤' : e.message;
+        errEl.innerHTML = `<div class="err-msg">❌ ${msg}</div>`;
+        btn.disabled = false; btn.textContent = '登入';
+      }
+    }
+
+    // ===== Auth 狀態 =====
+    // 保險：萬一驗證一直沒回（離線等），6 秒後也把開機畫面收掉、退回登入畫面
+    setTimeout(() => { const sp = document.getElementById('boot-splash'); if (sp && sp.style.display !== 'none') showLogin(); }, 6000);
+
+    // ── 封存＝即時斷線（2026-08-19，與學員端同一機制）──
+    let _archiveWatch = null;
+    function stopArchiveWatch() { if (_archiveWatch) { try { _archiveWatch(); } catch (e) {} _archiveWatch = null; } }
+    function watchArchive(instructorId) {
+      stopArchiveWatch();
+      _archiveWatch = onSnapshot(doc(db, 'instructors', instructorId), (snap) => {
+        if (!snap.exists()) return;
+        const d = snap.data();
+        if (d.archivedAt || d.isActive === false) forceLogout('此指導員帳號已停用');
+      }, (e) => console.warn('[archiveWatch]', e));
+    }
+    async function forceLogout(msg) {
+      stopArchiveWatch();
+      currentInstructor = null;
+      try { await signOut(auth); } catch (e) {}
+      showLogin(msg);
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) { stopArchiveWatch(); currentInstructor = null; showLogin(); return; }
+      try {
+        const q = query(collection(db, 'instructors'), where('email', '==', user.email));
+        const snap = await getDocs(q);
+        if (snap.empty) { await signOut(auth); showLogin('此帳號不是指導員'); return; }
+        const d = snap.docs[0];
+        const data = d.data();
+        if (data.isActive === false || data.archivedAt) { await forceLogout('此指導員帳號已停用'); return; }
+        currentInstructor = { id: d.id, ...data };
+        watchArchive(d.id);   // 常駐監聽：封存時即時踢出、不用等重開頁面
+        enterDashboard();
+      } catch (e) {
+        await signOut(auth); showLogin('驗證失敗：' + e.message);
+      }
+    });
+
+    document.getElementById('btn-logout').addEventListener('click', () => { if (confirm('確定登出？')) signOut(auth); });
+    document.getElementById('push-enable-btn').addEventListener('click', () => setupPush(true));
+
+    // ===== 進入後台 =====
+    function enterDashboard() {
+      const sp = document.getElementById('boot-splash'); if (sp) sp.style.display = 'none';
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+
+      // 權限改成「班級共用」：實際閘門在選定班級後由 applyClassPermissions() 套用
+      // 班級下拉（只有自己負責的班）
+      loadOwnClasses();
+      updatePushBtn();
+      setupPush(false);
+    }
+
+    // 讀取目前所選班級的「指導員權限」（班級共用），並套用顯示閘門
+    async function refreshClassPerms() {
+      classPerms = {};
+      if (selectedClassId) {
+        try {
+          const c = await getDoc(doc(db, 'classes', selectedClassId));
+          classPerms = (c.exists() && c.data().instructorPermissions) || {};
+        } catch (e) { classPerms = {}; }
+      }
+      applyClassPermissions();
+    }
+
+    // 依 classPerms 決定分頁鈕 / 卡片顯示；若目前分頁被隱藏則退回「出題追蹤」
+    function applyClassPermissions() {
+      const p = classPerms || {};
+      // 分頁層級：沒權限整個分頁鈕藏掉（點不過去）
+      document.getElementById('tabbtn-corrections').style.display = (p.canHandleCorrections || p.canAuditCorrections || p.canReviewAiQuestions) ? '' : 'none';
+      document.getElementById('tabbtn-signoff').style.display = p.canQRSignoff ? '' : 'none';
+      if (p.canHandleCorrections) refreshCorrectionBadge(); else setCorrectionBadge(0);
+      // 勘誤分頁內：處理卡 / 稽核卡 各自依權限顯示
+      const _hc = document.getElementById('corr-handle-card'); if (_hc) _hc.style.display = p.canHandleCorrections ? '' : 'none';
+      const _ac = document.getElementById('corr-audit-card'); if (_ac) _ac.style.display = p.canAuditCorrections ? '' : 'none';
+      // 🤖 AI 題目審核卡：沒授權整張不出現；只有 AI 權限（沒勘誤權限）時，分頁徽章改顯示待審則數
+      // 🤖 AI 審核卡（2026-08-31 奉旨裁撤，統一龍圖閣）：有權限者只看到指路牌
+      const _aic = document.getElementById('airev-i-card');
+      if (_aic) _aic.style.display = p.canReviewAiQuestions ? '' : 'none';
+      // 卡片層級：出題追蹤頁內的能量條 / 各班出題戰力
+      document.getElementById('energy-card').style.display = p.canEditEnergyBar ? '' : 'none';
+      document.getElementById('classpower-card').style.display = p.canViewClassPower ? '' : 'none';
+      { const _pc = document.getElementById('perf-card'); if (_pc) _pc.style.display = p.canViewPerfRanking ? '' : 'none'; }   // 綜合績效排名：後台授權才顯示（耗讀取）
+      // 目前所在分頁若被隱藏 → 退回出題追蹤（只切換、不在這裡載入；由呼叫端載入）
+      const activeBtn = document.querySelector('.bottom-tabs button.active');
+      if (activeBtn && activeBtn.style.display === 'none') {
+        document.querySelectorAll('.bottom-tabs button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelector('.bottom-tabs button[data-tab="schedule"]').classList.add('active');
+        document.getElementById('tab-schedule').classList.add('active');
+      }
+    }
+
+    async function loadOwnClasses() {
+      const sel = document.getElementById('class-select');
+      const ids = currentInstructor.managedClassIds || [];
+      if (ids.length === 0) { sel.innerHTML = '<option value="">（未指派班級）</option>'; return; }
+      try {
+        const items = [];
+        for (const cid of ids) {
+          const cDoc = await getDoc(doc(db, 'classes', cid));
+          if (cDoc.exists()) items.push({ id: cid, ...cDoc.data() });
+          else items.push({ id: cid, displayName: cid });
+        }
+        items.sort((a, b) => (b.year || 0) - (a.year || 0));
+        sel.innerHTML = items.map(c => `<option value="${c.id}">${c.displayName || c.id}</option>`).join('');
+        selectedClassId = items[0].id;
+        sel.value = selectedClassId;
+        await refreshClassPerms();   // 先套用此班權限閘門
+        loadScheduleTab();           // 預設首頁就是出題追蹤
+      } catch (e) {
+        sel.innerHTML = '<option value="">❌ 載入失敗</option>';
+      }
+    }
+
+    document.getElementById('class-select').addEventListener('change', async (e) => {
+      selectedClassId = e.target.value;
+      await refreshClassPerms();   // 換班 → 重新套用該班權限（可能切回出題追蹤）
+      const active = document.querySelector('.bottom-tabs button.active')?.dataset.tab;
+      if (active === 'corrections') { if ((classPerms || {}).canHandleCorrections) loadCorrections(); initCorrAudit(); }
+      else if (active === 'schedule') loadScheduleTab();
+      else if (active === 'other') loadOtherTab();
+      else if (active === 'signoff') { const pl = document.getElementById('prog-list'); if (pl) pl.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">選技術項目查看全班達標狀況</div>'; const ps = document.getElementById('prog-skill'); if (ps) ps.value = ''; }
+    });
+
+    // ===== 底部 Tab 切換 =====
+    document.querySelectorAll('.bottom-tabs button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.bottom-tabs button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        if (btn.dataset.tab === 'corrections') { if ((classPerms || {}).canHandleCorrections) loadCorrections(); initCorrAudit(); }
+        if (btn.dataset.tab === 'schedule') loadScheduleTab();
+        if (btn.dataset.tab === 'signoff') loadSignoffTab();
+        if (btn.dataset.tab === 'other') loadOtherTab();
+        window.scrollTo(0, 0);
+      });
+    });
+
+    // ===== 🤖 御史大夫審核（指導員端）已裁撤（2026-08-31 奉旨統一在龍圖閣）=====
+
+    // ===== 🔍 勘誤回覆稽核（唯讀：看哪個指導員回覆哪個學員，全系統）=====
+    let _corrAuditReports = null;
+    let _corrAuditQCache = {};
+    const CORR_AUDIT_ST = { fixed: '✅ 已修正', rejected: '❌ 不成立', hidden: '🚫 已隱藏', pending: '⏳ 待處理' };
+    function caEsc(v) { return String(v == null ? '' : v).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])); }
+    function caFmt(ts) { if (!ts || !ts.toDate) return ''; const d = ts.toDate(); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+
+    function initCorrAudit() {
+      const tog = document.getElementById('corr-audit-toggle');
+      if (!tog || tog._bound) return; tog._bound = true;
+      const wrap = document.getElementById('corr-audit-wrap'); const caret = document.getElementById('corr-audit-caret');
+      tog.addEventListener('click', () => {
+        const open = wrap.style.display === 'none';
+        wrap.style.display = open ? 'block' : 'none';
+        caret.textContent = open ? '▼ 收合' : '▶ 展開';
+        if (open && _corrAuditReports === null) loadCorrAudit();   // lazy：第一次展開才讀（省讀取）
+      });
+      document.getElementById('corr-audit-refresh').addEventListener('click', () => loadCorrAudit());
+      ['corr-audit-f-reviewer', 'corr-audit-f-class', 'corr-audit-f-status'].forEach(id => document.getElementById(id).addEventListener('change', renderCorrAudit));
+    }
+
+    async function loadCorrAudit() {
+      const list = document.getElementById('corr-audit-list');
+      list.innerHTML = '<div class="placeholder"><div class="icon">⏳</div><p>載入中…</p></div>';
+      try {
+        const snap = await getDocs(collection(db, 'question_error_reports'));
+        _corrAuditReports = []; snap.forEach(d => _corrAuditReports.push({ id: d.id, ...d.data() }));
+        const revs = [...new Set(_corrAuditReports.filter(r => r.reviewedByName).map(r => r.reviewedByName))].sort();
+        const cls = [...new Set(_corrAuditReports.filter(r => r.reportedByClassId).map(r => r.reportedByClassId))].sort();
+        const fillSel = (id, arr, label) => { const s = document.getElementById(id); const cur = s.value; s.innerHTML = `<option value="">${label}</option>` + arr.map(v => `<option value="${caEsc(v)}">${caEsc(v)}</option>`).join(''); s.value = cur; };
+        fillSel('corr-audit-f-reviewer', revs, '全部指導員'); fillSel('corr-audit-f-class', cls, '全部班級');
+        renderCorrAudit();
+      } catch (e) { list.innerHTML = `<div style="color:#dc2626;padding:12px">❌ ${caEsc(e.message)}</div>`; }
+    }
+
+    function renderCorrAudit() {
+      const list = document.getElementById('corr-audit-list'); if (!_corrAuditReports) return;
+      const fRev = document.getElementById('corr-audit-f-reviewer').value;
+      const fCls = document.getElementById('corr-audit-f-class').value;
+      const fSt = document.getElementById('corr-audit-f-status').value;
+      let rows = _corrAuditReports.slice();
+      if (fSt === 'resolved') rows = rows.filter(r => (r.status || 'pending') !== 'pending');
+      else if (fSt !== 'all') rows = rows.filter(r => (r.status || 'pending') === fSt);
+      if (fRev) rows = rows.filter(r => r.reviewedByName === fRev);
+      if (fCls) rows = rows.filter(r => r.reportedByClassId === fCls);
+      rows.sort((a, b) => (b.reviewedAt?.seconds || b.createdAt?.seconds || 0) - (a.reviewedAt?.seconds || a.createdAt?.seconds || 0));
+      if (rows.length === 0) { list.innerHTML = '<div style="color:#94a3b8;padding:14px;text-align:center">（無符合條件的紀錄）</div>'; return; }
+      list.innerHTML = `<div style="color:#64748b;font-size:12px;margin-bottom:8px">共 ${rows.length} 筆</div>` + rows.map(r => {
+        const st = r.status || 'pending'; const reviewed = st !== 'pending';
+        return `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff">
+          <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+            <span style="font-family:monospace;font-size:12px;color:#64748b">${caEsc(r.questionId)}</span>
+            <span style="font-size:12px;color:#475569">${CORR_AUDIT_ST[st] || st}　${caFmt(r.reviewedAt)}</span>
+          </div>
+          <div style="font-size:13px;color:#1e293b;margin-bottom:4px">👤 學員 <strong>${caEsc(r.reportedByName || '?')}</strong>（${caEsc(r.reportedByClassId || '?')}）回報：<span style="color:#b91c1c">${caEsc(r.reason || '(無內容)')}</span></div>
+          <div style="font-size:13px;color:#1e293b;margin-bottom:8px">🧑‍🏫 指導員 <strong style="color:#15803d">${caEsc(r.reviewedByName || '(未處理)')}</strong> 回覆：<span style="color:#4338ca">${reviewed ? caEsc(r.reviewerNote || '(無回覆內容)') : '—'}</span></div>
+          <button class="btn-logout" style="font-size:12px;padding:5px 10px" onclick="window._corrAuditOpenQ('${caEsc(r.questionId)}', this)">📖 看完整題目</button>
+          <div style="margin-top:10px;display:none"></div>
+        </div>`;
+      }).join('');
+    }
+
+    window._corrAuditOpenQ = async function (qid, btn) {
+      const box = btn.nextElementSibling;
+      if (box.style.display === 'block') { box.style.display = 'none'; btn.textContent = '📖 看完整題目'; return; }
+      box.style.display = 'block'; btn.textContent = '📕 收合題目';
+      if (box.dataset.loaded) return;
+      box.innerHTML = '<div style="color:#94a3b8;font-size:13px;padding:8px">⏳ 載入題目…</div>';
+      try {
+        let q = _corrAuditQCache[qid];
+        if (q === undefined) { const d = await getDoc(doc(db, 'questions', qid)); q = d.exists() ? d.data() : null; _corrAuditQCache[qid] = q; }
+        if (!q) { box.innerHTML = '<div style="color:#94a3b8;font-size:13px">（題目已不存在）</div>'; box.dataset.loaded = '1'; return; }
+        const s = q.source || {};
+        const srcTxt = [s.bookName || s.bookId || '', s.chapterNumber ? `第${s.chapterNumber}章` : '', s.page ? `p.${s.page}` : ''].filter(Boolean).join(' ') || '（無出處）';
+        const opts = q.options || {};
+        const optHtml = ['A', 'B', 'C', 'D', 'E', 'F'].filter(k => opts[k] && opts[k].text != null).map(k => {
+          const isAns = k === q.correctAnswer;
+          return `<div style="display:flex;gap:8px;padding:7px 10px;border-radius:6px;margin-bottom:4px;background:${isAns ? '#dcfce7' : '#f8fafc'};border:1px solid ${isAns ? '#86efac' : '#e2e8f0'}"><span style="font-weight:700;color:${isAns ? '#15803d' : '#475569'}">${k}.</span><span style="flex:1;color:#1e293b;white-space:pre-wrap">${caEsc(opts[k].text)}</span>${isAns ? '<span style="color:#15803d;font-weight:700;white-space:nowrap">✔ 正解</span>' : ''}${opts[k].imageUrl ? `<img src="${caEsc(opts[k].imageUrl)}" style="max-width:90px;border-radius:4px;cursor:zoom-in" onclick="window.open(this.src,'_blank')">` : ''}</div>`;
+        }).join('');
+        box.innerHTML = `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:12px">
+            <span style="background:#eef2ff;color:#4338ca;padding:3px 8px;border-radius:6px">👤 ${caEsc(q.createdByClassId || '—')} · ${caEsc(q.createdByName || q.createdBy || '—')}</span>
+            <span style="background:#ecfdf5;color:#065f46;padding:3px 8px;border-radius:6px">📖 ${caEsc(srcTxt)}</span>
+            ${q.derivedDimension ? `<span style="background:#dbeafe;color:#1e40af;padding:3px 8px;border-radius:6px">${caEsc(q.derivedDimension)}</span>` : ''}
+            ${q.isVisible === false ? '<span style="background:#fee2e2;color:#991b1b;padding:3px 8px;border-radius:6px">🚫 已隱藏</span>' : ''}
+          </div>
+          <div style="color:#1e293b;font-size:14px;white-space:pre-wrap;margin-bottom:${q.questionImageUrl ? '6px' : '10px'}">${caEsc(q.questionText)}</div>
+          ${q.questionImageUrl ? `<img src="${caEsc(q.questionImageUrl)}" style="display:block;max-width:100%;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:10px;cursor:zoom-in" onclick="window.open(this.src,'_blank')">` : ''}
+          ${optHtml}
+          <div style="color:#cbd5e1;font-size:11px;margin-top:8px">🔒 僅供檢視、不可修改</div>
+        </div>`;
+        box.dataset.loaded = '1';
+      } catch (e) { box.innerHTML = `<div style="color:#dc2626;font-size:13px">❌ ${caEsc(e.message)}</div>`; }
+    };
+
+    // ===== F16-B: 題目勘誤處理 =====
+    let corrReports = [];      // 目前班級的勘誤
+    let corrGroups = [];       // 依題號分組
+    let corrQuestions = {};    // questionId -> question data
+    let currentCorr = null;    // 正在處理的（依題號）
+
+    async function createNotification(recipientId, type, title, content, relatedId = null) {
+      try {
+        await setDoc(doc(collection(db, 'notifications')), {
+          recipientId, type, title, content, relatedId,
+          isRead: false, createdAt: serverTimestamp(), readAt: null
+        });
+      } catch (e) { console.error('createNotification', e); }
+    }
+
+    // 勘誤分頁徽章：待處理勘誤的題目數（distinct questionId，1~99+）
+    // PWA App 圖示角標（需裝成 APP 才有效；未裝/不支援會無聲略過）
+    function updateAppBadge(n) {
+      try {
+        if (!('setAppBadge' in navigator)) return;
+        if (n > 0) navigator.setAppBadge(n); else navigator.clearAppBadge();
+      } catch (e) {}
+    }
+    function setCorrectionBadge(n) {
+      updateAppBadge(n);
+      const badge = document.getElementById('corr-badge'); if (!badge) return;
+      if (n > 0) { badge.textContent = n > 99 ? '99+' : String(n); badge.style.display = 'flex'; }
+      else { badge.style.display = 'none'; }
+    }
+    async function refreshCorrectionBadge() {
+      try {
+        const snap = await getDocs(query(collection(db, 'question_error_reports'), where('status', '==', 'pending')));
+        const s = new Set(); snap.forEach(d => s.add(d.data().questionId));
+        setCorrectionBadge(s.size);
+      } catch (e) {}
+    }
+
+    // ===== 手機推播（FCM）：指導員收「勘誤待處理」=====
+    // VAPID 公鑰：Firebase Console → 專案設定 → Cloud Messaging → 網頁推播憑證
+    const VAPID_PUBLIC_KEY = 'BCRPh5pwUruMhMy63-3UOioZOvHmvyawIJer-lMpvyb2Vu96Cp2wPYI03KMBK676StrI3FpicfXAxqRbbr6pDnA';
+    let fcmMessaging = null;
+    function updatePushBtn() {
+      const btn = document.getElementById('push-enable-btn');
+      const granted = ('Notification' in window) && Notification.permission === 'granted';
+      if (btn) { btn.style.display = granted ? 'none' : 'inline-block'; }
+    }
+    async function setupPush(interactive) {
+      try {
+        if (VAPID_PUBLIC_KEY === 'REPLACE_WITH_VAPID_KEY') return;
+        if (!(await fcmSupported())) { if (interactive) alert('此瀏覽器不支援推播。iPhone 請先用 Safari「加入主畫面」開啟。'); return; }
+        if (!('Notification' in window)) return;
+        let perm = Notification.permission;
+        if (perm === 'default' && interactive) perm = await Notification.requestPermission();
+        if (perm !== 'granted') { if (interactive) alert('未允許通知，無法接收推播。'); updatePushBtn(); return; }
+        const reg = await navigator.serviceWorker.ready;
+        fcmMessaging = fcmMessaging || getMessaging(app);
+        const token = await getToken(fcmMessaging, { vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: reg });
+        if (!token || !currentInstructor) return;
+        await setDoc(doc(db, 'push_tokens', token), {
+          token, role: 'instructor', userId: currentInstructor.id, name: currentInstructor.name || '',
+          ua: (navigator.userAgent || '').slice(0, 180), updatedAt: serverTimestamp()
+        }, { merge: true });
+        onMessage(fcmMessaging, () => { refreshCorrectionBadge(); });
+        updatePushBtn();
+        if (interactive) alert('✅ 已開啟手機推播！之後有新勘誤待處理會主動通知你。');
+      } catch (e) { console.warn('[push]', e); if (interactive) alert('開啟推播失敗：' + (e.message || e)); }
+    }
+
+    async function loadCorrections() {
+      const el = document.getElementById('corr-list');
+      el.innerHTML = '<div class="placeholder"><div class="icon">⏳</div><p>載入中...</p></div>';
+      try {
+        const filter = document.getElementById('corr-filter').value;
+        // 勘誤跨班共用：題目全系統共享，指導員看「所有班級」的回報（結案時本來就會一次關閉所有班）
+        const snap = await getDocs(collection(db, 'question_error_reports'));
+        corrReports = [];
+        snap.forEach(d => corrReports.push({ id: d.id, ...d.data() }));
+        // 同步徽章：全系統 distinct 待處理題數
+        { const s = new Set(); corrReports.forEach(r => { if ((r.status || 'pending') === 'pending') s.add(r.questionId); }); setCorrectionBadge(s.size); }
+        if (filter === 'pending') corrReports = corrReports.filter(r => (r.status || 'pending') === 'pending');
+        corrReports.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        if (corrReports.length === 0) {
+          el.innerHTML = '<div class="placeholder"><div class="icon">✅</div><h3>沒有勘誤</h3><p>目前沒有符合條件的回報</p></div>';
+          return;
+        }
+        // 抓題目內容
+        corrQuestions = {};
+        await Promise.all([...new Set(corrReports.map(r => r.questionId))].map(async qid => {
+          try { const qd = await getDoc(doc(db, 'questions', qid)); if (qd.exists()) corrQuestions[qid] = qd.data(); } catch (e) {}
+        }));
+        // 依題號分組（同一題多人回報 → 顯示在一起、一次處理）
+        const groups = {};
+        corrReports.forEach(r => { (groups[r.questionId] = groups[r.questionId] || []).push(r); });
+        corrGroups = Object.entries(groups).map(([qid, rs]) => ({ qid, reports: rs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)) }));
+        corrGroups.sort((a, b) => (b.reports[0]?.createdAt?.seconds || 0) - (a.reports[0]?.createdAt?.seconds || 0));
+        el.innerHTML = corrGroups.map(g => {
+          const q = corrQuestions[g.qid];
+          const qtext = q ? (q.questionText || '').slice(0, 60) : '（題目已不存在）';
+          const anyPending = g.reports.some(r => (r.status || 'pending') === 'pending');
+          const reportersHtml = g.reports.map(r => `<div style="font-size:13px;color:#78350f;margin-bottom:3px"><strong>${r.reportedByName || '學員'}（${r.reportedByClassId || '—'}）：</strong>${r.reason || ''}${(r.status && r.status !== 'pending') ? ' <span style="color:#94a3b8">(已處理)</span>' : ''}</div>`).join('');
+          return `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
+              <span style="font-family:monospace;font-size:13px;color:#64748b">${g.qid}</span>
+              <span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:10px;font-size:12px">${g.reports.length} 筆回報</span>
+            </div>
+            <div style="font-size:14px;color:#1e293b;margin-bottom:8px">${qtext}${qtext.length >= 60 ? '…' : ''}</div>
+            <div style="background:#fffbeb;border-left:3px solid #f59e0b;padding:8px 12px;border-radius:0 8px 8px 0;margin-bottom:10px">${reportersHtml}</div>
+            ${anyPending
+              ? `<button class="btn-primary" style="width:auto;padding:8px 18px" data-corr-qid="${g.qid}">處理（${g.reports.length} 筆一起結案）</button>`
+              : `<div style="font-size:12px;color:#94a3b8">已處理</div>`}
+          </div>`;
+        }).join('');
+        el.querySelectorAll('button[data-corr-qid]').forEach(b => b.addEventListener('click', () => openCorrModal(b.dataset.corrQid)));
+      } catch (e) {
+        el.innerHTML = `<div class="placeholder"><div class="icon">❌</div><p>${e.message}</p></div>`;
+      }
+    }
+
+    document.getElementById('corr-filter').addEventListener('change', loadCorrections);
+    document.getElementById('corr-refresh').addEventListener('click', loadCorrections);
+
+    async function openCorrModal(qid) {
+      const g = corrGroups.find(x => x.qid === qid);
+      if (!g) return;
+      const q = corrQuestions[qid] || {};
+      currentCorr = { qid, reports: g.reports, qUpdatedAt: q.updatedAt?.seconds || 0 };  // qUpdatedAt 用於並發控制
+      document.getElementById('corr-reporter').textContent = `${g.reports.length} 筆回報`;
+      document.getElementById('corr-reason').innerHTML = g.reports.map(r => `• ${r.reportedByName || '學員'}：${r.reason || ''}`).join('<br>');
+      document.getElementById('corr-qid').textContent = qid;
+      // 出題者班級/姓名 + 書籍出處（章/頁），方便指導員判斷怎麼改
+      const _esc = v => String(v == null ? '' : v).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+      const _s = q.source || {};
+      const _cls = q.createdByClassId || '—';
+      const _who = q.createdByName || q.createdBy || '—';
+      const _book = _s.bookName || _s.bookId || '';
+      const _ch = _s.chapterNumber ? `第${_s.chapterNumber}章` : '';
+      const _pg = _s.page ? `p.${_s.page}` : '';
+      const _src = [_book, _ch, _pg].filter(Boolean).join(' ') || '（無出處）';
+      document.getElementById('corr-meta').innerHTML =
+        `<span style="background:#eef2ff;color:#4338ca;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600">👤 ${_esc(_cls)} · ${_esc(_who)}</span>` +
+        `<span style="background:#ecfdf5;color:#065f46;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600">📖 ${_esc(_src)}</span>`;
+      document.getElementById('corr-qtext').value = q.questionText || '';
+      { const iw = document.getElementById('corr-img-wrap'), im = document.getElementById('corr-img');
+        if (q.questionImageUrl) { im.src = q.questionImageUrl; im.onclick = () => window.open(im.src, '_blank'); iw.style.display = ''; }
+        else { im.removeAttribute('src'); iw.style.display = 'none'; } }
+      document.getElementById('corr-answer').value = q.correctAnswer || 'A';
+      document.getElementById('corr-page').value = (q.source && q.source.page) || '';
+      document.getElementById('corr-hide').checked = q.isVisible === false;
+      document.getElementById('corr-reply').value = '';
+      document.getElementById('corr-reply-author').value = '';
+      currentCorr.authorId = q.createdByStudentId || '';
+      currentCorr.authorName = _who;
+      // 回報者標籤：1 位顯示姓名、多位顯示「N 位」
+      const _reps = currentCorr.reports || [];
+      document.getElementById('corr-reply-rlabel').textContent =
+        _reps.length === 1 ? `給回報者 ${_esc(_reps[0].reportedByName || '學員')}` : `給回報者（${_reps.length} 位）`;
+      // 出題者欄：有 id → 啟用＋標姓名；無 id → 禁用＋灰掉＋提示
+      const _aTa = document.getElementById('corr-reply-author');
+      const _aGroup = document.getElementById('corr-author-group');
+      const _aLabel = document.getElementById('corr-reply-alabel');
+      const _aRule = document.getElementById('corr-author-rule');
+      if (currentCorr.authorId) {
+        _aTa.disabled = false; _aGroup.style.opacity = '1';
+        _aLabel.textContent = `給出題者 ${_esc(_who)}`;
+        _aRule.textContent = '〔留空＝不通知〕'; _aRule.style.color = '#b45309';
+        _aTa.placeholder = '給出題者（選填）：例 你出的這題標答有誤、已更正為 B，下次留意';
+      } else {
+        _aTa.disabled = true; _aTa.value = ''; _aGroup.style.opacity = '0.5';
+        _aLabel.textContent = '給出題者';
+        _aRule.textContent = '〔此題無出題者資料、無法通知〕'; _aRule.style.color = '#94a3b8';
+        _aTa.placeholder = '此題無出題者資料';
+      }
+      updateCorrBtnLabel();
+      document.getElementById('corr-modal-msg').innerHTML = '';
+      // 選項
+      const opts = q.options || {};
+      document.getElementById('corr-options').innerHTML = ['A','B','C','D'].map(k =>
+        `<div class="form-group" style="margin-bottom:8px"><label>選項 ${k}</label><textarea class="corr-opt corr-grow" data-k="${k}" rows="1" style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:9px;font-family:inherit;font-size:14px;line-height:1.5;resize:none;overflow:hidden">${String(opts[k]?.text || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</textarea></div>`
+      ).join('');
+      // 書籍 / 章節（可改、存檔時重算維度）：先顯示窗、再帶入現有出處
+      document.getElementById('corr-book').innerHTML = '<option value="">載入中…</option>';
+      document.getElementById('corr-chapter').innerHTML = '<option value="">先選書籍</option>';
+      document.getElementById('corr-dim-hint').innerHTML = '';
+      document.getElementById('corr-modal').style.display = 'flex';
+      corrAutosizeAll();   // 顯示後依內容長高（題目+選項）
+      try {
+        await ensureCorrBooksChapters();
+        const src = q.source || {};
+        populateCorrBook(src.bookId || '');
+        populateCorrChapter(src.bookId || '', src.chapterId || '', src.chapterNumber);
+        updateCorrDimHint();
+      } catch (e) { document.getElementById('corr-dim-hint').innerHTML = `<span style="color:#ef4444">書/章載入失敗：${e.message}</span>`; }
+    }
+    function closeCorrModal() { document.getElementById('corr-modal').style.display = 'none'; currentCorr = null; }
+    document.getElementById('corr-modal-close').addEventListener('click', closeCorrModal);
+    document.getElementById('corr-modal-cancel').addEventListener('click', closeCorrModal);
+    document.getElementById('corr-resolve-fix').addEventListener('click', () => resolveCorr());
+    // 結案鈕動態文字：出題者欄有字 → 顯示「回報者＋出題者」，否則「回報者」
+    function updateCorrBtnLabel() {
+      const aTa = document.getElementById('corr-reply-author');
+      const hasAuthor = !aTa.disabled && aTa.value.trim().length > 0;
+      document.getElementById('corr-resolve-fix').textContent = hasAuthor ? '✅ 結案並通知回報者＋出題者' : '✅ 結案並通知回報者';
+    }
+    document.getElementById('corr-reply-author').addEventListener('input', updateCorrBtnLabel);
+
+    // ===== 勘誤：書籍 / 章節（可改、存檔時重算維度）=====
+    let corrBooks = [], corrChapters = [];
+    const CORR_DIM_NAMES = { D1: '緊急救護系統', D2: '基礎醫學含評估', D3: '創傷', D4: '非創傷', D5: '特殊族群', D6: '災難及特殊情境' };
+    async function ensureCorrBooksChapters() {
+      if (corrBooks.length === 0) {
+        const bSnap = await getDocs(collection(db, 'books'));
+        corrBooks = []; bSnap.forEach(d => { const x = d.data(); if (x.isActive !== false) corrBooks.push({ id: d.id, ...x }); });
+        corrBooks.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+      }
+      if (corrChapters.length === 0) {
+        const cSnap = await getDocs(collection(db, 'chapters'));
+        corrChapters = []; cSnap.forEach(d => { const x = d.data(); if (x.isActive !== false) corrChapters.push({ id: d.id, ...x }); });
+      }
+    }
+    function populateCorrBook(selBookId) {
+      const sel = document.getElementById('corr-book');
+      sel.innerHTML = '<option value="">—</option>' + corrBooks.map(b => `<option value="${b.id}">${b.id}</option>`).join('');
+      if (selBookId) sel.value = selBookId;
+    }
+    function populateCorrChapter(bookId, selChapterId, selChapterNumber) {
+      const sel = document.getElementById('corr-chapter');
+      if (!bookId) { sel.innerHTML = '<option value="">先選書籍</option>'; return; }
+      const chs = corrChapters.filter(c => c.bookId === bookId).sort((a, b) => (parseInt(a.chapterNumber) || 0) - (parseInt(b.chapterNumber) || 0));
+      sel.innerHTML = '<option value="">請選章節</option>' + chs.map(c => `<option value="${c.id}" data-dim="${c.dimension || ''}" data-num="${c.chapterNumber}">Ch ${c.chapterNumber} ${String(c.chapterName || '').replace(/"/g, '&quot;')}</option>`).join('');
+      if (selChapterId && chs.some(c => c.id === selChapterId)) sel.value = selChapterId;
+      else if (selChapterNumber != null && selChapterNumber !== '') { const m = chs.find(c => String(c.chapterNumber) === String(selChapterNumber)); if (m) sel.value = m.id; }
+    }
+    function updateCorrDimHint() {
+      const dim = document.getElementById('corr-chapter').selectedOptions[0]?.dataset.dim;
+      const el = document.getElementById('corr-dim-hint');
+      if (!el) return;
+      if (dim) el.innerHTML = `✅ 存檔後此題編入維度 <strong style="color:#059669">${dim} ${CORR_DIM_NAMES[dim] || ''}</strong>`;
+      else el.innerHTML = '<span style="color:#b45309">⚠️ 此章節未設定維度、存檔後此題不會計入雷達</span>';
+    }
+    document.getElementById('corr-book').addEventListener('change', () => { populateCorrChapter(document.getElementById('corr-book').value, '', ''); updateCorrDimHint(); });
+    document.getElementById('corr-chapter').addEventListener('change', updateCorrDimHint);
+    // 題目/選項框依內容縱向自動長高
+    function corrGrow(el) { if (!el) return; el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
+    function corrAutosizeAll() { document.querySelectorAll('#corr-modal textarea.corr-grow').forEach(corrGrow); }
+    document.getElementById('corr-modal').addEventListener('input', (e) => { if (e.target.classList && e.target.classList.contains('corr-grow')) corrGrow(e.target); });
+
+    async function resolveCorr() {
+      if (!currentCorr) return;
+      const qid = currentCorr.qid;
+      const q0 = corrQuestions[qid] || {};
+      const msg = document.getElementById('corr-modal-msg');
+      const fixBtn = document.getElementById('corr-resolve-fix');
+      const hide = document.getElementById('corr-hide').checked;
+
+      // 讀目前表單值
+      const newText = document.getElementById('corr-qtext').value;
+      const newAns = document.getElementById('corr-answer').value;
+      const newPage = document.getElementById('corr-page').value;
+      const newOpts = {}; document.querySelectorAll('.corr-opt').forEach(inp => { newOpts[inp.dataset.k] = inp.value; });
+      const bkSel = document.getElementById('corr-book'), chSel = document.getElementById('corr-chapter');
+      const _bookId = bkSel.value, _chapterId = chSel.value;
+      const _chapterNumber = chSel.selectedOptions[0]?.dataset.num || '';
+      const _dimension = chSel.selectedOptions[0]?.dataset.dim || null;
+
+      // 判斷指導員是否真的改了題目：有改＝已修正(fixed)、沒改＝已處理(rejected，等同不成立)
+      const o0 = q0.options || {}, s0 = q0.source || {};
+      const optsChanged = ['A', 'B', 'C', 'D'].some(k => String(o0[k]?.text || '') !== String(newOpts[k] || ''));
+      const changed = (String(q0.questionText || '') !== newText)
+        || (String(q0.correctAnswer || '') !== newAns)
+        || optsChanged
+        || (String(s0.page || '') !== String(newPage || ''))
+        || (String(s0.bookId || '') !== _bookId)
+        || (String(s0.chapterId || '') !== _chapterId)
+        || ((q0.isVisible === false) !== hide);
+      const resolution = changed ? 'fixed' : 'rejected';
+
+      // 修正結案：強制「書籍 + 章節」都要選（藉勘誤把題目強制編入維度）
+      if (resolution === 'fixed' && (!_bookId || !_chapterId)) {
+        msg.innerHTML = '<div style="color:#ef4444;font-size:13px">⚠️ 你修改了題目內容，請選「書籍」與「章節」才能送出（用來把題目編入維度）。</div>';
+        return;
+      }
+
+      // 回覆文字（皆選填）：回報者一律通知（含預設結案語）；出題者只有寫了才通知
+      const replyRaw = document.getElementById('corr-reply').value.trim();
+      const reply = replyRaw || (resolution === 'fixed' ? '題目已更正' : '已審閱、此題維持原樣');
+      const authorMsg = document.getElementById('corr-reply-author').value.trim();
+      const authorId = currentCorr.authorId || q0.createdByStudentId || '';
+
+      fixBtn.disabled = true;
+      try {
+        // 並發控制：重讀題目、比對版本（先按出的先贏）
+        const fresh = await getDoc(doc(db, 'questions', qid));
+        const freshUpdated = fresh.exists() ? (fresh.data().updatedAt?.seconds || 0) : 0;
+        if (resolution === 'fixed' && freshUpdated !== currentCorr.qUpdatedAt) {
+          msg.innerHTML = '<div style="color:#ef4444;font-size:13px">⚠️ 這題剛剛已被其他教官修改過了！請關閉、重新整理後再確認（避免覆蓋別人的修正）。</div>';
+          fixBtn.disabled = false;
+          return;
+        }
+        // 1. 修正題目（fixed）+ editHistory；隱藏不論結案皆套用
+        if (resolution === 'fixed') {
+          const opts = {};
+          document.querySelectorAll('.corr-opt').forEach(inp => { opts[inp.dataset.k] = { text: inp.value }; });
+          const pre = corrQuestions[qid] || {};
+          await updateDoc(doc(db, 'questions', qid), {
+            questionText: newText,
+            options: opts,
+            correctAnswer: newAns,
+            'source.page': newPage,
+            'source.bookId': _bookId,
+            'source.chapterId': _chapterId,
+            'source.chapterNumber': _chapterNumber || null,
+            derivedDimension: _dimension,   // 依當下書+章重算（章沒改也重編）
+            isVisible: !hide,
+            updatedAt: serverTimestamp(),
+            lastEditedBy: currentInstructor.email,
+            editHistory: arrayUnion({
+              questionText: pre.questionText || '', options: pre.options || {}, correctAnswer: pre.correctAnswer || '', source: pre.source || {},
+              editedBy: currentInstructor.name, editedAt: Timestamp.now(), reason: '勘誤校正：' + (reply || '')
+            })
+          });
+        } else if (hide) {
+          await updateDoc(doc(db, 'questions', qid), { isVisible: false, hiddenReason: '勘誤處理', hiddenBy: currentInstructor.email, hiddenAt: serverTimestamp(), updatedAt: serverTimestamp() });
+        }
+        // 2. 關閉「所有班級」對這題的待處理回報（避免重複改）+ 一律通知每位回報者
+        const allRep = await getDocs(query(collection(db, 'question_error_reports'), where('questionId', '==', qid)));
+        const toClose = []; allRep.forEach(d => { if ((d.data().status || 'pending') === 'pending') toClose.push({ id: d.id, ...d.data() }); });
+        const newStatus = hide ? 'hidden' : resolution;
+        await Promise.all(toClose.map(rep => updateDoc(doc(db, 'question_error_reports', rep.id), {
+          status: newStatus, reviewedBy: currentInstructor.id, reviewedByName: currentInstructor.name, reviewedAt: serverTimestamp(), reviewerNote: reply
+        })));
+        const title = resolution === 'fixed' ? '✅ 你回報的題目已修正' : '📩 你回報的題目已處理';
+        await Promise.all(toClose.map(rep => createNotification(rep.reportedBy, 'error_report_reply', title, reply, qid)));
+        // 3. 給出題者：只有寫了內容且該題有出題者才發（推播由 onNotification 自動送）
+        if (authorMsg && authorId) {
+          await createNotification(authorId, 'error_report_to_author', '📣 指導員對你出的題目有話說', authorMsg, qid);
+        }
+        closeCorrModal();
+        loadCorrections();
+      } catch (e) {
+        msg.innerHTML = `<div style="color:#ef4444;font-size:13px">❌ ${e.message}</div>`;
+      } finally {
+        fixBtn.disabled = false;
+      }
+    }
+
+    // ===== F16-C: 出題追蹤（應繳出題日 + 能量條）=====
+    let schedCache = [];
+
+    async function loadScheduleTab() {
+      if (!selectedClassId) return;
+      const perms = classPerms || {};
+      // 日期框預設今天（字串、不做時區換算），避免空白被誤認為壞掉
+      const _sd = document.getElementById('sched-date');
+      if (_sd && !_sd.value) { const _t = new Date(); _sd.value = `${_t.getFullYear()}-${String(_t.getMonth() + 1).padStart(2, '0')}-${String(_t.getDate()).padStart(2, '0')}`; }
+      const tasks = [loadScheduleList()];
+      if (perms.canEditEnergyBar) tasks.push(loadEnergyBar());   // 沒權限不載、卡片已隱藏
+      await Promise.all(tasks);
+      populateTrackControls();                                    // 出題繳交追蹤（schedCache 已就緒）
+      if (perms.canViewPerfRanking) { if (!document.getElementById('perf-start').value) _setPerfWeek(); loadPerfRanking(); }   // 綜合績效排名：需後台授權才載入（耗讀取）
+      if (perms.canViewClassPower) loadQuestionPower();           // 各班出題戰力（需權限）
+    }
+
+    // ===== F16: 戰力排行 =====
+    function safeEvalFormula(expr, attempts, accuracy) {
+      try { const fn = new Function('attempts', 'accuracy', 'Math', `"use strict"; return (${expr});`); const v = fn(attempts, accuracy, Math); return (typeof v === 'number' && isFinite(v)) ? v : 0; }
+      catch (e) { return 0; }
+    }
+
+    // ===== 共用：週期區間 / 數字動畫 =====
+    const CP_COLORS = ['#f59e0b', '#ef4444', '#8b5cf6', '#10b981', '#3b82f6', '#ec4899', '#14b8a6', '#6366f1', '#f97316', '#0ea5e9', '#84cc16', '#a855f7'];
+    function _localDate(ms) { const x = new Date(ms); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); }
+    function _weekRange(which) {
+      const now = new Date(); now.setHours(0, 0, 0, 0);
+      const day = now.getDay();                                  // 0=日
+      const mon = new Date(now); mon.setDate(now.getDate() - (day === 0 ? 6 : day - 1)); // 本週一
+      if (which === 'lastweek') {
+        const lm = new Date(mon); lm.setDate(mon.getDate() - 7);
+        const ls = new Date(mon); ls.setMilliseconds(-1);        // 上週日 23:59:59
+        return [lm.getTime(), ls.getTime()];
+      }
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 7); sun.setMilliseconds(-1); // 本週日 23:59:59
+      return [mon.getTime(), sun.getTime()];
+    }
+    function _animateNum(el, target, suffix) {
+      if (!el) return; const dur = 800, t0 = performance.now();
+      function step(now) { const p = Math.min(1, (now - t0) / dur); el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3))) + (suffix || ''); if (p < 1) requestAnimationFrame(step); }
+      requestAnimationFrame(step);
+    }
+    function _setPerfWeek() { const [s, e] = _weekRange('week'); document.getElementById('perf-start').value = _localDate(s); document.getElementById('perf-end').value = _localDate(e); }
+
+    // ===== F16: 綜合測驗績效排名（正規化 0~100、預設本週、可收折） =====
+    async function loadPerfRanking() {
+      const el = document.getElementById('rank-perf');
+      el.innerHTML = '<div class="placeholder" style="padding:12px"><div class="icon">⏳</div></div>';
+      try {
+        const startStr = document.getElementById('perf-start')?.value;
+        const endStr = document.getElementById('perf-end')?.value;
+        const startMs = startStr ? new Date(startStr + 'T00:00:00').getTime() : null;
+        const endMs = endStr ? new Date(endStr + 'T23:59:59').getTime() : null;
+        let expr = 'Math.sqrt(attempts) * accuracy';
+        try { const f = await getDoc(doc(db, 'formulas', 'weighted_score')); if (f.exists() && f.data().expression) expr = f.data().expression; } catch (e) {}
+        const stuSnap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
+        const students = {}; stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false) students[d.id] = { name: s.name, no: s.studentNo, attempts: 0, correct: 0 }; });
+        // 讀取改革：不再撈整班逐筆作答（動輒上萬筆＝上萬讀取），改成每位學員各打 2 個 count() 聚合
+        //（聚合查詢「每掃 1000 筆才算 1 次讀取」）。只算綜合隨機 examMode=='scoring'（排除專項練習，與原本 examMode==='practice' 跳過同義）。
+        const startTs = startMs ? Timestamp.fromMillis(startMs) : null;
+        const endTs = endMs ? Timestamp.fromMillis(endMs) : null;
+        // 全部期間（完全沒設區間）仍二次確認，行為與介面不變
+        if (!startMs && !endMs) {
+          if (!confirm('「全部期間」會讀取整班的全部作答紀錄，大班可能數萬筆、耗用較多讀取額度。\n建議改用上方日期區間查詢（較省）。\n\n仍要查全部期間嗎？')) {
+            el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">已取消（可改用日期區間查詢，較省讀取）</div>';
+            return;
+          }
+        }
+        const rangeConstraints = [];
+        if (startTs) rangeConstraints.push(where('attemptedAt', '>=', startTs));
+        if (endTs) rangeConstraints.push(where('attemptedAt', '<=', endTs));
+        try {
+          await Promise.all(Object.keys(students).map(async (id) => {
+            const base = [where('studentId', '==', id), where('examMode', '==', 'scoring'), ...rangeConstraints];
+            const [tot, cor] = await Promise.all([
+              getCountFromServer(query(collection(db, 'question_attempts'), ...base)),
+              getCountFromServer(query(collection(db, 'question_attempts'), ...base, where('isCorrect', '==', true)))
+            ]);
+            students[id].attempts = tot.data().count;
+            students[id].correct = cor.data().count;
+          }));
+        } catch (idxErr) {
+          // 複合索引建置中或遺失：明確提示，不退回掃全班
+          console.error('[loadPerfRanking] count() 失敗（複合索引 studentId+examMode+attemptedAt / +isCorrect 可能建置中或遺失）：', idxErr?.code || idxErr);
+          el.innerHTML = '<div style="color:#ef4444;font-size:13px;text-align:center;padding:14px;line-height:1.6">成績排行索引建置中或暫時無法查詢<br><span style="color:#94a3b8;font-size:12px">請稍候 1～2 分鐘後重新整理（首次啟用聚合查詢需建索引）</span></div>';
+          return;
+        }
+        let rows = Object.values(students).map(s => { const accuracy = s.attempts ? s.correct / s.attempts : 0; return { ...s, accuracy, raw: safeEvalFormula(expr, s.attempts, accuracy) }; });
+        const maxRaw = Math.max(0, ...rows.map(r => r.raw));
+        rows.forEach(r => r.score = maxRaw > 0 ? (r.raw / maxRaw) * 100 : 0);   // 正規化 0~100
+        rows.sort((a, b) => b.raw - a.raw || (b.attempts - a.attempts) || ((a.no || 0) - (b.no || 0)));
+        if (rows.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">此班沒有學員</div>'; return; }
+        const medal = ['🥇', '🥈', '🥉'];
+        const rangeLabel = (startStr || endStr) ? `${startStr || '起'} ~ ${endStr || '今'}` : '全部期間';
+        const row = (r, i) => `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #f1f5f9;${i < 3 && r.attempts > 0 ? 'background:#fffbeb' : ''};${r.attempts === 0 ? 'opacity:0.5' : ''}">
+            <span style="width:30px;font-weight:700;color:#475569">${(i < 3 && r.attempts > 0) ? medal[i] : (i + 1)}</span>
+            <span style="flex:1;font-size:14px">${r.no}. ${r.name}</span>
+            <span style="width:48px;text-align:right;font-size:13px;color:#64748b">${r.attempts}</span>
+            <span style="width:48px;text-align:right;font-size:13px;color:#64748b">${Math.round(r.accuracy * 100)}%</span>
+            <span style="width:54px;text-align:right;font-weight:700;color:#3b82f6">${r.score.toFixed(1)}</span>
+          </div>`;
+        const TOPN = 10;
+        let html = `<div style="font-size:11px;color:#94a3b8;margin-bottom:6px">期間：${rangeLabel}　加權分已正規化 0~100（班內最高＝100）</div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:11px;color:#94a3b8;border-bottom:2px solid #e2e8f0">
+            <span style="width:30px">名次</span><span style="flex:1">姓名</span><span style="width:48px;text-align:right">刷題</span><span style="width:48px;text-align:right">答對率</span><span style="width:54px;text-align:right">加權分</span>
+          </div>` + rows.slice(0, TOPN).map(row).join('');
+        if (rows.length > TOPN) {
+          html += `<div id="perf-more" style="display:none">${rows.slice(TOPN).map((r, i) => row(r, i + TOPN)).join('')}</div>
+            <button id="perf-toggle" style="width:100%;background:#f1f5f9;border:none;color:#475569;padding:9px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;margin-top:8px">▼ 展開全部 ${rows.length} 人</button>`;
+        }
+        el.innerHTML = html;
+        const tg = document.getElementById('perf-toggle');
+        if (tg) tg.addEventListener('click', () => { const m = document.getElementById('perf-more'); const open = m.style.display !== 'none'; m.style.display = open ? 'none' : 'block'; tg.textContent = open ? `▼ 展開全部 ${rows.length} 人` : '▲ 收合'; });
+      } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+    }
+    document.getElementById('perf-apply').addEventListener('click', loadPerfRanking);
+    document.getElementById('perf-clear').addEventListener('click', () => { document.getElementById('perf-start').value = ''; document.getElementById('perf-end').value = ''; loadPerfRanking(); });
+
+    // ===== 各班出題戰力（本週/上週/總累計 + 彩色橫條 + 數字動畫）=====
+    let _cpPeriod = 'week';
+    let _qpCache = null, _qpNameCache = {};   // 戰力 session 快取（題目精簡＋班名）：期間切換/重進分頁不重掃題庫
+    async function loadQuestionPower() {
+      const el = document.getElementById('rank-questions');
+      const totalEl = document.getElementById('cp-total');
+      el.innerHTML = '<div class="placeholder" style="padding:12px"><div class="icon">⏳</div></div>';
+      try {
+        let startMs = 0, endMs = Infinity;
+        if (_cpPeriod !== 'all') { const [s, e] = _weekRange(_cpPeriod); startMs = s; endMs = e; }
+        // session 快取：題目精簡資料只掃一次，期間(本週/上週/總累計)切換用快取前端過濾、不重掃 3,206 題
+        if (!_qpCache) {
+          const qSnap = await getDocs(collection(db, 'questions'));
+          _qpCache = [];
+          qSnap.forEach(d => { const q = d.data(); if (q.isVisible === false || q.isActive === false) return; _qpCache.push({ c: q.createdByClassId || '其他', t: q.createdAt?.seconds ? q.createdAt.seconds * 1000 : 0 }); });
+        }
+        const byClass = {};
+        _qpCache.forEach(q => { if (q.t < startMs || q.t > endMs) return; byClass[q.c] = (byClass[q.c] || 0) + 1; });
+        const list = Object.entries(byClass).map(([cid, n]) => ({ cid, n })).sort((a, b) => b.n - a.n);
+        const total = list.reduce((s, x) => s + x.n, 0);
+        totalEl.innerHTML = `該期間全班總出題 <b id="cp-total-num" style="color:#3b82f6;font-size:18px">0</b> 題`;
+        if (list.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">此期間尚無出題</div>'; _animateNum(document.getElementById('cp-total-num'), 0, ''); return; }
+        const max = list[0].n;
+        const nameCache = _qpNameCache;   // 班名 session 快取，不每次逐班 getDoc
+        for (const it of list) { if (nameCache[it.cid]) continue; try { const c = await getDoc(doc(db, 'classes', it.cid)); nameCache[it.cid] = c.exists() ? (c.data().displayName || it.cid) : it.cid; } catch (e) { nameCache[it.cid] = it.cid; } }
+        el.innerHTML = list.map((it, i) => {
+          const mine = it.cid === selectedClassId;
+          const color = mine ? '#e11d48' : CP_COLORS[i % CP_COLORS.length];
+          return `<div style="margin-bottom:11px">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="font-weight:${mine ? '700' : '600'};color:${mine ? '#e11d48' : '#1e293b'}">${mine ? '⭐ ' : ''}${nameCache[it.cid]}</span><span style="color:#64748b" class="cp-num" data-target="${it.n}">0 題</span></div>
+            <div style="height:13px;background:#f1f5f9;border-radius:7px;overflow:hidden"><div class="cp-bar" style="height:100%;width:0%;background:${color};border-radius:7px;transition:width 0.9s ease-out" data-w="${max ? (it.n / max) * 100 : 0}"></div></div>
+          </div>`;
+        }).join('');
+        requestAnimationFrame(() => {
+          el.querySelectorAll('.cp-bar').forEach(b => { b.style.width = b.dataset.w + '%'; });
+          el.querySelectorAll('.cp-num').forEach(n => _animateNum(n, parseInt(n.dataset.target), ' 題'));
+          _animateNum(document.getElementById('cp-total-num'), total, '');
+        });
+      } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+    }
+    document.querySelectorAll('#cp-toggle .cp-tab').forEach(b => b.addEventListener('click', () => {
+      _cpPeriod = b.dataset.period;
+      document.querySelectorAll('#cp-toggle .cp-tab').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      loadQuestionPower();
+    }));
+
+    async function loadScheduleList() {
+      const el = document.getElementById('sched-list');
+      el.innerHTML = '<div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div>';
+      try {
+        const snap = await getDocs(query(collection(db, 'question_schedule'), where('classId', '==', selectedClassId)));
+        schedCache = [];
+        snap.forEach(d => { const data = d.data(); if (data.isActive !== false) schedCache.push({ id: d.id, ...data }); });
+        schedCache.sort((a, b) => (a.scheduledDate || '').localeCompare(b.scheduledDate || ''));
+        if (schedCache.length === 0) {
+          el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">尚未設定應繳出題日</div>';
+          return;
+        }
+        const n = schedCache.length;
+        const pad = v => String(v).padStart(2, '0');
+        const fmtMD = iso => { const dt = new Date(iso); return isNaN(dt) ? iso : `${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`; };
+        el.innerHTML = `<details class="sched-fold">
+            <summary class="sched-fold-bar"><span class="when-closed">∨ 展開已設定日期 (${n})</span><span class="when-open">∧ 收合已設定日期 (${n})</span></summary>
+            <div class="sched-pillbox">` +
+          schedCache.map(s => `<div class="sched-pill"><span>${fmtMD(s.scheduledDate)}${s.questionsPerStudent > 1 ? `(${s.questionsPerStudent})` : ''}</span><button data-del="${s.id}">×</button></div>`).join('') +
+          `</div></details>`;
+        el.querySelectorAll('button[data-del]').forEach(b => b.addEventListener('click', () => removeScheduleDate(b.dataset.del)));
+      } catch (e) {
+        el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`;
+      }
+    }
+
+    document.getElementById('sched-add').addEventListener('click', async () => {
+      const date = document.getElementById('sched-date').value;
+      const per = parseInt(document.getElementById('sched-per').value) || 1;
+      if (!selectedClassId) { alert('請先選班級'); return; }
+      if (!date) { alert('請選日期'); return; }
+      if (schedCache.some(s => s.scheduledDate === date)) { alert('此日期已存在'); return; }
+      const btn = document.getElementById('sched-add');
+      btn.disabled = true;
+      try {
+        await setDoc(doc(collection(db, 'question_schedule')), {
+          classId: selectedClassId, scheduledDate: date, questionsPerStudent: per,
+          isActive: true, createdBy: currentInstructor.id, createdByName: currentInstructor.name,
+          createdAt: serverTimestamp()
+        });
+        document.getElementById('sched-date').value = '';
+        loadScheduleList();
+      } catch (e) { alert('❌ ' + e.message); }
+      finally { btn.disabled = false; }
+    });
+
+    async function removeScheduleDate(id) {
+      if (!confirm('刪除此應繳日？')) return;
+      try { await deleteDoc(doc(db, 'question_schedule', id)); loadScheduleList(); }
+      catch (e) { alert('❌ ' + e.message); }
+    }
+
+    // ===== 出題繳交追蹤 =====
+    // 出題日下拉：最近且已到達的 3 筆放最前面，其次歷史（過往），最後尚未到期
+    async function populateTrackControls() {
+      const dateSel = document.getElementById('track-date');
+      const stuSel = document.getElementById('track-student');
+      if (!dateSel) return;
+      const _t = new Date();
+      const todayStr = `${_t.getFullYear()}-${String(_t.getMonth() + 1).padStart(2, '0')}-${String(_t.getDate()).padStart(2, '0')}`;  // 字串比較、含今天，避免時區位移
+      // 本班學員抓一次（排除測試帳號＝姓名含「測試」；統計只算真實學員）
+      let allStudents = [];
+      try {
+        const snap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
+        snap.forEach(d => { const s = d.data(); if (s.isActive !== false) allStudents.push({ id: d.id, name: s.name || '', no: s.studentNo }); });
+      } catch (e) {}
+      allStudents.sort((a, b) => (a.no || 0) - (b.no || 0));
+      const realStudents = allStudents.filter(s => !s.name.includes('測試'));
+      const realIdSet = new Set(realStudents.map(s => s.id));
+      const realCount = realStudents.length;
+      // 各出題日 → 每位真實學員出了幾題（依題庫 createdByClassId/createdByStudentId）
+      const cntByDateStu = {};
+      try {
+        const qSnap = await getDocs(query(collection(db, 'questions'), where('createdByClassId', '==', selectedClassId)));
+        qSnap.forEach(d => { const q = d.data(); const sd = q.scheduledDate, sid = q.createdByStudentId; if (!sd || !sid || !realIdSet.has(sid)) return; (cntByDateStu[sd] = cntByDateStu[sd] || {})[sid] = (cntByDateStu[sd][sid] || 0) + 1; });
+      } catch (e) {}
+      const missOf = s => { const need = s.questionsPerStudent || 1; const m = cntByDateStu[s.scheduledDate] || {}; let done = 0; realStudents.forEach(st => { if ((m[st.id] || 0) >= need) done++; }); return realCount - done; };
+      // option 文字：已到期的日期標注「✅ 全繳 / 尚 N 人未繳」（排除測試帳號）
+      const optText = (s, annotate) => {
+        let t = `${s.scheduledDate}${s.questionsPerStudent > 1 ? `（${s.questionsPerStudent}題）` : ''}`;
+        if (annotate && realCount > 0) { const miss = missOf(s); t += miss === 0 ? ' ✅ 全繳' : `・尚 ${miss} 人未繳`; }
+        return t;
+      };
+      const arrived = schedCache.filter(s => (s.scheduledDate || '') <= todayStr)
+        .sort((a, b) => (b.scheduledDate || '').localeCompare(a.scheduledDate || '')); // 新→舊
+      const future = schedCache.filter(s => (s.scheduledDate || '') > todayStr)
+        .sort((a, b) => (a.scheduledDate || '').localeCompare(b.scheduledDate || ''));
+      const recent = arrived.slice(0, 3);
+      const older = arrived.slice(3);
+      const prev = dateSel.value;
+      let h = '<option value="">請選出題日...</option>';
+      if (recent.length) { h += '<optgroup label="🔥 最近可繳交（近期 3 筆）">'; recent.forEach(s => h += `<option value="${s.scheduledDate}">${optText(s, true)}</option>`); h += '</optgroup>'; }
+      if (older.length) { h += '<optgroup label="📁 歷史排程（過往日期）">'; older.forEach(s => h += `<option value="${s.scheduledDate}">${optText(s, true)}</option>`); h += '</optgroup>'; }
+      if (future.length) { h += '<optgroup label="⏳ 尚未到期">'; future.forEach(s => h += `<option value="${s.scheduledDate}">${optText(s, false)}</option>`); h += '</optgroup>'; }
+      dateSel.innerHTML = h;
+      if (prev && schedCache.some(s => s.scheduledDate === prev)) dateSel.value = prev;
+      // 學員下拉（含測試帳號，供個別查看用）
+      if (stuSel) stuSel.innerHTML = '<option value="">全部學員</option>' + allStudents.map(s => `<option value="${s.id}">${s.no}. ${s.name}</option>`).join('');
+    }
+
+    async function loadTrackResult() {
+      const stuFilter = document.getElementById('track-student').value;
+      // 指定單一學員 → 看他在「所有應出題日」的狀況（不需選日期）
+      if (stuFilter) { loadTrackByStudent(stuFilter); return; }
+      // 全部學員 → 看某一出題日的全班狀況
+      const el = document.getElementById('track-result');
+      const date = document.getElementById('track-date').value;
+      if (!date) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">選出題日查看全班繳交狀況（或選學員看跨日期狀況）</div>'; return; }
+      el.innerHTML = '<div class="placeholder" style="padding:12px"><div class="icon">⏳</div></div>';
+      try {
+        const sch = schedCache.find(s => s.scheduledDate === date);
+        const need = (sch && sch.questionsPerStudent) || 1;
+        const stuSnap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
+        let students = [];
+        stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false && !String(s.name || '').includes('測試')) students.push({ id: d.id, name: s.name, no: s.studentNo }); });
+        students.sort((a, b) => (a.no || 0) - (b.no || 0));
+        // 以「題庫出題者」判斷：該班該日、每位學員出了幾題
+        const qSnap = await getDocs(query(collection(db, 'questions'), where('createdByClassId', '==', selectedClassId)));
+        const countByStu = {};
+        qSnap.forEach(d => { const q = d.data(); if (q.scheduledDate === date && q.createdByStudentId) countByStu[q.createdByStudentId] = (countByStu[q.createdByStudentId] || 0) + 1; });
+        const rows = students.map(s => ({ ...s, cnt: countByStu[s.id] || 0, done: (countByStu[s.id] || 0) >= need }));
+        const total = rows.length, done = rows.filter(r => r.done).length, miss = total - done;
+        el.innerHTML = `
+          <div style="font-size:13px;color:#475569;text-align:center;margin-bottom:8px">📅 ${date} · 全班繳交狀況</div>
+          <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;flex-wrap:wrap;font-size:14px">
+            <span style="background:#f1f5f9;color:#475569;padding:5px 14px;border-radius:18px">總數 <b>${total}</b></span>
+            <span style="background:#dcfce7;color:#166534;padding:5px 14px;border-radius:18px">✅ 完成 <b>${done}</b></span>
+            <span style="background:#fee2e2;color:#991b1b;padding:5px 14px;border-radius:18px">❌ 未交 <b>${miss}</b></span>
+          </div>
+          <div style="font-size:11px;color:#94a3b8;text-align:center;margin-bottom:10px">達標門檻：每人 ${need} 題</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px">` +
+          rows.map(r => `<div style="border-radius:10px;padding:8px 6px;text-align:center;font-size:13px;border:1px solid ${r.done ? '#86efac' : '#fca5a5'};background:${r.done ? '#f0fdf4' : '#fef2f2'};color:${r.done ? '#166534' : '#991b1b'}">${r.done ? '✅' : '❌'} ${r.name}${need > 1 ? `<div style="font-size:10px;opacity:0.8">${r.cnt}/${need}</div>` : ''}</div>`).join('') +
+          '</div>' +
+          (rows.length === 0 ? '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">無學員</div>' : '');
+      } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+    }
+
+    // 單一學員 → 跨所有應出題日的繳交狀況
+    async function loadTrackByStudent(stuId) {
+      const el = document.getElementById('track-result');
+      const stuSel = document.getElementById('track-student');
+      const stuName = stuSel.options[stuSel.selectedIndex] ? stuSel.options[stuSel.selectedIndex].text : '該學員';
+      if (schedCache.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">本班尚未設定應繳出題日</div>'; return; }
+      el.innerHTML = '<div class="placeholder" style="padding:12px"><div class="icon">⏳</div></div>';
+      try {
+        // 以「題庫出題者」判斷：該學員每個應繳日各出了幾題
+        const qSnap = await getDocs(query(collection(db, 'questions'), where('createdByStudentId', '==', stuId)));
+        const cntByDate = {};
+        qSnap.forEach(d => { const sd = d.data().scheduledDate; if (sd) cntByDate[sd] = (cntByDate[sd] || 0) + 1; });
+        const _t2 = new Date();
+        const todayStr = `${_t2.getFullYear()}-${String(_t2.getMonth() + 1).padStart(2, '0')}-${String(_t2.getDate()).padStart(2, '0')}`;
+        // 已到期者「最接近今天（最新）→ 舊」排；尚未到期的未來日期不顯示（要看排程去出題日下拉）
+        const due = [...schedCache]
+          .filter(s => (s.scheduledDate || '') <= todayStr)
+          .sort((a, b) => (b.scheduledDate || '').localeCompare(a.scheduledDate || ''))
+          .map(s => {
+            const need = s.questionsPerStudent || 1;
+            const cnt = cntByDate[s.scheduledDate] || 0;
+            return { date: s.scheduledDate, need, cnt, done: cnt >= need };
+          });
+        const done = due.filter(r => r.done).length;
+        el.innerHTML = `
+          <div style="font-size:13px;color:#475569;text-align:center;margin-bottom:8px">👤 ${stuName} · 跨日期繳交狀況</div>
+          <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;flex-wrap:wrap;font-size:14px">
+            <span style="background:#f1f5f9;color:#475569;padding:5px 14px;border-radius:18px">應交 <b>${due.length}</b> 天</span>
+            <span style="background:#dcfce7;color:#166534;padding:5px 14px;border-radius:18px">✅ 完成 <b>${done}</b></span>
+            <span style="background:#fee2e2;color:#991b1b;padding:5px 14px;border-radius:18px">❌ 未交 <b>${due.length - done}</b></span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px">` +
+          due.map(r => `<div style="border-radius:10px;padding:8px 6px;text-align:center;font-size:12px;border:1px solid ${r.done ? '#86efac' : '#fca5a5'};background:${r.done ? '#f0fdf4' : '#fef2f2'};color:${r.done ? '#166534' : '#991b1b'}">${r.done ? '✅' : '❌'} ${r.date}${r.need > 1 ? `<div style="font-size:10px;opacity:0.8">${r.cnt}/${r.need}</div>` : ''}</div>`).join('') +
+          '</div>' +
+          (due.length === 0 ? '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">尚無已到期的應繳日</div>' : '');
+      } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+    }
+    document.getElementById('track-date').addEventListener('change', loadTrackResult);
+    document.getElementById('track-student').addEventListener('change', loadTrackResult);
+
+    async function loadEnergyBar() {
+      const el = document.getElementById('energy-body');
+      const canEdit = !!(classPerms || {}).canEditEnergyBar;
+      try {
+        const cDoc = await getDoc(doc(db, 'classes', selectedClassId));
+        const eb = (cDoc.exists() && cDoc.data().settings && cDoc.data().settings.energyBar) || { enabled: false, target: 15, period: 'weekly' };
+        const dis = canEdit ? '' : 'disabled';
+        el.innerHTML = `
+          ${canEdit ? '' : '<div style="background:#fff7ed;color:#9a3412;font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px">🔒 你沒有「修改能量條」權限、僅供檢視</div>'}
+          <label style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;font-size:14px">
+            <span>開啟學員端顯示</span>
+            <input type="checkbox" id="eb-enabled" ${eb.enabled ? 'checked' : ''} ${dis} style="width:42px;height:24px;cursor:pointer">
+          </label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+            <div>
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">週期模式 <span style="cursor:pointer;color:#3b82f6;font-weight:700" onclick="alert('每週重置＝每週一 00:00（凌晨）起算，只算本週一之後刷的趟數。每月重置＝每月 1 號 00:00 起算。到了週一／1 號，趟數會自動歸零重算，上一週期不計入。')" title="點我看說明">ⓘ</span></label>
+              <select id="eb-period" ${dis} style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit">
+                <option value="weekly" ${eb.period === 'weekly' ? 'selected' : ''}>每週重置</option>
+                <option value="monthly" ${eb.period === 'monthly' ? 'selected' : ''}>每月重置</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">目標趟數 <span style="cursor:pointer;color:#3b82f6;font-weight:700" onclick="alert('一趟＝完成一次 10 題綜合測驗（專項練習不計）。學員在本週期內刷滿這個趟數，就達標、能量條集滿。')" title="點我看說明">ⓘ</span></label>
+              <input type="number" id="eb-target" value="${eb.target || 15}" min="1" max="100" ${dis} style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit">
+            </div>
+          </div>
+          ${canEdit ? '<button id="eb-save" style="width:100%;background:#f59e0b;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700">💾 儲存此班級設定</button><div id="eb-msg"></div>' : ''}
+        `;
+        if (canEdit) document.getElementById('eb-save').addEventListener('click', saveEnergyBar);
+      } catch (e) {
+        el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`;
+      }
+    }
+
+    async function saveEnergyBar() {
+      const btn = document.getElementById('eb-save');
+      const msg = document.getElementById('eb-msg');
+      btn.disabled = true; btn.textContent = '⏳ 儲存中...';
+      try {
+        await updateDoc(doc(db, 'classes', selectedClassId), {
+          'settings.energyBar': {
+            enabled: document.getElementById('eb-enabled').checked,
+            period: document.getElementById('eb-period').value,
+            target: parseInt(document.getElementById('eb-target').value) || 15
+          },
+          settingsUpdatedAt: serverTimestamp(),
+          settingsUpdatedBy: currentInstructor.name
+        });
+        msg.innerHTML = '<div style="color:#10b981;font-size:13px;margin-top:8px">✅ 已儲存（學員端下次載入生效）</div>';
+        setTimeout(() => { msg.innerHTML = ''; }, 3000);
+      } catch (e) {
+        msg.innerHTML = `<div style="color:#ef4444;font-size:13px;margin-top:8px">❌ ${e.message}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 儲存此班級設定';
+      }
+    }
+
+    // ===== F16-D: 教官簽核（QR + 簽核進度）=====
+    let signoffSkills = [];
+    let currentQrSession = null;
+    let qrCountdownTimer = null;
+    let qrSnapshotUnsub = null;
+
+    async function loadSignoffTab() {
+      // 載入核心技術項目
+      if (signoffSkills.length === 0) {
+        try {
+          const snap = await getDocs(collection(db, 'core_skills'));
+          signoffSkills = [];
+          snap.forEach(d => { const data = d.data(); if (data.isActive !== false) signoffSkills.push({ id: d.id, ...data }); });
+          signoffSkills.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+        } catch (e) { console.error('load skills', e); }
+      }
+      const optHtml = '<option value="">請選項目...</option>' + signoffSkills.map(s => `<option value="${s.id}" data-name="${s.name}" data-target="${s.targetCount || 1}">${s.name}（目標 ${s.targetCount || 1} 次）</option>`).join('');
+      document.getElementById('qr-skill').innerHTML = optHtml;
+      document.getElementById('prog-skill').innerHTML = optHtml;
+    }
+
+    document.getElementById('btn-start-qr').addEventListener('click', async () => {
+      const skillSel = document.getElementById('qr-skill');
+      const skillId = skillSel.value;
+      const skillName = skillSel.selectedOptions[0]?.dataset.name || skillId;
+      const errEl = document.getElementById('qr-setup-error');
+      errEl.innerHTML = '';
+      if (!selectedClassId) { errEl.innerHTML = '<div class="err-msg">❌ 請先選班級</div>'; return; }
+      if (!skillId) { errEl.innerHTML = '<div class="err-msg">❌ 請選技術項目</div>'; return; }
+      const btn = document.getElementById('btn-start-qr');
+      btn.disabled = true; btn.textContent = '⏳ 產生中...';
+      try {
+        const sessionId = 'qr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        const now = Date.now();
+        const classDisplay = document.getElementById('class-select').selectedOptions[0]?.textContent || selectedClassId;
+        await setDoc(doc(db, 'qr_signoff_sessions', sessionId), {
+          instructorId: currentInstructor.id, instructorName: currentInstructor.name,
+          skillId, skillName,
+          classId: selectedClassId, className: classDisplay,
+          createdAt: serverTimestamp(),
+          expiresAt: Timestamp.fromDate(new Date(now + 5 * 60 * 1000)),
+          scannedStudents: [], isActive: true
+        });
+        currentQrSession = { id: sessionId, expiresAtMs: now + 5 * 60 * 1000 };
+        document.getElementById('qr-setup').style.display = 'none';
+        document.getElementById('qr-active').style.display = 'block';
+        document.getElementById('qr-skill-name').textContent = `${skillName} · ${classDisplay}`;
+        const url = `${location.origin}${location.pathname.replace(/instructor\.html$/, 'student.html')}?qr=${sessionId}`;
+        document.getElementById('qr-url-text') && (document.getElementById('qr-url-text').textContent = url);
+        // 用 QR 圖片 API、不依賴 JS 函式庫（最穩定）
+        document.getElementById('qr-img').src = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=10&data=' + encodeURIComponent(url);
+        startQrCountdown();
+        qrSnapshotUnsub = onSnapshot(doc(db, 'qr_signoff_sessions', sessionId), (snap) => {
+          if (!snap.exists()) return;
+          const scanned = snap.data().scannedStudents || [];
+          document.getElementById('qr-scanned-count').textContent = scanned.length;
+          const listEl = document.getElementById('qr-scanned-list');
+          listEl.innerHTML = scanned.length === 0
+            ? '<div style="color:#94a3b8;text-align:center">尚未有學員掃描</div>'
+            : scanned.map((s, i) => { const t = s.scannedAt?.seconds ? new Date(s.scannedAt.seconds * 1000).toLocaleTimeString('zh-TW') : '—'; return `<div class="qr-student-row"><span>${i + 1}. ${s.studentName || s.studentId}</span><span style="color:#10b981;font-size:12px">✅ ${t}</span></div>`; }).join('');
+        });
+      } catch (e) {
+        errEl.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = '📱 產生 QR Code（5 分鐘）';
+      }
+    });
+
+    function startQrCountdown() {
+      const el = document.getElementById('qr-countdown');
+      function tick() {
+        if (!currentQrSession) return;
+        const remain = Math.max(0, currentQrSession.expiresAtMs - Date.now());
+        el.textContent = `${Math.floor(remain / 60000)}:${String(Math.floor((remain % 60000) / 1000)).padStart(2, '0')}`;
+        el.classList.remove('warning', 'critical');
+        if (remain <= 60000) el.classList.add('critical');
+        else if (remain <= 120000) el.classList.add('warning');
+        if (remain <= 0) endQrSession(true);
+      }
+      tick();
+      qrCountdownTimer = setInterval(tick, 500);
+    }
+
+    async function endQrSession(isExpired) {
+      if (qrCountdownTimer) { clearInterval(qrCountdownTimer); qrCountdownTimer = null; }
+      if (qrSnapshotUnsub) { qrSnapshotUnsub(); qrSnapshotUnsub = null; }
+      if (currentQrSession) {
+        try { await updateDoc(doc(db, 'qr_signoff_sessions', currentQrSession.id), { isActive: false, endedAt: serverTimestamp(), endedReason: isExpired ? 'expired' : 'manual' }); } catch (e) {}
+      }
+      currentQrSession = null;
+      document.getElementById('qr-setup').style.display = 'block';
+      document.getElementById('qr-active').style.display = 'none';
+      if (isExpired) alert('⏰ QR Code 已過期（5 分鐘到）、可重新產生');
+    }
+
+    document.getElementById('btn-end-qr').addEventListener('click', () => { if (confirm('確定提早結束此 session？')) endQrSession(false); });
+
+    // 全班簽核進度
+    document.getElementById('prog-skill').addEventListener('change', loadSignoffProgress);
+
+    async function loadSignoffProgress() {
+      const skillSel = document.getElementById('prog-skill');
+      const skillId = skillSel.value;
+      const target = parseInt(skillSel.selectedOptions[0]?.dataset.target) || 1;
+      const el = document.getElementById('prog-list');
+      if (!skillId || !selectedClassId) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">選技術項目查看全班達標狀況</div>'; return; }
+      el.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:14px">⏳ 載入中...</div>';
+      try {
+        const [stuSnap, signSnap] = await Promise.all([
+          getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId))),
+          getDocs(query(collection(db, 'core_skill_signoffs'), where('classId', '==', selectedClassId), where('skillId', '==', skillId)))
+        ]);
+        const students = [];
+        stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false) students.push({ id: d.id, ...s }); });
+        students.sort((a, b) => (a.studentNo || 0) - (b.studentNo || 0));
+        const counts = {};
+        signSnap.forEach(d => { const sid = d.data().studentId; counts[sid] = (counts[sid] || 0) + 1; });
+        if (students.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">此班沒有學員</div>'; return; }
+        const done = students.filter(s => (counts[s.id] || 0) >= target).length;
+        el.innerHTML = `<div style="font-size:13px;color:#475569;margin-bottom:12px">達標 <strong style="color:#10b981">${done}</strong> / ${students.length} 人（目標 ${target} 次）</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">` +
+          students.map(s => {
+            const c = counts[s.id] || 0;
+            const ok = c >= target;
+            const filled = Math.min(c, target);
+            // 電池：依「目標次數」顯示格數、依「簽核成功數」填滿格
+            let cells = '';
+            for (let i = 0; i < target; i++) cells += `<div style="flex:1;border-radius:2px;background:${i < filled ? (ok ? '#10b981' : '#22c55e') : '#e2e8f0'}"></div>`;
+            return `<div style="border:1.5px solid ${ok ? '#10b981' : '#e2e8f0'};border-radius:10px;padding:10px 11px;background:${ok ? '#f0fdf4' : '#fff'}">
+              <div style="font-size:13px;font-weight:600;color:#1e293b;margin-bottom:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.studentNo}. ${s.name} ${ok ? '✅' : ''}</div>
+              <div style="display:flex;align-items:center;gap:3px">
+                <div style="flex:1;display:flex;gap:2px;border:2px solid ${ok ? '#10b981' : '#cbd5e1'};border-radius:4px;padding:2px;height:20px">${cells}</div>
+                <div style="width:3px;height:9px;background:${ok ? '#10b981' : '#cbd5e1'};border-radius:0 2px 2px 0"></div>
+              </div>
+              <div style="font-size:12px;font-weight:700;color:${ok ? '#10b981' : '#f59e0b'};margin-top:5px;text-align:right">${filled}/${target} 次</div>
+            </div>`;
+          }).join('') + '</div>';
+      } catch (e) {
+        el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`;
+      }
+    }
+
+    // ===== F16-E: 其他（公告 + 錯題本開關）=====
+    let editingAnnId = null;
+    let instructorAnnCache = [];
+
+    async function loadOtherTab() {
+      if (!selectedClassId) return;
+      const perms = classPerms || {};
+      // 預設下架日 +7
+      const d = document.getElementById('ann-expire');
+      if (d && !d.value) { const t = new Date(); t.setDate(t.getDate() + 7); d.value = t.toISOString().slice(0, 10); }
+      loadInstructorAnnouncements();
+      // 個別學員檢視（三個獨立權限：雷達/動能/河流）
+      loadStudentViewPanel(perms);
+      initTroopOverview();   // ⚡ 全班刷題趟數總覽（lazy：展開才讀彙總）
+      // 沒「開關錯題本」權限 → 整張卡隱藏
+      const mbCard = document.getElementById('mb-card');
+      if (perms.canToggleMistakeBook) { mbCard.style.display = ''; loadMistakeBookToggle(); }
+      else { mbCard.style.display = 'none'; }
+      // 成績上傳（依權限）
+      loadScoreUpload(perms);
+      // 成績查詢/管理（能碰成績的人都可看）
+      const smCard = document.getElementById('scoremanage-card');
+      const canTouchScore = perms.canUploadScores || perms.canUploadRadar || perms.canEditScores;
+      if (canTouchScore) { smCard.style.display = ''; loadScoreManage(); }
+      else { smCard.style.display = 'none'; }
+      // 個人成績修正（gated canEditScores）
+      const seCard = document.getElementById('scoreedit-card');
+      if (perms.canEditScores) { seCard.style.display = ''; loadScoreEdit(); }
+      else { seCard.style.display = 'none'; }
+      // 題庫下載（gated canDownloadQuestions）
+      const qdCard = document.getElementById('qdl-card');
+      if (perms.canDownloadQuestions) { qdCard.style.display = ''; loadQuestionDownload(); }
+      else { qdCard.style.display = 'none'; }
+    }
+
+    document.getElementById('ann-publish').addEventListener('click', async () => {
+      const title = document.getElementById('ann-title').value.trim();
+      const content = document.getElementById('ann-content').value.trim();
+      const category = document.getElementById('ann-category').value;
+      const expStr = document.getElementById('ann-expire').value;
+      const msg = document.getElementById('ann-msg');
+      msg.innerHTML = '';
+      if (!selectedClassId) { msg.innerHTML = '<div class="err-msg">❌ 請先選班級</div>'; return; }
+      if (!title) { msg.innerHTML = '<div class="err-msg">❌ 請填標題</div>'; return; }
+      if (!content) { msg.innerHTML = '<div class="err-msg">❌ 請填內容</div>'; return; }
+      if (!expStr) { msg.innerHTML = '<div class="err-msg">❌ 請選下架日期</div>'; return; }
+      const expiresAt = new Date(expStr + 'T23:59:59');
+      if (expiresAt.getTime() < Date.now()) { msg.innerHTML = '<div class="err-msg">❌ 下架日不能早於今天</div>'; return; }
+      const btn = document.getElementById('ann-publish');
+      btn.disabled = true; btn.textContent = '⏳ 處理中...';
+      try {
+        if (editingAnnId) {
+          // 修改：清空 readBy → 學員重新看到（登入會再彈出）
+          await updateDoc(doc(db, 'announcements', editingAnnId), {
+            category, title, content, expiresAt: Timestamp.fromDate(expiresAt),
+            readBy: [], isPublished: true,
+            updatedAt: serverTimestamp(), updatedByName: currentInstructor.name
+          });
+          msg.innerHTML = '<div class="ok-msg">✅ 已更新（學員會重新收到通知）</div>';
+        } else {
+          await setDoc(doc(collection(db, 'announcements')), {
+            classIds: [selectedClassId], category, title, content,
+            publishedBy: currentInstructor.id, publishedByName: currentInstructor.name,
+            publishedAt: serverTimestamp(), expiresAt: Timestamp.fromDate(expiresAt),
+            isPublished: true, readBy: []
+          });
+          msg.innerHTML = '<div class="ok-msg">✅ 已發布</div>';
+        }
+        resetAnnForm();
+        loadInstructorAnnouncements();
+        setTimeout(() => { const m = document.getElementById('ann-msg'); if (m && m.querySelector('.ok-msg')) m.innerHTML = ''; }, 3000);
+      } catch (e) { msg.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = editingAnnId ? '💾 更新公告' : '📢 發布公告'; }
+    });
+
+    function resetAnnForm() {
+      editingAnnId = null;
+      document.getElementById('ann-title').value = '';
+      document.getElementById('ann-content').value = '';
+      document.getElementById('ann-publish').textContent = '📢 發布公告';
+    }
+
+    function editAnnouncement(id) {
+      const a = instructorAnnCache.find(x => x.id === id);
+      if (!a) return;
+      editingAnnId = id;
+      document.getElementById('ann-category').value = a.category || '其他';
+      document.getElementById('ann-title').value = a.title || '';
+      document.getElementById('ann-content').value = a.content || '';
+      if (a.expiresAt?.seconds) document.getElementById('ann-expire').value = new Date(a.expiresAt.seconds * 1000).toISOString().slice(0, 10);
+      document.getElementById('ann-publish').textContent = '💾 更新公告';
+      document.getElementById('ann-msg').innerHTML = '<div style="background:#eff6ff;color:#1e40af;padding:8px 12px;border-radius:8px;font-size:12px;margin-top:8px">✏️ 編輯中、更新後學員會重新收到通知　<a href="#" id="ann-cancel-edit" style="color:#dc2626">取消</a></div>';
+      document.getElementById('ann-cancel-edit').addEventListener('click', (e) => { e.preventDefault(); resetAnnForm(); document.getElementById('ann-msg').innerHTML = ''; });
+      document.getElementById('ann-title').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    async function loadInstructorAnnouncements() {
+      const el = document.getElementById('ann-list');
+      el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:10px">⏳ 載入中...</div>';
+      try {
+        const snap = await getDocs(query(collection(db, 'announcements'), where('classIds', 'array-contains', selectedClassId)));
+        const now = Date.now();
+        const items = [];
+        snap.forEach(d => { const data = d.data(); const exp = data.expiresAt?.seconds ? data.expiresAt.seconds * 1000 : 0; if (!(exp && exp < now)) items.push({ id: d.id, ...data }); });
+        items.sort((a, b) => (b.publishedAt?.seconds || 0) - (a.publishedAt?.seconds || 0));
+        instructorAnnCache = items;
+        if (items.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:10px">目前沒有公告</div>'; return; }
+        const emo = { '課程通知': '📘', '重大活動': '🎯', '重要提醒': '⚠️', '其他': '📌' };
+        el.innerHTML = items.map(a => `
+          <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:6px">
+              <span style="font-size:12px;color:#6366f1;font-weight:600">${emo[a.category] || '📌'} ${a.category || ''}</span>
+              <span style="display:flex;gap:6px">
+                <button data-edit-ann="${a.id}" style="background:#eff6ff;color:#2563eb;border:none;padding:3px 10px;border-radius:8px;cursor:pointer;font-size:12px">修改</button>
+                <button data-del-ann="${a.id}" style="background:#fef2f2;color:#dc2626;border:none;padding:3px 10px;border-radius:8px;cursor:pointer;font-size:12px">下架</button>
+              </span>
+            </div>
+            <div style="font-weight:700;color:#1e293b;font-size:15px">${a.title}</div>
+            <div style="font-size:13px;color:#475569;white-space:pre-wrap;margin-top:2px">${a.content}</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:6px">👁 已讀 ${(a.readBy || []).length} 人</div>
+          </div>`).join('');
+        el.querySelectorAll('button[data-del-ann]').forEach(b => b.addEventListener('click', async () => {
+          if (!confirm('下架這則公告？')) return;
+          try { await deleteDoc(doc(db, 'announcements', b.dataset.delAnn)); loadInstructorAnnouncements(); } catch (e) { alert('❌ ' + e.message); }
+        }));
+        el.querySelectorAll('button[data-edit-ann]').forEach(b => b.addEventListener('click', () => editAnnouncement(b.dataset.editAnn)));
+      } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+    }
+
+    // ===== 個別學員檢視（河流 / 雷達 / 動能；三個獨立權限）=====
+    const SV_DIMS = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'];
+    const SV_DIM_NAMES = ['緊急救護系統', '基礎醫學含評估', '創傷', '非創傷', '特殊族群', '災難及特殊情境'];
+    let svRiverChart = null, svRadarChart = null, svMomentumChart = null;
+    let svRiverMode = 'river', svRadarMode = 'first';
+    let _svRiverStats = null, _svRadarData = null;
+    let _svCurrentStudentId = null;
+
+    function _svPct(sorted, p) {
+      if (!sorted.length) return null;
+      if (sorted.length === 1) return sorted[0];
+      const idx = (p / 100) * (sorted.length - 1);
+      const lo = Math.floor(idx), hi = Math.ceil(idx), w = idx - lo;
+      return sorted[lo] * (1 - w) + sorted[hi] * w;
+    }
+    function _svBand(label, upArr, loArr, rgba) {
+      return [
+        { label: label + '_lo', data: loArr, borderColor: 'transparent', backgroundColor: 'transparent', pointRadius: 0, fill: false, tension: 0.3, _band: true },
+        { label: label + '_hi', data: upArr, borderColor: 'transparent', backgroundColor: rgba, pointRadius: 0, fill: '-1', tension: 0.3, _band: true }
+      ];
+    }
+
+    // ===== ⚡ 全班刷題趟數總覽（讀彙總 sessionLog、最省；點學員連到動能）=====
+    let _svStudents = [];   // loadStudentViewPanel 載入的全班學員（id/no/name），總覽重用
+    function troopPeriodStart(period) { const d = new Date(); d.setHours(0, 0, 0, 0); if (period === 'monthly') { d.setDate(1); return d.getTime(); } const day = d.getDay(); d.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); return d.getTime(); }
+
+    function initTroopOverview() {
+      const card = document.getElementById('troop-card');
+      const p = classPerms || {};
+      if (card) card.style.display = p.canViewTroopOverview ? '' : 'none';   // 後台「查看能量條進度」權限控管
+      const tog = document.getElementById('troop-toggle');
+      if (!tog || tog._bound) return; tog._bound = true;
+      const wrap = document.getElementById('troop-wrap'), caret = document.getElementById('troop-caret');
+      tog.addEventListener('click', () => { const open = wrap.style.display === 'none'; wrap.style.display = open ? 'block' : 'none'; caret.textContent = open ? '▼ 收合' : '▶ 展開'; if (open) loadTroopOverview(); });
+      document.getElementById('troop-refresh').addEventListener('click', loadTroopOverview);
+      document.getElementById('troop-period').addEventListener('change', () => { const c = document.getElementById('troop-period').value === 'custom'; document.querySelectorAll('.troop-date').forEach(e => e.style.display = c ? 'flex' : 'none'); loadTroopOverview(); });
+      ['troop-start', 'troop-end'].forEach(id => document.getElementById(id).addEventListener('change', () => { if (document.getElementById('troop-period').value === 'custom') loadTroopOverview(); }));
+    }
+
+    async function loadTroopOverview() {
+      const list = document.getElementById('troop-list');
+      list.innerHTML = '<div class="placeholder"><div class="icon">⏳</div><p>載入中…</p></div>';
+      try {
+        const period = document.getElementById('troop-period').value;
+        let start, end = Infinity, label;
+        if (period === 'custom') {
+          const s = document.getElementById('troop-start').value, e = document.getElementById('troop-end').value;
+          start = s ? new Date(s + 'T00:00:00').getTime() : 0; end = e ? new Date(e + 'T23:59:59').getTime() : Infinity; label = `${s || '起'} ~ ${e || '今'}`;
+        } else { start = troopPeriodStart(period); label = period === 'monthly' ? '本月' : '本週'; }
+        // 能量條目標（讀 1 筆 classes）
+        const cDoc = await getDoc(doc(db, 'classes', selectedClassId));
+        const eb = (cDoc.exists() && cDoc.data().settings && cDoc.data().settings.energyBar) || {};
+        const target = eb.target || 15;
+        // 學員清單：重用 _svStudents、排除測試帳號；若沒有就自己讀一次
+        let studs = (_svStudents || []).filter(s => !String(s.name).includes('測試'));
+        if (!studs.length) {
+          const snap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
+          studs = []; snap.forEach(d => { const x = d.data(); if (x.isActive === false || String(x.name || '').includes('測試')) return; studs.push({ id: d.id, no: x.studentNo || '', name: x.name || d.id }); });
+          studs.sort((a, b) => (parseInt(a.no) || 0) - (parseInt(b.no) || 0));
+        }
+        // 逐生讀 progress.sessionLog（每生 1 筆、最省）
+        const rows = [];
+        for (const s of studs) {
+          const prog = (await getDoc(doc(db, 'student_quiz_progress', s.id))).data() || {};
+          let cnt = 0;
+          if (Array.isArray(prog.sessionLog)) { const ids = new Set(); prog.sessionLog.forEach(x => { if (x && x.at >= start && x.at <= end && x.id) ids.add(x.id); }); cnt = ids.size; }
+          rows.push({ ...s, cnt });
+        }
+        const done = rows.filter(r => r.cnt >= target).length;
+        list.innerHTML = `<div style="color:#64748b;font-size:12px;margin-bottom:10px">期間：${label}　目標 ${target} 趟　達標 ${done}/${rows.length} 人　（讀 ${rows.length} 筆彙總；點學員看每日動能）</div>` +
+          `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">` +
+          rows.map(r => {
+            const ok = r.cnt >= target; const cells = Math.max(target, 1); const filled = Math.min(r.cnt, cells);
+            const bat = Array.from({ length: cells }, (_, i) => `<span style="flex:1;height:10px;border-radius:2px;background:${i < filled ? (ok ? '#10b981' : '#f59e0b') : '#e2e8f0'}"></span>`).join('');
+            return `<div class="troop-cell" data-sid="${r.id}" style="cursor:pointer;border:1px solid ${ok ? '#86efac' : '#e2e8f0'};background:${ok ? '#f0fdf4' : '#fff'};border-radius:10px;padding:10px">
+              <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span style="font-weight:600;color:#1e293b">${r.no ? r.no + '號 ' : ''}${r.name}</span><span style="color:${ok ? '#15803d' : '#b45309'};font-weight:700">${r.cnt}/${target}${ok ? ' ✅' : ''}</span></div>
+              <div style="display:flex;gap:2px">${bat}</div>
+            </div>`;
+          }).join('') + `</div>`;
+        list.querySelectorAll('.troop-cell').forEach(c => c.addEventListener('click', () => {
+          const sid = c.dataset.sid; const sel = document.getElementById('sv-student');
+          if (sel) { sel.value = sid; sel.dispatchEvent(new Event('change')); const sc = document.getElementById('student-view-card'); if (sc) sc.scrollIntoView({ behavior: 'smooth' }); }
+        }));
+      } catch (e) { list.innerHTML = `<div style="color:#dc2626;padding:12px">❌ ${e.message}</div>`; }
+    }
+
+    async function loadStudentViewPanel(perms) {
+      const card = document.getElementById('student-view-card');
+      const p = perms || classPerms || {};
+      const anyPerm = p.canViewStudentRiver || p.canViewStudentRadar || p.canViewStudentMomentum;
+      if (!card) return;
+      // 完全沒權限 → 整張卡隱藏
+      if (!anyPerm) { card.style.display = 'none'; return; }
+      card.style.display = '';
+      // 各子卡依權限顯示
+      document.getElementById('sv-river-card').style.display = p.canViewStudentRiver ? '' : 'none';
+      document.getElementById('sv-radar-card').style.display = p.canViewStudentRadar ? '' : 'none';
+      document.getElementById('sv-momentum-card').style.display = p.canViewStudentMomentum ? '' : 'none';
+      document.getElementById('sv-noperm').style.display = 'none';
+      // 載入學員下拉
+      const sel = document.getElementById('sv-student');
+      sel.innerHTML = '<option value="">⏳ 載入中...</option>';
+      try {
+        const snap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
+        const studs = [];
+        snap.forEach(d => { const x = d.data(); if (x.isActive === false) return; studs.push({ id: d.id, no: x.studentNo || '', name: x.name || d.id }); });
+        studs.sort((a, b) => (parseInt(a.no) || 0) - (parseInt(b.no) || 0));
+        _svStudents = studs;   // 存起來供「全班趟數總覽」重用，不再重讀 students
+        sel.innerHTML = '<option value="">請選擇學員...</option>' + studs.map(s => `<option value="${s.id}">${s.no ? s.no + '號 ' : ''}${s.name}</option>`).join('');
+        _svCurrentStudentId = null;
+      } catch (e) { sel.innerHTML = '<option value="">❌ 載入失敗</option>'; }
+    }
+
+    document.getElementById('sv-student').addEventListener('change', (e) => {
+      _svCurrentStudentId = e.target.value || null;
+      const p = classPerms || {};
+      if (!_svCurrentStudentId) return;
+      if (p.canViewStudentRiver) loadSvRiver(_svCurrentStudentId);
+      if (p.canViewStudentRadar) loadSvRadar(_svCurrentStudentId);
+      if (p.canViewStudentMomentum) loadSvMomentum(_svCurrentStudentId);
+    });
+
+    // 河流圖切換
+    document.getElementById('sv-river-tab-river').addEventListener('click', () => { svRiverMode = 'river'; document.getElementById('sv-river-tab-river').classList.add('active'); document.getElementById('sv-river-tab-density').classList.remove('active'); renderSvRiver(); });
+    document.getElementById('sv-river-tab-density').addEventListener('click', () => { svRiverMode = 'density'; document.getElementById('sv-river-tab-density').classList.add('active'); document.getElementById('sv-river-tab-river').classList.remove('active'); renderSvRiver(); });
+    // 雷達切換
+    document.getElementById('sv-radar-tab-first').addEventListener('click', () => { svRadarMode = 'first'; drawSvRadar(); });
+    document.getElementById('sv-radar-tab-exam').addEventListener('click', () => { svRadarMode = 'exam'; drawSvRadar(); });
+
+    async function loadSvRiver(studentId) {
+      const empty = document.getElementById('sv-river-empty');
+      const ctx = document.getElementById('sv-river-chart');
+      try {
+        // 全班成績（同班，status=scored）
+        const classSnap = await getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', selectedClassId)));
+        const byExam = {}; const myMap = {};
+        classSnap.forEach(d => {
+          const x = d.data(); if (x.status !== 'scored' || x.totalScore == null) return;
+          const k = x.examName; if (!byExam[k]) byExam[k] = { name: k, date: x.examDate || '', scores: [] };
+          byExam[k].scores.push(x.totalScore); if (x.examDate) byExam[k].date = x.examDate;
+          if (x.studentId === studentId) myMap[k] = x.totalScore;
+        });
+        const exams = Object.values(byExam).filter(e => myMap[e.name] != null).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+        if (exams.length === 0) { empty.style.display = 'block'; ctx.style.display = 'none'; if (svRiverChart) { svRiverChart.destroy(); svRiverChart = null; } return; }
+        empty.style.display = 'none'; ctx.style.display = 'block';
+        const examStats = exams.map(e => {
+          const arr = e.scores.slice().sort((a, b) => a - b);
+          const n = arr.length, enough = n >= 5;
+          const mean = n ? arr.reduce((x, y) => x + y, 0) / n : null;
+          const P = p => enough ? _svPct(arr, p) : null;
+          const dist = { d85: arr.filter(v => v >= 85).length, d76: arr.filter(v => v >= 76 && v < 85).length, d66: arr.filter(v => v >= 66 && v < 76).length, d65: arr.filter(v => v < 66).length };
+          const dt = e.date ? new Date(e.date) : null;
+          return { name: e.name, date: e.date, label: dt ? `${dt.getMonth() + 1}/${dt.getDate()}` : e.name, n, mean, enough, my: myMap[e.name], dist,
+            p10: P(10), p20: P(20), p25: P(25), p30: P(30), p40: P(40), p60: P(60), p70: P(70), p75: P(75), p80: P(80), p90: P(90) };
+        });
+        _svRiverStats = { labels: examStats.map(s => s.label), examStats };
+        renderSvRiver();
+      } catch (e) { empty.style.display = 'block'; empty.textContent = '❌ ' + e.message; ctx.style.display = 'none'; }
+    }
+
+    function renderSvRiver() {
+      const ctx = document.getElementById('sv-river-chart');
+      if (!_svRiverStats || !ctx || !window.Chart) return;
+      const S = _svRiverStats.examStats, labels = _svRiverStats.labels;
+      const myData = S.map(s => s.my);
+      const avgData = S.map(s => s.mean != null ? Math.round(s.mean * 10) / 10 : null);
+      const passLine = S.map(() => 75);
+
+      // 考試多時改為可橫向滑動：每場固定寬度、標籤不再擠成一團（與學員端一致）
+      const scroll = document.getElementById('sv-river-scroll');
+      const wrap = document.getElementById('sv-river-wrap');
+      const PER = 56;
+      const avail = scroll ? scroll.clientWidth : 0;
+      const need = labels.length * PER;
+      const scrollable = avail > 0 && need > avail;
+      if (wrap) wrap.style.width = scrollable ? need + 'px' : '100%';
+      const hintEl = document.getElementById('sv-river-scroll-hint');
+      if (hintEl) hintEl.style.display = scrollable ? 'block' : 'none';
+
+      // 得分線下方漸層填色（只在河流模式）
+      const cv = ctx.getContext('2d');
+      const grad = cv.createLinearGradient(0, 0, 0, 300);
+      grad.addColorStop(0, 'rgba(37,99,235,0.22)');
+      grad.addColorStop(1, 'rgba(37,99,235,0.01)');
+
+      let datasets = [];
+      if (svRiverMode === 'river') {
+        datasets.push(..._svBand('河道', S.map(s => s.p75), S.map(s => s.p25), 'rgba(148,163,184,0.28)'));
+      } else {
+        datasets.push(..._svBand('全班', S.map(s => s.p90), S.map(s => s.p10), 'rgba(239,68,68,0.10)'));
+        datasets.push(..._svBand('穩定', S.map(s => s.p80), S.map(s => s.p20), 'rgba(239,68,68,0.10)'));
+        datasets.push(..._svBand('主力', S.map(s => s.p70), S.map(s => s.p30), 'rgba(239,68,68,0.12)'));
+        datasets.push(..._svBand('核心', S.map(s => s.p60), S.map(s => s.p40), 'rgba(239,68,68,0.15)'));
+      }
+      datasets.push({ label: '班級平均', data: avgData, borderColor: 'rgba(148,163,184,0.9)', pointBackgroundColor: 'rgba(148,163,184,0.9)', pointRadius: 3, pointHoverRadius: 5, borderWidth: 2, borderDash: [4, 4], fill: false, tension: 0.35, cubicInterpolationMode: 'monotone', spanGaps: true });
+      datasets.push({ label: '及格門檻 (75)', data: passLine, borderColor: 'rgba(239,68,68,0.8)', pointRadius: 0, borderWidth: 1.5, borderDash: [6, 4], fill: false });
+      datasets.push({ label: '學員得分', data: myData, borderColor: 'rgba(37,99,235,1)', backgroundColor: svRiverMode === 'river' ? grad : 'transparent', pointBackgroundColor: 'rgba(37,99,235,1)', pointBorderColor: '#fff', pointBorderWidth: 2, pointRadius: 5, pointHoverRadius: 8, pointHitRadius: 18, borderWidth: 3, fill: svRiverMode === 'river' ? 'origin' : false, tension: 0.35, cubicInterpolationMode: 'monotone', spanGaps: true });
+      if (svRiverChart) svRiverChart.destroy();
+      svRiverChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          animation: { duration: 600 },
+          layout: { padding: { top: 8, right: 10, left: 2 } },
+          elements: { line: { borderJoinStyle: 'round', borderCapStyle: 'round' } },
+          interaction: { mode: 'index', intersect: false },
+          scales: { y: { min: 30, max: 100, ticks: { stepSize: 10, color: '#64748b', font: { size: 11 } }, grid: { color: 'rgba(148,163,184,0.18)', drawBorder: false } }, x: { ticks: { color: '#64748b', font: { size: 11 }, maxRotation: 0, autoSkip: false }, grid: { display: false } } },
+          plugins: {
+            legend: { position: 'bottom', labels: { padding: 10, font: { size: 11 }, usePointStyle: true, filter: it => !/_(lo|hi)$/.test(it.text) } },
+            tooltip: {
+              filter: it => !it.dataset._band,
+              callbacks: {
+                title: items => { const s = S[items[0]?.dataIndex]; return s ? `${s.name}（${s.label}）` : ''; },
+                afterBody: items => {
+                  const s = S[items[0]?.dataIndex]; if (!s) return '';
+                  const L = [];
+                  if (svRiverMode === 'density') {
+                    if (s.enough) { L.push('— 落點區間 —'); L.push(`核心 P40-60: ${Math.round(s.p40)}~${Math.round(s.p60)}`); L.push(`主力 P30-70: ${Math.round(s.p30)}~${Math.round(s.p70)}`); L.push(`穩定 P20-80: ${Math.round(s.p20)}~${Math.round(s.p80)}`); L.push(`全班 P10-90: ${Math.round(s.p10)}~${Math.round(s.p90)}`); }
+                    else { L.push(`（有成績 ${s.n} 人 < 5、不畫密度帶）`); }
+                  }
+                  L.push('— 全班人數分佈 —'); L.push(`85以上: ${s.dist.d85} 人`); L.push(`76-85: ${s.dist.d76} 人`); L.push(`66-75: ${s.dist.d66} 人`); L.push(`65以下: ${s.dist.d65} 人`);
+                  return L;
+                }
+              }
+            }
+          }
+        }
+      });
+      // 載入後自動捲到最新一場考試（最右側）
+      if (scrollable && scroll) requestAnimationFrame(() => { scroll.scrollLeft = scroll.scrollWidth; });
+    }
+
+    async function loadSvRadar(studentId) {
+      const empty = document.getElementById('sv-radar-empty');
+      const ctx = document.getElementById('sv-radar-chart');
+      try {
+        const dimAcc10 = recs => { const sums = {}; SV_DIMS.forEach(d => sums[d] = { c: 0, t: 0 }); recs.forEach(r => { if (sums[r.dim]) { sums[r.dim].t++; if (r.isCorrect) sums[r.dim].c++; } }); return SV_DIMS.map(d => sums[d].t === 0 ? 0 : (sums[d].c / sums[d].t) * 10); };
+        // 首刷：優先讀個人彙總 student_first_radar（1 筆）→ 不掃該生全部作答（省讀取）
+        let myFirstScores;
+        const sfrDoc = await getDoc(doc(db, 'student_first_radar', studentId));
+        if (sfrDoc.exists() && sfrDoc.data().first) {
+          const f = sfrDoc.data().first;
+          myFirstScores = SV_DIMS.map(d => { const o = f[d]; return (o && o.t) ? (o.c / o.t) * 10 : 0; });
+        } else {
+          // 沒彙總（極少數未回填/全新學員）→ fallback 掃該生作答算一次
+          const mySnap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', studentId)));
+          const myFirst = {};
+          mySnap.forEach(d => { const a = d.data(); if (!a.questionId || !a.dimension) return; const t = a.attemptedAt?.seconds || 0; if (!myFirst[a.questionId] || t < myFirst[a.questionId].t) myFirst[a.questionId] = { dim: a.dimension, isCorrect: a.isCorrect, t }; });
+          myFirstScores = dimAcc10(Object.values(myFirst));
+        }
+        // 全班首刷平均：讀彙總 class_radar
+        let clsFirstScores = SV_DIMS.map(() => 0);
+        const crDoc = await getDoc(doc(db, 'class_radar', selectedClassId));
+        if (crDoc.exists() && crDoc.data().first) { const f = crDoc.data().first; clsFirstScores = SV_DIMS.map(d => { const o = f[d]; return (o && o.t) ? (o.c / o.t) * 10 : 0; }); }
+        // 考試：exam_scores_radar
+        const calcExam = exams => { const sums = {}; SV_DIMS.forEach(d => sums[d] = { c: 0, t: 0 }); exams.forEach(e => { if (!e.dimensions) return; SV_DIMS.forEach(d => { const s = e.dimensions[d]; if (s) { sums[d].c += s.correct || 0; sums[d].t += s.total || 0; } }); }); return SV_DIMS.map(d => sums[d].t === 0 ? 0 : (sums[d].c / sums[d].t) * 10); };
+        const myExamSnap = await getDocs(query(collection(db, 'exam_scores_radar'), where('studentId', '==', studentId)));
+        const myExams = []; myExamSnap.forEach(d => myExams.push(d.data()));
+        const clsExamSnap = await getDocs(query(collection(db, 'exam_scores_radar'), where('classId', '==', selectedClassId)));
+        const clsExams = []; clsExamSnap.forEach(d => clsExams.push(d.data()));
+        const hasExam = clsExams.length > 0;
+        _svRadarData = { first: { my: myFirstScores, cls: clsFirstScores }, exam: { my: calcExam(myExams), cls: calcExam(clsExams) }, hasExam };
+        // 考試鈕有資料才顯示
+        const bExam = document.getElementById('sv-radar-tab-exam'); bExam.style.display = hasExam ? '' : 'none';
+        if (svRadarMode === 'exam' && !hasExam) svRadarMode = 'first';
+        empty.style.display = 'none'; ctx.style.display = 'block';
+        drawSvRadar();
+      } catch (e) { empty.style.display = 'block'; empty.textContent = '❌ ' + e.message; ctx.style.display = 'none'; }
+    }
+
+    function drawSvRadar() {
+      const ctx = document.getElementById('sv-radar-chart');
+      if (!_svRadarData || !ctx || !window.Chart) return;
+      const src = svRadarMode === 'exam' ? _svRadarData.exam : _svRadarData.first;
+      document.getElementById('sv-radar-tab-first').classList.toggle('active', svRadarMode === 'first');
+      document.getElementById('sv-radar-tab-exam').classList.toggle('active', svRadarMode === 'exam');
+      document.getElementById('sv-radar-note').textContent = svRadarMode === 'exam' ? '📊 來自考試成績' : '✏️ 來自刷題首刷';
+      if (svRadarChart) svRadarChart.destroy();
+      svRadarChart = new Chart(ctx, {
+        type: 'radar',
+        data: { labels: SV_DIM_NAMES, datasets: [
+          { label: '學員得分', data: src.my, backgroundColor: 'rgba(59,130,246,0.25)', borderColor: 'rgba(59,130,246,1)', pointBackgroundColor: 'rgba(59,130,246,1)', pointBorderColor: '#fff', borderWidth: 2 },
+          { label: '班級平均', data: src.cls, backgroundColor: 'rgba(239,68,68,0)', borderColor: 'rgba(239,68,68,0.7)', borderDash: [6, 4], pointBackgroundColor: 'rgba(239,68,68,0.7)', pointRadius: 3, borderWidth: 1.5 }
+        ] },
+        options: { responsive: true, maintainAspectRatio: true, scales: { r: { min: 0, max: 10, ticks: { stepSize: 2, color: '#94a3b8', backdropColor: 'transparent' }, pointLabels: { font: { size: 11, weight: '600' }, color: '#1e293b' }, grid: { color: 'rgba(148,163,184,0.25)' }, angleLines: { color: 'rgba(148,163,184,0.3)' } } }, plugins: { legend: { position: 'bottom', labels: { padding: 10, font: { size: 11 } } } } }
+      });
+    }
+
+    async function loadSvMomentum(studentId) {
+      const empty = document.getElementById('sv-momentum-empty');
+      const ctx = document.getElementById('sv-momentum-chart');
+      const stat = document.getElementById('sv-momentum-stat');
+      try {
+        // 動能：只查近 90 天（走 studentId+attemptedAt 索引）→ 不掃該生全部歷史作答（省讀取）
+        const sinceMs = Date.now() - 90 * 86400000;
+        let snap;
+        try {
+          snap = await getDocs(query(collection(db, 'question_attempts'), where('studentId', '==', studentId), where('attemptedAt', '>=', Timestamp.fromMillis(sinceMs))));
+        } catch (idxErr) {
+          console.error('[loadSvMomentum] 區間查詢失敗（studentId+attemptedAt 索引建置中或遺失）：', idxErr?.code || idxErr);
+          empty.style.display = 'block'; empty.textContent = '⏳ 動能索引建置中，請稍候 1–2 分鐘後重新整理'; ctx.style.display = 'none'; stat.textContent = '—';
+          if (svMomentumChart) { svMomentumChart.destroy(); svMomentumChart = null; }
+          return;
+        }
+        const byDay = {};
+        snap.forEach(d => { const a = d.data(); const sec = a.attemptedAt?.seconds; if (!sec) return; const dt = new Date(sec * 1000); const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`; byDay[key] = (byDay[key] || 0) + 1; });
+        const days = Object.keys(byDay).sort();
+        if (days.length === 0) { empty.style.display = 'block'; ctx.style.display = 'none'; stat.textContent = '—'; if (svMomentumChart) { svMomentumChart.destroy(); svMomentumChart = null; } return; }
+        empty.style.display = 'none'; ctx.style.display = 'block';
+        // 補齊每日（含空白日）讓動能線連續
+        const first = new Date(days[0]), last = new Date(days[days.length - 1]);
+        const labels = [], daily = [], cumu = [];
+        let acc = 0;
+        for (let t = new Date(first); t <= last; t.setDate(t.getDate() + 1)) {
+          const key = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+          const c = byDay[key] || 0; acc += c;
+          labels.push(`${t.getMonth() + 1}/${t.getDate()}`); daily.push(c); cumu.push(acc);
+        }
+        const total = acc, activeDays = days.length, span = labels.length;
+        stat.textContent = `累積 ${total} 題　|　活躍 ${activeDays} 天 / 共 ${span} 天　|　日均 ${(total / span).toFixed(1)} 題`;
+        if (svMomentumChart) svMomentumChart.destroy();
+        svMomentumChart = new Chart(ctx, {
+          data: { labels, datasets: [
+            { type: 'bar', label: '當日刷題', data: daily, backgroundColor: 'rgba(249,115,22,0.55)', borderRadius: 3, yAxisID: 'y', order: 2 },
+            { type: 'line', label: '累積動能', data: cumu, borderColor: 'rgba(37,99,235,1)', backgroundColor: 'rgba(37,99,235,0.08)', pointRadius: 0, borderWidth: 2.5, fill: true, tension: 0.25, yAxisID: 'y1', order: 1 }
+          ] },
+          options: {
+            responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+            scales: {
+              y: { position: 'left', beginAtZero: true, title: { display: true, text: '當日題數', color: '#ea580c', font: { size: 11 } }, ticks: { color: '#64748b' }, grid: { color: 'rgba(148,163,184,0.15)' } },
+              y1: { position: 'right', beginAtZero: true, title: { display: true, text: '累積', color: '#2563eb', font: { size: 11 } }, ticks: { color: '#64748b' }, grid: { drawOnChartArea: false } },
+              x: { ticks: { color: '#64748b', maxTicksLimit: 12, autoSkip: true }, grid: { display: false } }
+            },
+            plugins: { legend: { position: 'bottom', labels: { padding: 10, font: { size: 11 } } } }
+          }
+        });
+      } catch (e) { empty.style.display = 'block'; empty.textContent = '❌ ' + e.message; ctx.style.display = 'none'; }
+    }
+
+    async function loadMistakeBookToggle() {
+      const el = document.getElementById('mb-body');
+      const canEdit = !!(classPerms || {}).canToggleMistakeBook;
+      try {
+        const cDoc = await getDoc(doc(db, 'classes', selectedClassId));
+        const enabled = !!(cDoc.exists() && cDoc.data().settings && cDoc.data().settings.mistakeBook && cDoc.data().settings.mistakeBook.enabled);
+        el.innerHTML = `
+          ${canEdit ? '' : '<div style="background:#fff7ed;color:#9a3412;font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px">🔒 你沒有「開關錯題本」權限、僅供檢視</div>'}
+          <label style="display:flex;justify-content:space-between;align-items:center;font-size:14px">
+            <span>開放學員使用錯題本</span>
+            <input type="checkbox" id="mb-enabled" ${enabled ? 'checked' : ''} ${canEdit ? '' : 'disabled'} style="width:42px;height:24px;cursor:pointer">
+          </label>
+          ${canEdit ? '<button id="mb-save" style="width:100%;margin-top:14px;background:#3b82f6;color:white;border:none;padding:11px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:600">💾 儲存</button><div id="mb-msg"></div>' : ''}
+        `;
+        if (canEdit) document.getElementById('mb-save').addEventListener('click', async () => {
+          const btn = document.getElementById('mb-save'); const m = document.getElementById('mb-msg');
+          btn.disabled = true; btn.textContent = '⏳';
+          try {
+            await updateDoc(doc(db, 'classes', selectedClassId), { 'settings.mistakeBook': { enabled: document.getElementById('mb-enabled').checked }, settingsUpdatedAt: serverTimestamp(), settingsUpdatedBy: currentInstructor.name });
+            m.innerHTML = '<div style="color:#10b981;font-size:13px;margin-top:8px">✅ 已儲存</div>';
+            setTimeout(() => { m.innerHTML = ''; }, 3000);
+          } catch (e) { m.innerHTML = `<div style="color:#ef4444;font-size:13px;margin-top:8px">❌ ${e.message}</div>`; }
+          finally { btn.disabled = false; btn.textContent = '💾 儲存'; }
+        });
+      } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+    }
+
+    // ===== F16-F: 成績上傳（總分/雷達、各自 gated）=====
+    let scPreview = null;
+
+    function scMode() { return document.querySelector('input[name="sc-mode"]:checked')?.value || 'total'; }
+
+    function downloadScoreTemplate() {
+      const mode = scMode();
+      const csv = mode === 'total'
+        ? '學號,分數（數字或請假/缺考/免修）\n1,\n2,\n3,\n'
+        : '學號,D1對,D1總,D2對,D2總,D3對,D3總,D4對,D4總,D5對,D5總,D6對,D6總\n1,,,,,,,,,,,,\n2,,,,,,,,,,,,\n';
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `成績範例_${mode === 'total' ? '總分' : '雷達'}.csv`;
+      a.click();
+    }
+
+    function handleScoreFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        let text = ev.target.result;
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        const lines = text.split(/\r?\n/);
+        if (lines[0] && /學號|分數|D\d/.test(lines[0])) lines.shift();
+        document.getElementById('sc-data').value = lines.map(l => l.replace(/,/g, '\t')).join('\n').trim();
+        e.target.value = '';
+      };
+      reader.readAsText(file, 'UTF-8');
+    }
+    function updateScoreHint() {
+      const el = document.getElementById('sc-hint');
+      if (el) el.textContent = scMode() === 'total'
+        ? '每行：學號,分數（或 請假/缺考/免修）　例：1,85'
+        : '每行：學號,D1對,D1總,D2對,D2總,…,D6對,D6總';
+    }
+
+    function loadScoreUpload(perms) {
+      const canTotal = !!perms.canUploadScores;
+      const canRadar = !!perms.canUploadRadar;
+      const card = document.getElementById('score-card');
+      if (!canTotal && !canRadar) { card.style.display = 'none'; return; }
+      card.style.display = '';
+      const modeOpts = [];
+      if (canTotal) modeOpts.push('<label style="margin-right:16px"><input type="radio" name="sc-mode" value="total" checked> 總分（河流）</label>');
+      if (canRadar) modeOpts.push(`<label><input type="radio" name="sc-mode" value="radar" ${canTotal ? '' : 'checked'}> 雷達（6 維度）</label>`);
+      document.getElementById('score-body').innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <input id="sc-name" class="pri-select" placeholder="考試名稱">
+          <input type="date" id="sc-date" class="pri-select">
+        </div>
+        <select id="sc-type" class="pri-select" style="margin-bottom:10px">
+          <option value="小考">小考</option><option value="期中考">期中考</option><option value="期末考">期末考</option><option value="模擬考">模擬考</option>
+        </select>
+        <div style="margin-bottom:8px;font-size:13px;color:#475569">${modeOpts.join('')}</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <button id="sc-template" style="flex:1;min-width:130px;background:#e2e8f0;color:#475569;border:none;padding:9px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px">📥 下載範例</button>
+          <label style="flex:1;min-width:130px;background:#e2e8f0;color:#475569;padding:9px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;text-align:center">📤 上傳檔案<input type="file" id="sc-file" accept=".csv,.txt" style="display:none"></label>
+        </div>
+        <div id="sc-hint" style="font-size:12px;color:#94a3b8;margin-bottom:6px"></div>
+        <textarea id="sc-data" class="pri-select" rows="5" placeholder="貼上資料（可從 Excel 複製）、或用上方「上傳檔案」帶入" style="font-family:monospace;margin-bottom:10px"></textarea>
+        <button id="sc-preview" style="width:100%;background:#6366f1;color:white;border:none;padding:11px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:600">🔍 預覽</button>
+        <div id="sc-preview-box" style="margin-top:10px"></div>
+        <div id="sc-msg"></div>
+      `;
+      updateScoreHint();
+      document.querySelectorAll('input[name="sc-mode"]').forEach(r => r.addEventListener('change', updateScoreHint));
+      document.getElementById('sc-preview').addEventListener('click', previewScore);
+      document.getElementById('sc-template').addEventListener('click', downloadScoreTemplate);
+      document.getElementById('sc-file').addEventListener('change', handleScoreFile);
+    }
+
+    async function previewScore() {
+      const name = document.getElementById('sc-name').value.trim();
+      const date = document.getElementById('sc-date').value;
+      const type = document.getElementById('sc-type').value;
+      const mode = scMode();
+      const raw = document.getElementById('sc-data').value;
+      const box = document.getElementById('sc-preview-box');
+      const msg = document.getElementById('sc-msg'); msg.innerHTML = '';
+      if (!name) { msg.innerHTML = '<div class="err-msg">❌ 請填考試名稱</div>'; return; }
+      if (!date) { msg.innerHTML = '<div class="err-msg">❌ 請選日期</div>'; return; }
+      const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l && !/學號|D\d總/.test(l));
+      if (lines.length === 0) { msg.innerHTML = '<div class="err-msg">❌ 無資料</div>'; return; }
+      try {
+        const stuSnap = await getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId)));
+        const byNo = {}; stuSnap.forEach(d => { const s = d.data(); byNo[String(s.studentNo)] = { id: d.id, ...s }; });
+        const rows = [];
+        lines.forEach(line => {
+          const p = line.split(/[\t,]/).map(s => s.trim());
+          const no = p[0]; const stu = byNo[no];
+          if (!stu) { rows.push({ no, err: `找不到學號 ${no}` }); return; }
+          if (mode === 'total') {
+            const v = p[1] || '';
+            if (['請假', '缺考', '免修'].includes(v)) rows.push({ no, name: stu.name, sid: stu.id, studentNo: stu.studentNo, status: 'absent_excused', ok: true, disp: v });
+            else { const s = parseFloat(v); if (isNaN(s) || s < 0 || s > 100) { rows.push({ no, name: stu.name, err: `分數錯誤 "${v}"` }); return; } rows.push({ no, name: stu.name, sid: stu.id, studentNo: stu.studentNo, totalScore: s, status: 'scored', ok: true, disp: s + ' 分' }); }
+          } else {
+            if (p.length < 13) { rows.push({ no, name: stu.name, err: '欄位不足（需 13 欄）' }); return; }
+            const dims = {}; let valid = true;
+            for (let i = 1; i <= 6; i++) { const c = parseInt(p[1 + (i - 1) * 2]); const t = parseInt(p[2 + (i - 1) * 2]); if (isNaN(c) || isNaN(t) || t === 0 || c > t) { valid = false; break; } dims['D' + i] = { correct: c, total: t }; }
+            if (!valid) { rows.push({ no, name: stu.name, err: '維度數字錯誤' }); return; }
+            rows.push({ no, name: stu.name, sid: stu.id, studentNo: stu.studentNo, dimensions: dims, ok: true, disp: Object.entries(dims).map(([d, v]) => `${d}:${v.correct}/${v.total}`).join(' ') });
+          }
+        });
+        const okc = rows.filter(r => r.ok).length, errc = rows.filter(r => r.err).length;
+        box.innerHTML = `<div style="font-size:13px;margin-bottom:8px">有效 <strong style="color:#10b981">${okc}</strong>${errc ? ` ・ <strong style="color:#ef4444">錯誤 ${errc}</strong>` : ''}</div>` +
+          rows.map(r => `<div style="font-size:13px;padding:5px 0;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;gap:8px"><span>${r.no}. ${r.name || '—'}</span><span style="text-align:right">${r.err ? `<span style="color:#ef4444">❌ ${r.err}</span>` : `<span style="color:#475569">${r.disp}</span>`}</span></div>`).join('') +
+          (okc > 0 ? `<button id="sc-commit" style="width:100%;margin-top:12px;background:#10b981;color:white;border:none;padding:11px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700">💾 寫入 ${okc} 筆</button>` : '');
+        scPreview = { name, date, type, mode, rows: rows.filter(r => r.ok) };
+        if (okc > 0) document.getElementById('sc-commit').addEventListener('click', commitScore);
+      } catch (e) { msg.innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+    }
+
+    // 重算班級考試彙總 class_exam_summary（成績有變動就呼叫；學員端改讀此 1 筆、不掃整班。失敗不影響成績寫入）
+    function _examPct(sorted, p) { if (!sorted.length) return null; if (sorted.length === 1) return sorted[0]; const idx = (p / 100) * (sorted.length - 1); const lo = Math.floor(idx), hi = Math.ceil(idx), w = idx - lo; return sorted[lo] * (1 - w) + sorted[hi] * w; }
+    async function recalcExamSummary(classId) {
+      if (!classId) return;
+      try {
+        const DIMS = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'];
+        const [rSnap, tSnap, sSnap] = await Promise.all([
+          getDocs(query(collection(db, 'exam_scores_radar'), where('classId', '==', classId))),
+          getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', classId))),
+          getDocs(query(collection(db, 'students'), where('classId', '==', classId)))
+        ]);
+        // 甲：封存學員以「封存日」為時間分界——封存前的成績照舊計入河流/熱力圖、封存後(含事後補登)不計入。
+        //（缺封存日 → 視為遠未來＝全部保留、不竄改歷史；退訓者不會再有新成績，實務上等於歷史原樣保留）
+        const _archiveDateStr = (ts) => {
+          try {
+            const d = ts && ts.toDate ? ts.toDate() : (ts && ts.seconds ? new Date(ts.seconds * 1000) : null);
+            if (!d) return '9999-12-31';
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          } catch (e) { return '9999-12-31'; }
+        };
+        const archivedCut = {};   // studentNo(字串) -> { d:'YYYY-MM-DD', strict:布林 }；archivedDate(指定退訓生效日)＝0點分界當天不計、fallback archivedAt(按鈕時刻)＝當天仍計
+        sSnap.forEach(d => { const s = d.data(); if (s.isActive === false) archivedCut[String(s.studentNo)] = s.archivedDate ? { d: s.archivedDate, strict: true } : { d: _archiveDateStr(s.archivedAt), strict: false }; });
+        const countsIn = (rec) => { const cut = archivedCut[String(rec.studentNo)]; if (!cut) return true; if (!rec.examDate) return true; return cut.strict ? rec.examDate < cut.d : rec.examDate <= cut.d; };
+        const radar = {}; DIMS.forEach(d => radar[d] = { c: 0, t: 0 });
+        rSnap.forEach(d => { const e = d.data(); if (!countsIn(e)) return; if (!e.dimensions) return; DIMS.forEach(k => { const s = e.dimensions[k]; if (s) { radar[k].c += s.correct || 0; radar[k].t += s.total || 0; } }); });
+        const byExam = {};
+        tSnap.forEach(d => { const x = d.data(); if (!countsIn(x)) return; if (x.status !== 'scored' || x.totalScore == null) return; const k = x.examName; if (!byExam[k]) byExam[k] = { date: x.examDate || '', scores: [] }; byExam[k].scores.push(x.totalScore); if (x.examDate) byExam[k].date = x.examDate; });
+        const river = {};
+        Object.entries(byExam).forEach(([name, e]) => {
+          const arr = e.scores.slice().sort((a, b) => a - b); const n = arr.length, enough = n >= 5;
+          const P = p => enough ? _examPct(arr, p) : null;
+          river[name] = { date: e.date, n, mean: n ? arr.reduce((x, y) => x + y, 0) / n : null, p10: P(10), p20: P(20), p25: P(25), p30: P(30), p40: P(40), p60: P(60), p70: P(70), p75: P(75), p80: P(80), p90: P(90), dist: { d85: arr.filter(v => v >= 85).length, d76: arr.filter(v => v >= 76 && v < 85).length, d66: arr.filter(v => v >= 66 && v < 76).length, d65: arr.filter(v => v < 66).length } };
+        });
+        await setDoc(doc(db, 'class_exam_summary', classId), { radar, river, updatedAt: serverTimestamp() }, { merge: true });
+      } catch (e) { console.warn('[recalcExamSummary] 重算失敗（不影響成績寫入）:', e?.message || e); }
+    }
+
+    async function commitScore() {
+      if (!scPreview) return;
+      const { name, date, type, mode, rows } = scPreview;
+      if (!confirm(`寫入 ${rows.length} 筆「${name}」（${mode === 'total' ? '總分' : '雷達'}）？`)) return;
+      const btn = document.getElementById('sc-commit'); btn.disabled = true; btn.textContent = '⏳ 寫入中...';
+      try {
+        const batchRef = doc(collection(db, 'upload_batches'));
+        const coll = mode === 'total' ? 'exam_scores_total' : 'exam_scores_radar';
+        // upsert：同場同人已存在就更新（最新覆蓋）、避免重複
+        const existSnap = await getDocs(query(collection(db, coll), where('classId', '==', selectedClassId), where('examName', '==', name)));
+        const existMap = {}; existSnap.forEach(d => { existMap[d.data().studentId] = d.id; });
+        let updated = 0, created = 0;
+        await setDoc(batchRef, { type: mode === 'total' ? 'exam_total' : 'exam_radar', examName: name, classId: selectedClassId, recordCount: rows.length, uploadedBy: currentInstructor.name, uploadedAt: serverTimestamp(), isReverted: false });
+        await Promise.all(rows.map(r => {
+          const base = { studentId: r.sid, classId: selectedClassId, studentNo: String(r.studentNo), examName: name, examDate: date, examType: type, uploadBatchId: batchRef.id, uploadedBy: currentInstructor.name, uploadedAt: serverTimestamp() };
+          const payload = mode === 'total' ? { ...base, totalScore: r.totalScore ?? null, status: r.status } : { ...base, dimensions: r.dimensions };
+          if (existMap[r.sid]) { updated++; return updateDoc(doc(db, coll, existMap[r.sid]), payload); }
+          created++; return setDoc(doc(collection(db, coll)), payload);
+        }));
+        document.getElementById('sc-msg').innerHTML = `<div class="ok-msg">✅ 已寫入（更新 ${updated}、新增 ${created}、不會重複）</div>`;
+        document.getElementById('sc-data').value = '';
+        document.getElementById('sc-preview-box').innerHTML = '';
+        scPreview = null;
+        await recalcExamSummary(selectedClassId);   // 成績寫完→重算班彙總
+      } catch (e) { document.getElementById('sc-msg').innerHTML = `<div class="err-msg">❌ ${e.message}</div>`; }
+      finally { btn.disabled = false; btn.textContent = '💾 寫入'; }
+    }
+
+    // ===== F16-F: 個人成績修正（總分）=====
+    let seScoreDocs = {};  // studentId -> { docId, totalScore, status }
+
+    async function loadScoreEdit() {
+      const sel = document.getElementById('se-exam');
+      sel.innerHTML = '<option value="">載入中...</option>';
+      try {
+        const snap = await getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', selectedClassId)));
+        const exams = {};
+        snap.forEach(d => { const x = d.data(); exams[x.examName] = x.examDate || ''; });
+        const names = Object.keys(exams).sort((a, b) => (exams[b] || '').localeCompare(exams[a] || ''));
+        if (names.length === 0) { sel.innerHTML = '<option value="">（此班尚無總分成績）</option>'; document.getElementById('se-list').innerHTML = ''; return; }
+        sel.innerHTML = '<option value="">請選考試...</option>' + names.map(n => `<option value="${n}">${n}${exams[n] ? '（' + exams[n] + '）' : ''}</option>`).join('');
+        if (!sel._bound) { sel.addEventListener('change', () => loadScoreEditList(sel.value)); sel._bound = true; }
+        document.getElementById('se-list').innerHTML = '';
+      } catch (e) { sel.innerHTML = `<option value="">❌ ${e.message}</option>`; }
+    }
+
+    async function loadScoreEditList(examName) {
+      const el = document.getElementById('se-list');
+      if (!examName) { el.innerHTML = ''; return; }
+      el.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:12px">⏳ 載入中...</div>';
+      try {
+        const [stuSnap, scoreSnap] = await Promise.all([
+          getDocs(query(collection(db, 'students'), where('classId', '==', selectedClassId))),
+          getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', selectedClassId), where('examName', '==', examName)))
+        ]);
+        const students = []; stuSnap.forEach(d => { const s = d.data(); if (s.isActive !== false) students.push({ id: d.id, ...s }); });
+        students.sort((a, b) => (a.studentNo || 0) - (b.studentNo || 0));
+        seScoreDocs = {};
+        scoreSnap.forEach(d => { const x = d.data(); seScoreDocs[x.studentId] = { docId: d.id, totalScore: x.totalScore, status: x.status }; });
+        el.innerHTML = students.map(s => {
+          const sc = seScoreDocs[s.id];
+          const val = sc ? (sc.status === 'absent_excused' ? '' : (sc.totalScore ?? '')) : '';
+          const tag = sc && sc.status === 'absent_excused' ? '（原:請假/缺考）' : (sc ? '' : '（未上傳）');
+          return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9">
+            <span style="flex:1;font-size:14px">${s.studentNo}. ${s.name} <span style="color:#94a3b8;font-size:12px">${tag}</span></span>
+            <input class="se-input" data-sid="${s.id}" value="${val}" placeholder="分數" style="width:90px;padding:7px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit;text-align:center">
+            <button class="se-save" data-sid="${s.id}" data-sno="${s.studentNo}" style="background:#3b82f6;color:white;border:none;padding:7px 12px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px">存</button>
+          </div>`;
+        }).join('');
+        el.querySelectorAll('.se-save').forEach(b => b.addEventListener('click', () => saveStudentScore(examName, b.dataset.sid, b.dataset.sno, b)));
+      } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+    }
+
+    async function saveStudentScore(examName, studentId, studentNo, btn) {
+      const input = document.querySelector(`.se-input[data-sid="${studentId}"]`);
+      const raw = input.value.trim();
+      let payload;
+      if (['請假', '缺考', '免修'].includes(raw)) payload = { totalScore: null, status: 'absent_excused' };
+      else { const v = parseFloat(raw); if (isNaN(v) || v < 0 || v > 100) { alert('請輸入 0-100 的分數、或 請假/缺考/免修'); return; } payload = { totalScore: v, status: 'scored' }; }
+      btn.disabled = true; btn.textContent = '⏳';
+      try {
+        const existing = seScoreDocs[studentId];
+        if (existing) {
+          await updateDoc(doc(db, 'exam_scores_total', existing.docId), { ...payload, updatedAt: serverTimestamp(), updatedBy: currentInstructor.name });
+        } else {
+          // 原本沒上傳 → 補一筆
+          const exDate = document.getElementById('se-exam').selectedOptions[0]?.textContent.match(/（(.+?)）/)?.[1] || '';
+          const ref = doc(collection(db, 'exam_scores_total'));
+          await setDoc(ref, { studentId, classId: selectedClassId, studentNo: String(studentNo), examName, examDate: exDate, examType: '小考', ...payload, uploadBatchId: 'manual_edit', uploadedBy: currentInstructor.name, uploadedAt: serverTimestamp() });
+          seScoreDocs[studentId] = { docId: ref.id, ...payload };
+        }
+        await recalcExamSummary(selectedClassId);   // 成績改完→重算班彙總
+        btn.textContent = '✅'; setTimeout(() => { btn.textContent = '存'; btn.disabled = false; }, 1200);
+      } catch (e) { alert('❌ ' + e.message); btn.disabled = false; btn.textContent = '存'; }
+    }
+
+    // ===== F16-G: 成績查詢 / 管理（列考試 + 刪除整場）=====
+    async function loadScoreManage() {
+      const el = document.getElementById('sm-list');
+      el.innerHTML = '<div class="placeholder" style="padding:16px"><div class="icon">⏳</div></div>';
+      try {
+        const [tSnap, rSnap] = await Promise.all([
+          getDocs(query(collection(db, 'exam_scores_total'), where('classId', '==', selectedClassId))),
+          getDocs(query(collection(db, 'exam_scores_radar'), where('classId', '==', selectedClassId)))
+        ]);
+        const exams = {};
+        const acc = (snap, key) => snap.forEach(d => { const x = d.data(); const k = x.examName; if (!exams[k]) exams[k] = { name: k, date: x.examDate || '', type: x.examType || '', total: 0, radar: 0 }; exams[k][key]++; if (x.examDate) exams[k].date = x.examDate; if (x.examType) exams[k].type = x.examType; });
+        acc(tSnap, 'total'); acc(rSnap, 'radar');
+        const list = Object.values(exams).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        if (list.length === 0) { el.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:14px">此班尚無成績</div>'; return; }
+        el.innerHTML = list.map(e => `
+          <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+              <div>
+                <div style="font-weight:700;color:#1e293b">${e.name}</div>
+                <div style="font-size:12px;color:#94a3b8">${e.date || ''} ${e.type ? '· ' + e.type : ''} · 總分 ${e.total} 筆 · 雷達 ${e.radar} 筆</div>
+              </div>
+              <button data-del-exam="${e.name.replace(/"/g, '&quot;')}" style="background:#fef2f2;color:#dc2626;border:none;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px">🗑 刪除整場</button>
+            </div>
+          </div>`).join('');
+        el.querySelectorAll('button[data-del-exam]').forEach(b => b.addEventListener('click', () => deleteExam(b.dataset.delExam)));
+      } catch (e) { el.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+    }
+
+    async function deleteExam(examName) {
+      if (!confirm(`⚠️ 確定刪除「${examName}」整場成績？\n（總分 + 雷達全部、僅限本班、不可復原）`)) return;
+      if (!confirm('再次確認：此操作無法復原，確定刪除？')) return;
+      try {
+        for (const coll of ['exam_scores_total', 'exam_scores_radar']) {
+          const snap = await getDocs(query(collection(db, coll), where('classId', '==', selectedClassId), where('examName', '==', examName)));
+          await Promise.all(snap.docs.map(d => deleteDoc(doc(db, coll, d.id))));
+        }
+        await recalcExamSummary(selectedClassId);   // 刪場後→重算班彙總
+        loadScoreManage();
+        if (document.getElementById('scoreedit-card').style.display !== 'none') loadScoreEdit();
+      } catch (e) { alert('❌ ' + e.message); }
+    }
+
+    // ===== F16-G: 題庫下載（校正後現役題庫、可篩選）=====
+    let qdlQuestions = [];
+
+    async function loadQuestionDownload() {
+      const countEl = document.getElementById('qdl-count');
+      countEl.textContent = '載入中...';
+      try {
+        const snap = await getDocs(query(collection(db, 'questions'), where('createdByClassId', '==', selectedClassId)));
+        qdlQuestions = [];
+        snap.forEach(d => { const q = d.data(); if (q.isVisible !== false && q.isActive !== false) qdlQuestions.push({ id: d.id, ...q }); });
+        // 篩選選項
+        const studs = [...new Set(qdlQuestions.map(q => q.createdByName || q.createdBy).filter(Boolean))].sort();
+        const books = [...new Set(qdlQuestions.map(q => q.source && q.source.bookId).filter(Boolean))].sort();
+        document.getElementById('qdl-student').innerHTML = '<option value="">全部</option>' + studs.map(s => `<option value="${s}">${s}</option>`).join('');
+        document.getElementById('qdl-book').innerHTML = '<option value="">全部書籍</option>' + books.map(b => `<option value="${b}">${b}</option>`).join('');
+        renderQdlChapters();   // 依目前書籍渲染章節（預設「全部書籍」→ 不顯示章節）
+        ['qdl-date-start', 'qdl-date-end', 'qdl-student'].forEach(id => { const e = document.getElementById(id); if (e && !e._bound) { e.addEventListener('change', updateQdlCount); e._bound = true; } });
+        const bookSel = document.getElementById('qdl-book');
+        if (!bookSel._bound) { bookSel.addEventListener('change', renderQdlChapters); bookSel._bound = true; }
+        const chAll = document.getElementById('qdl-ch-all');
+        if (!chAll._bound) { chAll.addEventListener('change', () => { document.querySelectorAll('#qdl-chapters .qdl-ch').forEach(c => { c.checked = chAll.checked; }); updateQdlCount(); }); chAll._bound = true; }
+        updateQdlCount();
+      } catch (e) { countEl.textContent = '❌ ' + e.message; }
+    }
+
+    // 依選定書籍渲染章節複選（數字排序、預設全選；選「全部書籍」則不顯示章節區）
+    function renderQdlChapters() {
+      const book = document.getElementById('qdl-book').value;
+      const box = document.getElementById('qdl-chapter-box');
+      const wrap = document.getElementById('qdl-chapters');
+      if (!book) { box.style.display = 'none'; wrap.innerHTML = ''; updateQdlCount(); return; }
+      const set = new Set();
+      qdlQuestions.forEach(q => { if (q.source && q.source.bookId === book) set.add(q.source.chapterNumber != null && q.source.chapterNumber !== '' ? String(q.source.chapterNumber) : ''); });
+      const chs = [...set].sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
+      wrap.innerHTML = chs.map(c => `<label style="display:flex;align-items:center;gap:5px;background:#f1f5f9;border-radius:8px;padding:5px 10px;font-size:13px;cursor:pointer"><input type="checkbox" class="qdl-ch" value="${c}" checked style="width:14px;height:14px">${c === '' ? '（無章節）' : 'Ch' + c}</label>`).join('');
+      document.getElementById('qdl-ch-all').checked = true;
+      wrap.querySelectorAll('.qdl-ch').forEach(c => c.addEventListener('change', () => {
+        document.getElementById('qdl-ch-all').checked = [...wrap.querySelectorAll('.qdl-ch')].every(x => x.checked);
+        updateQdlCount();
+      }));
+      box.style.display = 'block';
+      updateQdlCount();
+    }
+
+    function filterQdl() {
+      const fds = document.getElementById('qdl-date-start').value;
+      const fde = document.getElementById('qdl-date-end').value;
+      const fs = document.getElementById('qdl-student').value;
+      const fbook = document.getElementById('qdl-book').value;
+      const chSet = fbook ? new Set([...document.querySelectorAll('#qdl-chapters .qdl-ch')].filter(c => c.checked).map(c => c.value)) : null;
+      return qdlQuestions.filter(q => {
+        if (fds && (q.scheduledDate || '') < fds) return false;
+        if (fde && (q.scheduledDate || '') > fde) return false;
+        if (fs && (q.createdByName || q.createdBy) !== fs) return false;
+        if (fbook) {
+          if (!q.source || q.source.bookId !== fbook) return false;
+          const cn = (q.source.chapterNumber != null && q.source.chapterNumber !== '') ? String(q.source.chapterNumber) : '';
+          if (!chSet.has(cn)) return false;
+        }
+        return true;
+      });
+    }
+    function updateQdlCount() {
+      document.getElementById('qdl-count').textContent = `符合 ${filterQdl().length} 題（共 ${qdlQuestions.length} 題現役）`;
+    }
+
+    document.getElementById('qdl-download').addEventListener('click', () => {
+      const list = filterQdl();
+      const msg = document.getElementById('qdl-msg');
+      if (list.length === 0) { msg.innerHTML = '<div class="err-msg">沒有符合條件的題目</div>'; return; }
+      const esc = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+      const header = ['題號', '出題日期', '出題學員', '難度', '維度', '題目', 'A', 'B', 'C', 'D', '正解', '書', '章', '頁'];
+      const lines = [header.map(esc).join(',')];
+      list.forEach(q => {
+        const o = q.options || {};
+        const s = q.source || {};
+        lines.push([q.id, q.scheduledDate || '', q.createdByName || q.createdBy || '', q.difficulty || '', q.derivedDimension || '', q.questionText || '', o.A?.text || '', o.B?.text || '', o.C?.text || '', o.D?.text || '', q.correctAnswer || '', s.bookId || '', s.chapterNumber || '', s.page || ''].map(esc).join(','));
+      });
+      const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `題庫_${selectedClassId}_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      msg.innerHTML = `<div class="ok-msg">✅ 已下載 ${list.length} 題</div>`;
+      setTimeout(() => { msg.innerHTML = ''; }, 3000);
+    });
+  </script>
+</body>
+</html>
